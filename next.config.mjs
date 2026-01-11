@@ -4,6 +4,9 @@ const withNextra = nextra({
 })
 
 export default withNextra({
-  // Your existing Next.js configuration
   reactStrictMode: true,
+  output: 'export',
+  images: {
+    unoptimized: true,
+  },
 })
