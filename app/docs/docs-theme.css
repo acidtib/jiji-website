@@ -1,0 +1,248 @@
+/* Jiji Docs Theme - Nextra v4 Overrides */
+/* Dark mode only, green primary, Outfit + JetBrains Mono */
+
+/* ===== Force Dark Mode ===== */
+html,
+html.dark,
+html.light,
+[data-theme="dark"],
+[data-theme="light"] {
+  --nextra-bg: 10 12 16 !important;
+  color-scheme: dark !important;
+
+  /* Primary color: Jiji green */
+  --nextra-primary-hue: 142deg !important;
+  --nextra-primary-saturation: 71% !important;
+  --nextra-primary-lightness: 45% !important;
+
+  /* Override primary color scale */
+  --x-color-primary-50: hsl(142 71% 97%) !important;
+  --x-color-primary-100: hsl(142 71% 94%) !important;
+  --x-color-primary-200: hsl(142 71% 86%) !important;
+  --x-color-primary-300: hsl(142 71% 77%) !important;
+  --x-color-primary-400: hsl(142 71% 66%) !important;
+  --x-color-primary-500: hsl(142 71% 50%) !important;
+  --x-color-primary-600: hsl(142 71% 45%) !important;
+  --x-color-primary-700: hsl(142 71% 39%) !important;
+  --x-color-primary-800: hsl(142 71% 32%) !important;
+
+  /* Custom fonts */
+  --x-font-sans: 'Outfit', system-ui, sans-serif;
+  --x-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Hide theme toggle button */
+button[aria-label="Toggle theme"],
+button[aria-label="Change theme"],
+[class*="theme-toggle"],
+[class*="ThemeSwitch"] {
+  display: none !important;
+}
+
+/* ===== Typography ===== */
+body {
+  font-family: 'Outfit', system-ui, sans-serif !important;
+}
+
+code, pre, kbd, [class*="font-mono"] {
+  font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+}
+
+/* ===== Sidebar ===== */
+aside {
+  background: rgb(10 12 16) !important;
+  border-color: hsl(220 15% 12%) !important;
+}
+
+aside a {
+  color: hsl(220 10% 55%) !important;
+  transition: all 0.2s ease !important;
+}
+
+aside a:hover {
+  color: hsl(0 0% 95%) !important;
+  background: hsl(220 15% 10%) !important;
+}
+
+aside a[aria-current="page"],
+aside a[data-active="true"] {
+  color: hsl(142 71% 50%) !important;
+  background: hsl(142 71% 45% / 0.1) !important;
+}
+
+/* ===== Main Content ===== */
+main, article {
+  background: transparent !important;
+}
+
+article h1 {
+  color: hsl(0 0% 98%) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+
+article h2 {
+  color: hsl(0 0% 95%) !important;
+  border-bottom-color: hsl(220 15% 15%) !important;
+}
+
+article h3,
+article h4 {
+  color: hsl(0 0% 92%) !important;
+}
+
+article p,
+article li {
+  color: hsl(220 10% 68%) !important;
+}
+
+article a {
+  color: hsl(142 71% 50%) !important;
+}
+
+article a:hover {
+  color: hsl(142 71% 60%) !important;
+}
+
+/* ===== Code ===== */
+pre {
+  background: hsl(220 20% 6%) !important;
+  border: 1px solid hsl(220 15% 15%) !important;
+  border-radius: 0.75rem !important;
+}
+
+pre code {
+  font-size: 0.875rem !important;
+}
+
+:not(pre) > code {
+  background: hsl(220 15% 12%) !important;
+  color: hsl(142 71% 55%) !important;
+  padding: 0.2em 0.4em !important;
+  border-radius: 0.375rem !important;
+  border: 1px solid hsl(220 15% 18%) !important;
+}
+
+/* ===== Tables ===== */
+th {
+  background: hsl(220 15% 10%) !important;
+  color: hsl(0 0% 90%) !important;
+  border-bottom: 2px solid hsl(142 71% 45% / 0.3) !important;
+}
+
+td {
+  border-color: hsl(220 15% 15%) !important;
+  color: hsl(220 10% 68%) !important;
+}
+
+tr:hover td {
+  background: hsl(220 15% 8%) !important;
+}
+
+/* ===== Blockquotes & Callouts ===== */
+blockquote {
+  border-left-color: hsl(142 71% 45% / 0.5) !important;
+  background: hsl(220 15% 8%) !important;
+  color: hsl(220 10% 70%) !important;
+}
+
+[class*="callout"],
+[class*="Callout"] {
+  background: hsl(220 15% 8%) !important;
+  border-color: hsl(220 15% 15%) !important;
+}
+
+/* ===== TOC ===== */
+nav[aria-label="Table of contents"] a {
+  color: hsl(220 10% 50%) !important;
+}
+
+nav[aria-label="Table of contents"] a:hover {
+  color: hsl(0 0% 90%) !important;
+}
+
+nav[aria-label="Table of contents"] a[aria-current="true"] {
+  color: hsl(142 71% 45%) !important;
+}
+
+/* ===== Search ===== */
+[data-search],
+input[type="search"] {
+  background: hsl(220 20% 8%) !important;
+  border-color: hsl(220 15% 15%) !important;
+  color: hsl(0 0% 95%) !important;
+}
+
+/* ===== Cards ===== */
+[class*="card"] {
+  background: hsl(220 15% 8%) !important;
+  border-color: hsl(220 15% 15%) !important;
+}
+
+[class*="card"]:hover {
+  border-color: hsl(142 71% 45% / 0.5) !important;
+}
+
+/* ===== Misc ===== */
+li::marker {
+  color: hsl(142 71% 45%) !important;
+}
+
+hr {
+  border-color: hsl(220 15% 15%) !important;
+}
+
+::selection {
+  background: hsl(142 71% 45% / 0.3) !important;
+  color: hsl(0 0% 98%) !important;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid hsl(142 71% 45%) !important;
+  outline-offset: 2px !important;
+}
+
+/* ===== Navbar ===== */
+nav[class*="sticky"] {
+  background: rgba(10, 12, 16, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom-color: hsl(220 15% 12% / 0.5) !important;
+}
+
+/* ===== Footer ===== */
+footer {
+  background: rgb(10 12 16) !important;
+  border-top-color: hsl(220 15% 12% / 0.5) !important;
+}
+
+/* ===== Scrollbars ===== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(220 15% 20%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(220 15% 30%);
+}
+
+/* ===== Noise Texture ===== */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.015;
+  pointer-events: none;
+  z-index: -1;
+}
