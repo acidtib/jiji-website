@@ -1,0 +1,367 @@
+# Troubleshooting
+
+## SSH Issues
+
+### Connection Timeout
+
+```
+Error: Connection timeout
+```
+
+**Causes:**
+- Server unreachable
+- Firewall blocking port 22
+- Wrong hostname
+
+**Solutions:**
+```bash
+# Test connectivity
+ping server.example.com
+
+# Test SSH manually
+ssh -v user@server.example.com
+
+# Check firewall
+ssh user@server "iptables -L -n | grep 22"
+```
+
+### Authentication Failed
+
+```
+Error: All configured authentication methods failed
+```
+
+**Solutions:**
+```bash
+# Check SSH key permissions
+chmod 600 ~/.ssh/id_ed25519
+
+# Test with specific key
+ssh -i ~/.ssh/id_ed25519 user@server
+
+# Check authorized_keys on server
+cat ~/.ssh/authorized_keys
+
+# Try with verbose output
+jiji --verbose server exec "echo ok"
+```
+
+### ProxyJump Issues
+
+```
+Error: Could not resolve hostname bastion
+```
+
+**Solutions:**
+```bash
+# Test ProxyJump manually
+ssh -J bastion.example.com user@internal-server
+
+# Check SSH config
+cat ~/.ssh/config
+```
+
+## Registry Issues
+
+### 401 Unauthorized
+
+```
+Error: unauthorized: authentication required
+```
+
+**Solutions:**
+```bash
+# Check secrets are configured
+jiji secrets print
+
+# Verify .env file exists and contains the token
+cat .env | grep GITHUB_TOKEN
+
+# Re-authenticate servers
+jiji registry login
+
+# Or with host env fallback
+jiji --host-env registry login
+```
+
+### 403 Forbidden
+
+```
+Error: denied: permission denied
+```
+
+**Causes:**
+- Token lacks required scopes
+- Repository is private
+- Wrong username
+
+**Solutions:**
+- For GHCR: Ensure token has `write:packages` scope
+- Verify username matches token owner
+- Check repository visibility settings
+
+### Push Failed
+
+```
+Error: failed to push image
+```
+
+**Solutions:**
+```bash
+# Check local registry is running (for local type)
+docker ps | grep registry
+
+# Check disk space
+df -h
+
+# Try manual push
+docker push ghcr.io/user/project-service:latest
+
+# Check network
+curl -I https://ghcr.io
+```
+
+## Deployment Issues
+
+### Health Check Timeout
+
+```
+Error: Container failed to become healthy within timeout
+```
+
+**Causes:**
+- Application not starting
+- Wrong health check path
+- Port mismatch
+
+**Solutions:**
+```bash
+# Check container logs
+jiji services logs -S api --since 5m
+
+# Check if container is running
+jiji server exec "docker ps -a"
+
+# Test health endpoint manually
+jiji server exec "docker exec <container> curl localhost:3000/health"
+
+# Increase timeout in config
+```
+
+```yaml
+proxy:
+  healthcheck:
+    path: /health
+    deploy_timeout: 120s  # Increase timeout
+```
+
+### Container Crashes
+
+```
+Error: Container exited with code 1
+```
+
+**Solutions:**
+```bash
+# View exit logs
+jiji server exec "docker logs <container>"
+
+# Check for OOM
+jiji server exec "dmesg | grep -i oom"
+
+# Verify environment variables
+jiji server exec "docker inspect <container> | grep -A20 Env"
+```
+
+### Deployment Hangs
+
+**Causes:**
+- Lock held by another process
+- Network issues
+- Large image download
+
+**Solutions:**
+```bash
+# Check lock status
+jiji lock status
+
+# Force release lock (if stuck)
+jiji lock release --force
+
+# Check what's happening
+jiji --verbose deploy
+```
+
+## Network Issues
+
+### WireGuard Not Connecting
+
+```bash
+# Check WireGuard status
+jiji server exec "wg show jiji"
+
+# Check service status
+jiji server exec "systemctl status wg-quick@jiji"
+
+# Check firewall (UDP 51820)
+jiji server exec "iptables -L -n | grep 51820"
+
+# View WireGuard logs
+jiji server exec "journalctl -u wg-quick@jiji -n 50"
+```
+
+### DNS Not Resolving
+
+```bash
+# Check jiji-dns status
+jiji server exec "systemctl status jiji-dns"
+
+# Test DNS directly
+jiji server exec "dig @10.210.0.1 myapp-api.jiji"
+
+# Check Corrosion connection
+jiji server exec "curl http://127.0.0.1:9220/v1/queries"
+
+# View jiji-dns logs
+jiji server exec "journalctl -u jiji-dns -n 50"
+```
+
+### Containers Can't Communicate
+
+```bash
+# Verify container DNS setting
+jiji server exec "docker inspect <container> | grep -A5 Dns"
+
+# Test from inside container
+jiji server exec "docker exec <container> nslookup myapp-api.jiji"
+
+# Test connectivity
+jiji server exec "docker exec <container> ping 10.210.1.1"
+```
+
+## Build Issues
+
+### Build Context Too Large
+
+```
+Error: context size exceeds limit
+```
+
+**Solutions:**
+- Add `.dockerignore` file
+- Exclude `node_modules`, `.git`, etc.
+
+```
+# .dockerignore
+node_modules
+.git
+*.log
+.env*
+```
+
+### Dockerfile Not Found
+
+```
+Error: Cannot find Dockerfile
+```
+
+**Solutions:**
+```yaml
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile  # Specify path
+```
+
+### Build Arguments Not Working
+
+```yaml
+services:
+  api:
+    build:
+      context: .
+      args:
+        NODE_ENV: production
+        BUILD_DATE: BUILD_DATE  # Resolved from .env file
+```
+
+## Proxy Issues
+
+### SSL Certificate Errors
+
+```bash
+# Check proxy logs
+jiji proxy logs --grep "ssl\|cert\|tls"
+
+# Verify SSL is enabled
+jiji server exec "docker exec kamal-proxy cat /config"
+```
+
+### 502 Bad Gateway
+
+**Causes:**
+- Container not running
+- Wrong `app_port`
+- Container not healthy
+
+**Solutions:**
+```bash
+# Check container is running
+jiji server exec "docker ps"
+
+# Check proxy config
+jiji proxy logs --since 5m
+
+# Verify port mapping
+jiji server exec "docker port <container>"
+```
+
+### Routing Not Working
+
+```bash
+# Check proxy configuration
+jiji proxy logs --grep "route"
+
+# Verify host configuration
+jiji server exec "curl -H 'Host: myapp.example.com' localhost:80"
+```
+
+## Performance Issues
+
+### Slow Deployments
+
+**Solutions:**
+- Enable build caching: `builder.cache: true`
+- Use remote builder for slow connections
+- Optimize Docker layers
+- Use smaller base images
+
+### High Memory Usage
+
+```bash
+# Check container memory
+jiji server exec "docker stats --no-stream"
+
+# Check system memory
+jiji server exec "free -h"
+```
+
+## Debugging Commands
+
+```bash
+# Verbose output for any command
+jiji --verbose deploy
+
+# Check server status
+jiji server exec "systemctl list-units 'jiji*'"
+
+# View all jiji services
+jiji server exec "docker ps --filter 'label=jiji'"
+
+# Full container inspection
+jiji server exec "docker inspect <container>"
+
+# View audit trail
+jiji audit --lines 20
+```

@@ -1,0 +1,703 @@
+# Configuration Reference
+
+Jiji uses YAML configuration files stored in `.jiji/deploy.yml`. Environment-specific overrides can be placed in `.jiji/deploy.{environment}.yml`.
+
+## Project
+
+```yaml
+project: myapp  # Required, unique identifier for your project
+```
+
+The project name is used in container naming, DNS resolution, and registry namespacing. Must be alphanumeric with hyphens only.
+
+## Builder
+
+```yaml
+builder:
+  engine: docker        # docker or podman
+  local: true           # Build locally (true) or on remote server (false)
+  cache: true           # Enable Docker build caching
+  remote: ssh://user@builder.example.com  # Remote builder (if local: false)
+  registry:
+    type: local         # local or remote
+    port: 9270          # Local registry port (default: 9270)
+    server: ghcr.io     # Registry server (for remote)
+    username: myuser    # Registry username
+    password: GITHUB_TOKEN  # Secret name (loaded from .env file)
+```
+
+### Container Engine
+
+```yaml
+builder:
+  engine: docker  # docker (default) or podman
+```
+
+| Engine | Minimum Version |
+|--------|----------------|
+| Docker | 28.2.0+ |
+| Podman | 4.9.3+ |
+
+### Registry Types
+
+**Local Registry**
+```yaml
+builder:
+  registry:
+    type: local
+    port: 9270  # Optional, default: 9270
+    # Uses localhost:9270, forwarded via SSH to remote servers
+```
+
+**GitHub Container Registry**
+```yaml
+builder:
+  registry:
+    type: remote
+    server: ghcr.io
+    username: myuser
+    password: GITHUB_TOKEN
+```
+
+**Docker Hub**
+```yaml
+builder:
+  registry:
+    type: remote
+    server: docker.io
+    username: myuser
+    password: DOCKER_TOKEN
+```
+
+**AWS ECR**
+```yaml
+builder:
+  registry:
+    type: remote
+    server: 123456789012.dkr.ecr.us-west-2.amazonaws.com
+    username: AWS
+    password: AWS_ECR_TOKEN
+```
+
+## SSH
+
+```yaml
+ssh:
+  user: deploy                    # SSH username (default: root)
+  port: 22                        # SSH port (default: 22)
+  key_path: ~/.ssh/id_rsa         # SSH private key path
+  key_passphrase: ""              # SSH key passphrase
+  connect_timeout: 30             # Connection timeout in seconds (default: 30)
+  command_timeout: 300            # Command timeout in seconds (default: 300)
+  log_level: error                # SSH logging (debug|info|warn|error|fatal)
+
+  # Multiple SSH keys
+  keys:
+    - ~/.ssh/id_rsa
+    - ~/.ssh/deploy_key
+
+  # Keys from environment variables
+  key_data:
+    - SSH_PRIVATE_KEY_1
+    - SSH_PRIVATE_KEY_2
+
+  keys_only: false                # Ignore ssh-agent (default: false)
+  max_concurrent_starts: 30       # Concurrent SSH connections (default: 30)
+  pool_idle_timeout: 900          # Pool idle timeout in seconds (default: 900)
+  dns_retries: 3                  # DNS retry attempts (default: 3)
+```
+
+### SSH Proxy/Jump Host
+
+For servers behind a bastion host:
+
+```yaml
+ssh:
+  # ProxyJump format
+  proxy: root@bastion.example.com
+
+  # OR ProxyCommand format
+  proxy_command: "ssh -W %h:%p user@proxy.example.com"
+```
+
+### SSH Config File
+
+Load settings from SSH config files:
+
+```yaml
+ssh:
+  # Load ~/.ssh/config
+  config: true
+
+  # Load specific file
+  config: "~/.ssh/custom_config"
+
+  # Load multiple files
+  config:
+    - ~/.ssh/config
+    - ~/.ssh/work_config
+```
+
+SSH config files support:
+- Host patterns and aliases
+- ProxyJump/ProxyCommand inheritance
+- IdentityFile discovery
+- Port and user overrides
+
+## Network
+
+```yaml
+network:
+  enabled: true                  # Enable private networking (default: false)
+  cluster_cidr: "10.210.0.0/16"  # IP range for WireGuard mesh (default)
+```
+
+When enabled, Jiji sets up:
+- WireGuard mesh VPN between all servers (port 51820/UDP)
+- Corrosion for distributed service registry (port 9280/TCP, API 9220/TCP)
+- jiji-dns for service discovery
+
+### IP Allocation
+
+With default `10.210.0.0/16`:
+- Server 0: 10.210.0.1 (containers: 10.210.0.2-254)
+- Server 1: 10.210.1.1 (containers: 10.210.1.2-254)
+- Maximum: 256 servers, 253 containers per server
+
+## Servers
+
+```yaml
+servers:
+  web1:
+    host: server1.example.com     # IP or hostname (required)
+    arch: amd64                   # amd64 or arm64 (default: amd64)
+
+    # Override SSH settings per server
+    user: admin
+    port: 2222
+    key_path: ~/.ssh/special_key
+    key_passphrase: ""
+    keys:
+      - ~/.ssh/key1
+      - ~/.ssh/key2
+    key_data:
+      - SSH_KEY_ENV_VAR
+
+  web2:
+    host: server2.example.com
+
+  db:
+    host: db.example.com
+    arch: arm64
+```
+
+### Multi-Architecture Support
+
+Jiji automatically builds and deploys the correct architecture for each server:
+
+```yaml
+servers:
+  x86-server:
+    host: amd64.example.com
+    arch: amd64
+
+  arm-server:
+    host: arm64.example.com
+    arch: arm64
+```
+
+## Services
+
+```yaml
+services:
+  api:
+    # Image source (one of image or build)
+    image: nginx:latest
+    # OR
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production          # Multi-stage build target
+      args:
+        NODE_ENV: production
+        API_VERSION: "2.1.0"
+
+    # Deployment targets
+    hosts:
+      - web1
+      - web2
+
+    # Port mappings
+    ports:
+      - "3000"                    # Container port only
+      - "8080:3000"               # host:container
+      - "127.0.0.1:8080:80"       # host_ip:host_port:container_port
+      - "53:53/udp"               # UDP protocol
+
+    # Volume mounts
+    volumes:
+      - /data:/app/data
+      - /config:/app/config:ro    # Read-only
+      - web_storage:/opt/uploads  # Named volume
+
+    # File transfers (simple format)
+    files:
+      - ./config.json:/app/config.json
+      - ./secrets.env:/app/.env:600  # With permissions
+
+    # File transfers (detailed format)
+    files:
+      - local: config/secret.key
+        remote: /etc/app/secret.key
+        mode: "0600"
+        owner: "nginx:nginx"
+        options: "ro"
+
+    # Directory transfers (simple format)
+    directories:
+      - ./templates:/app/templates
+      - ./html:/usr/share/nginx/html:ro
+
+    # Directory transfers (detailed format)
+    directories:
+      - local: logs
+        remote: /var/log/nginx
+        mode: "0755"
+        owner: "nginx:nginx"
+        options: "z"              # SELinux context
+
+    # Environment variables
+    environment:
+      clear:
+        NODE_ENV: production
+        LOG_LEVEL: info
+      secrets:
+        - DATABASE_URL
+        - API_KEY
+
+    # Container command override
+    command:
+      - node
+      - dist/server.js
+
+    # Network mode
+    network_mode: bridge          # bridge | host | none | container:<name>
+
+    # Resource limits
+    cpus: 2                       # CPU limit (can be fractional: 0.5, 1.5)
+    memory: "1g"                  # Memory limit (units: b|k|m|g|kb|mb|gb)
+
+    # GPU access
+    gpus: "all"                   # all | 0 | 0,1 | device=0
+
+    # Device mapping
+    devices:
+      - "/dev/video0"
+      - "/dev/snd:/dev/snd:rwm"   # With permissions
+
+    # Privileged mode and capabilities
+    privileged: false             # Privileged mode (default: false)
+    cap_add:                      # Linux capabilities
+      - NET_ADMIN
+      - SYS_MODULE
+
+    # Deployment behavior
+    stop_first: false             # Stop old container before new (default: false)
+    retain: 3                     # Images to retain after prune (default: 3)
+
+    # Proxy configuration
+    proxy:
+      app_port: 3000
+      host: api.example.com
+      ssl: true
+      healthcheck:
+        path: /health
+        interval: 10s
+        timeout: 5s
+        deploy_timeout: 60s
+```
+
+### Build Configuration
+
+```yaml
+services:
+  api:
+    build:
+      context: .                  # Build context path
+      dockerfile: Dockerfile      # Dockerfile path (relative to context)
+      target: production          # Multi-stage target
+      args:
+        NODE_ENV: production
+        BUILD_VERSION: "1.2.3"
+```
+
+### Port Mappings
+
+```yaml
+ports:
+  - "3000"                        # Container port, random host port
+  - "8080:3000"                   # host:container
+  - "127.0.0.1:8080:80"           # Bind to specific interface
+  - "53:53/udp"                   # UDP protocol
+  - "443:443/tcp"                 # TCP protocol (default)
+```
+
+### Resource Limits
+
+```yaml
+services:
+  api:
+    cpus: 2                       # CPU cores (fractional: 0.5, 1.5, 2.5)
+    memory: "1g"                  # Memory limit
+```
+
+Memory units: `b`, `k`, `m`, `g`, `kb`, `mb`, `gb`
+
+### GPU Access
+
+```yaml
+services:
+  ml-worker:
+    gpus: "all"                   # All GPUs
+    # OR
+    gpus: "0"                     # GPU 0 only
+    # OR
+    gpus: "0,1"                   # GPUs 0 and 1
+    # OR
+    gpus: "device=0"              # By device ID
+```
+
+### Device Mapping
+
+```yaml
+services:
+  video-processor:
+    devices:
+      - "/dev/video0"                     # Simple mapping
+      - "/dev/snd:/dev/snd:rwm"           # With permissions (r=read, w=write, m=mknod)
+```
+
+### Linux Capabilities
+
+```yaml
+services:
+  vpn-client:
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    # OR for full access
+    privileged: true
+```
+
+Common capabilities:
+- `NET_ADMIN` - Network administration
+- `SYS_MODULE` - Load kernel modules
+- `SYS_PTRACE` - Process tracing
+- `SYS_ADMIN` - System administration
+
+### Stateful Services
+
+For services that can't run multiple instances (databases, etc.):
+
+```yaml
+services:
+  postgres:
+    stop_first: true              # Stop old container before starting new
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+```
+
+### Proxy Configuration
+
+**Single Host**
+```yaml
+proxy:
+  app_port: 3000
+  host: api.example.com
+  ssl: true
+  healthcheck:
+    path: /health
+```
+
+**Multiple Hosts**
+```yaml
+proxy:
+  app_port: 3000
+  hosts:
+    - api.example.com
+    - www.api.example.com
+  ssl: true
+  healthcheck:
+    path: /health
+```
+
+**Path-Based Routing**
+```yaml
+proxy:
+  app_port: 3000
+  host: example.com
+  path_prefix: /api
+  ssl: true
+  healthcheck:
+    path: /api/health
+```
+
+**Multi-Target Proxy** (multiple ports/endpoints)
+```yaml
+proxy:
+  targets:
+    - app_port: 3900
+      host: s3.garage.example.com
+      ssl: false
+      healthcheck:
+        path: /health
+    - app_port: 3903
+      host: admin.garage.example.com
+      ssl: true
+      healthcheck:
+        path: /health
+```
+
+### Health Checks
+
+**HTTP Health Check**
+```yaml
+healthcheck:
+  path: /health                   # Must return 2xx status
+  interval: 10s                   # Time between checks (default: 10s)
+  timeout: 5s                     # Request timeout (default: 5s)
+  deploy_timeout: 60s             # Max time to wait for healthy (default: 60s)
+```
+
+**Command Health Check**
+```yaml
+healthcheck:
+  cmd: "test -f /app/ready"       # Exit code 0 = healthy
+  cmd_runtime: docker             # docker or podman
+  interval: 10s
+  timeout: 5s
+  deploy_timeout: 60s
+```
+
+## Secrets Configuration
+
+Secrets are loaded from `.env` files in your project root.
+
+### File Loading Priority
+
+1. `.env.{environment}` - When using `-e/--environment` flag (e.g., `.env.staging`)
+2. `.env` - Fallback when no environment-specific file exists
+
+### Secret References
+
+Use ALL_CAPS names to reference secrets:
+
+```yaml
+builder:
+  registry:
+    password: GITHUB_TOKEN  # Resolved from .env file
+
+services:
+  api:
+    environment:
+      secrets:
+        - DATABASE_URL    # Must be defined in .env file
+        - API_KEY
+```
+
+### Example .env File
+
+```bash
+# .env.production
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+DATABASE_URL=postgres://user:pass@host:5432/db
+API_KEY=secret123
+```
+
+### Host Environment Fallback
+
+By default, Jiji only reads from `.env` files. Use `--host-env` flag to allow fallback to host environment variables:
+
+```bash
+jiji --host-env deploy
+```
+
+### Custom Secrets Path
+
+```yaml
+secrets_path: .secrets  # Load from .secrets instead of .env
+```
+
+## Multi-Environment Setup
+
+**Base configuration** (`.jiji/deploy.yml`):
+```yaml
+project: myapp
+
+builder:
+  engine: docker
+  registry:
+    type: remote
+    server: ghcr.io
+    username: myuser
+    password: GITHUB_TOKEN
+
+services:
+  api:
+    build:
+      context: .
+    proxy:
+      app_port: 3000
+      healthcheck:
+        path: /health
+```
+
+**Staging** (`.jiji/deploy.staging.yml`):
+```yaml
+servers:
+  staging:
+    host: staging.example.com
+
+services:
+  api:
+    hosts:
+      - staging
+    proxy:
+      host: staging.myapp.com
+    environment:
+      clear:
+        NODE_ENV: staging
+```
+
+**Production** (`.jiji/deploy.production.yml`):
+```yaml
+servers:
+  prod1:
+    host: prod1.example.com
+  prod2:
+    host: prod2.example.com
+
+services:
+  api:
+    hosts:
+      - prod1
+      - prod2
+    cpus: 4
+    memory: "2g"
+    proxy:
+      host: myapp.com
+      ssl: true
+    environment:
+      clear:
+        NODE_ENV: production
+```
+
+Deploy with:
+```bash
+jiji deploy -e staging
+jiji deploy -e production
+```
+
+## Complete Example
+
+```yaml
+project: myapp
+
+ssh:
+  user: deploy
+  keys:
+    - ~/.ssh/id_ed25519
+    - ~/.ssh/deploy_key
+  connect_timeout: 30
+  command_timeout: 300
+
+builder:
+  engine: docker
+  local: true
+  cache: true
+  registry:
+    type: remote
+    server: ghcr.io
+    username: myuser
+    password: GITHUB_TOKEN
+
+network:
+  enabled: true
+  cluster_cidr: "10.210.0.0/16"
+
+servers:
+  web1:
+    host: web1.example.com
+    arch: amd64
+  web2:
+    host: web2.example.com
+    arch: amd64
+  worker:
+    host: worker.example.com
+    arch: arm64
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        NODE_ENV: production
+    hosts:
+      - web1
+      - web2
+    cpus: 2
+    memory: "1g"
+    environment:
+      clear:
+        NODE_ENV: production
+        LOG_LEVEL: info
+      secrets:
+        - DATABASE_URL
+        - API_KEY
+    proxy:
+      app_port: 3000
+      host: api.myapp.com
+      ssl: true
+      healthcheck:
+        path: /health
+        interval: 10s
+        timeout: 5s
+        deploy_timeout: 60s
+    retain: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    hosts:
+      - worker
+    cpus: 4
+    memory: "4g"
+    gpus: "all"
+    environment:
+      clear:
+        WORKER_THREADS: "8"
+      secrets:
+        - DATABASE_URL
+    proxy:
+      app_port: 8080
+      healthcheck:
+        cmd: "test -f /tmp/worker.ready"
+
+  postgres:
+    image: postgres:16
+    hosts:
+      - web1
+    stop_first: true
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+    environment:
+      clear:
+        POSTGRES_DB: myapp
+      secrets:
+        - POSTGRES_PASSWORD
+    ports:
+      - "5432:5432"
+```

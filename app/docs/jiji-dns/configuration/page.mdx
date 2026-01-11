@@ -1,0 +1,278 @@
+# jiji-dns Configuration
+
+jiji-dns is configured via environment variables, set in the systemd service file.
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `LISTEN_ADDR` | **Yes** | - | Address(es) to listen on, comma-separated |
+| `SERVICE_DOMAIN` | No | `jiji` | Domain suffix for service discovery |
+| `CORROSION_API` | No | `http://127.0.0.1:9220` | Corrosion API endpoint |
+| `DNS_TTL` | No | `60` | TTL for DNS responses (seconds) |
+| `RECONNECT_INTERVAL` | No | `5000` | Base reconnect interval on connection loss (ms) |
+| `MAX_RECONNECT_ATTEMPTS` | No | `0` (unlimited) | Maximum reconnect attempts before giving up |
+
+## Default Configuration
+
+When installed via `jiji server init`, jiji-dns is configured with:
+
+```ini
+# /etc/systemd/system/jiji-dns.service
+[Unit]
+Description=Jiji DNS Server
+After=network.target
+
+[Service]
+Type=simple
+Environment=LISTEN_ADDR=10.210.X.1:53
+Environment=SERVICE_DOMAIN=jiji
+Environment=CORROSION_API=http://127.0.0.1:9220
+Environment=DNS_TTL=60
+ExecStart=/opt/jiji/dns/jiji-dns
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+The `LISTEN_ADDR` is set to the server's WireGuard IP address.
+
+## Customizing Configuration
+
+To modify settings:
+
+```bash
+# Edit the service file
+sudo systemctl edit jiji-dns
+
+# Add overrides
+[Service]
+Environment=DNS_TTL=30
+Environment=RECONNECT_INTERVAL=3000
+```
+
+Reload and restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart jiji-dns
+```
+
+## Configuration Details
+
+### LISTEN_ADDR
+
+The IP address(es) and port to listen on. Supports comma-separated addresses for listening on multiple interfaces.
+
+```bash
+# Single address
+LISTEN_ADDR=10.210.0.1:53
+
+# Multiple addresses
+LISTEN_ADDR=10.210.0.1:53,10.210.128.1:53
+```
+
+**Requirements:**
+- Must include the WireGuard interface IP
+- Port 53 requires root or CAP_NET_BIND_SERVICE
+- Containers use this address as their DNS server
+- Each address gets its own UDP listener
+
+**Use cases for multiple addresses:**
+- Listen on both WireGuard and container gateway interfaces
+- Support multiple network segments
+- Handle traffic from different sources
+
+### SERVICE_DOMAIN
+
+The domain suffix for service discovery queries.
+
+```bash
+SERVICE_DOMAIN=jiji
+```
+
+Queries matching `*.{SERVICE_DOMAIN}` are resolved from Corrosion. All other queries are forwarded to upstream resolvers.
+
+**Examples:**
+- `myapp-api.jiji` matches (resolved from cache)
+- `google.com` doesn't match (forwarded to upstream)
+
+### CORROSION_API
+
+The Corrosion HTTP API endpoint.
+
+```bash
+CORROSION_API=http://127.0.0.1:9220
+```
+
+jiji-dns connects to this endpoint and subscribes to `/v1/subscriptions` for real-time updates. The subscription uses NDJSON (Newline Delimited JSON) streaming.
+
+### DNS_TTL
+
+Time-to-live for DNS responses in seconds.
+
+```bash
+DNS_TTL=60     # Default: 60 seconds
+DNS_TTL=30     # Lower for faster failover
+DNS_TTL=300    # Higher for less DNS traffic
+```
+
+**Trade-offs:**
+- **Lower TTL** (e.g., 30s): Faster failover, more DNS queries
+- **Higher TTL** (e.g., 300s): Fewer DNS queries, slower failover
+
+For most deployments, the default 60 seconds provides a good balance.
+
+### RECONNECT_INTERVAL
+
+Base interval for reconnecting to Corrosion on connection loss, in milliseconds.
+
+```bash
+RECONNECT_INTERVAL=5000    # 5 seconds (default)
+RECONNECT_INTERVAL=3000    # 3 seconds (faster reconnect)
+RECONNECT_INTERVAL=10000   # 10 seconds (less aggressive)
+```
+
+**Backoff behavior:**
+- Uses exponential backoff starting from this value
+- Adds random jitter to prevent thundering herd
+- Caps at 60 seconds maximum
+- Resets counter on successful reconnection
+
+### MAX_RECONNECT_ATTEMPTS
+
+Maximum number of reconnection attempts before giving up.
+
+```bash
+MAX_RECONNECT_ATTEMPTS=0     # Unlimited (default) - never give up
+MAX_RECONNECT_ATTEMPTS=10    # Give up after 10 attempts
+MAX_RECONNECT_ATTEMPTS=100   # Give up after 100 attempts
+```
+
+**When to change:**
+- Default `0` (unlimited) is recommended for production
+- Set a limit if you want jiji-dns to exit on persistent Corrosion failure
+- The service will restart via systemd if it exits
+
+## Example Configurations
+
+### Low-Latency Configuration
+
+For environments requiring fast failover:
+
+```ini
+[Service]
+Environment=DNS_TTL=30
+Environment=RECONNECT_INTERVAL=2000
+```
+
+### High-Traffic Configuration
+
+For environments with many DNS queries:
+
+```ini
+[Service]
+Environment=DNS_TTL=120
+```
+
+### Multi-Interface Configuration
+
+For complex network topologies:
+
+```ini
+[Service]
+Environment=LISTEN_ADDR=10.210.0.1:53,172.17.0.1:53,10.0.0.1:53
+```
+
+## Viewing Current Configuration
+
+```bash
+jiji server exec "systemctl show jiji-dns | grep Environment"
+```
+
+Or view the service file directly:
+
+```bash
+jiji server exec "cat /etc/systemd/system/jiji-dns.service"
+```
+
+## Verifying Configuration
+
+Test DNS resolution with the configured settings:
+
+```bash
+# Check listening addresses
+jiji server exec "ss -ulnp | grep 53"
+
+# Test resolution
+jiji server exec "dig @10.210.0.1 myapp-api.jiji +short"
+
+# Check Corrosion connection (look for READY message)
+jiji server exec "journalctl -u jiji-dns | grep -E '(READY|RECONNECT|ERROR)'"
+
+# View startup configuration
+jiji server exec "journalctl -u jiji-dns | head -20"
+```
+
+## Startup Logging
+
+When jiji-dns starts, it logs its configuration:
+
+```
+     _ _ _ _       _
+    (_|_|_|_)     | |
+       | |  _ ___ | |___  ____  ___
+   _   | | | |_  || | _ \/ ___)/___)
+  | |__| | | | | || | | ( (___| |
+   \______)|_| |_||_|_| |\____|_|
+                     /__)
+
+  Configuration:
+    Listen addresses: 10.210.0.1:53
+    Service domain: jiji
+    Corrosion API: http://127.0.0.1:9220
+    TTL: 60 seconds
+
+  System resolvers: 8.8.8.8, 1.1.1.1
+
+  [READY] Initial sync complete: 5 records, 3 hostnames
+```
+
+## Troubleshooting Configuration
+
+### Port Already in Use
+
+```bash
+# Check what's using port 53
+jiji server exec "ss -ulnp | grep :53"
+
+# Stop conflicting service
+jiji server exec "systemctl stop systemd-resolved"
+```
+
+### Corrosion Connection Failed
+
+```bash
+# Check Corrosion is running
+jiji server exec "systemctl status jiji-corrosion"
+
+# Test Corrosion API
+jiji server exec "curl http://127.0.0.1:9220/v1/queries"
+
+# Check jiji-dns reconnection attempts
+jiji server exec "journalctl -u jiji-dns | grep RECONNECT"
+```
+
+### DNS Not Resolving
+
+```bash
+# Verify jiji-dns is listening
+jiji server exec "ss -ulnp | grep jiji-dns"
+
+# Test directly
+jiji server exec "dig @10.210.0.1 myapp-api.jiji +short"
+
+# Check cache has records
+jiji server exec "journalctl -u jiji-dns | grep READY"
+```

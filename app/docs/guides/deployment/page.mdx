@@ -1,0 +1,501 @@
+# Deployment Guide
+
+## Zero-Downtime Deployment
+
+Jiji ensures zero downtime during deployments through a rolling update process:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Zero-Downtime Flow                           │
+│                                                                 │
+│  1. Old Container Running    ──▶  Traffic served               │
+│                                                                 │
+│  2. Rename Old Container     ──▶  Keep running as backup       │
+│                                                                 │
+│  3. New Container Starts     ──▶  Old still serving            │
+│                                                                 │
+│  4. Health Checks Pass       ──▶  New marked healthy           │
+│                                                                 │
+│  5. Proxy Routes to New      ──▶  Traffic switches             │
+│                                                                 │
+│  6. Old Container Stops      ──▶  Cleanup complete             │
+│                                                                 │
+│  If health checks fail:                                         │
+│  ──▶ Old container continues serving, new container removed    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Health Checks
+
+Health checks are critical for zero-downtime deployments.
+
+### HTTP Health Check
+
+```yaml
+services:
+  api:
+    proxy:
+      healthcheck:
+        path: /health
+        interval: 10s
+        timeout: 5s
+        deploy_timeout: 60s
+```
+
+| Option | Description |
+|--------|-------------|
+| `path` | HTTP endpoint to check (must return 2xx) |
+| `interval` | Time between checks |
+| `timeout` | Max time to wait for response |
+| `deploy_timeout` | Max time to wait for container to become healthy |
+
+### Command Health Check
+
+For non-HTTP services:
+
+```yaml
+services:
+  worker:
+    proxy:
+      healthcheck:
+        cmd: "test -f /tmp/ready"
+        cmd_runtime: docker      # docker or podman
+        interval: 10s
+        timeout: 5s
+        deploy_timeout: 60s
+```
+
+### Health Status Values
+
+Containers can have these health statuses:
+- `healthy` - Passing health checks
+- `degraded` - Intermittent failures
+- `unhealthy` - Consistently failing
+- `unknown` - No check run yet
+
+## Deployment Strategies
+
+### Full Deploy
+
+Deploy all services to all hosts:
+
+```bash
+jiji deploy --build
+```
+
+### Targeted Deploy
+
+Deploy specific services:
+
+```bash
+jiji deploy -S api
+jiji deploy -S "api,worker"
+jiji deploy -S "web*"         # Wildcard matching
+```
+
+Deploy to specific hosts:
+
+```bash
+jiji deploy -H web1
+jiji deploy -H "prod*"        # Wildcard matching
+```
+
+Combine both:
+
+```bash
+jiji deploy -S api -H "prod*"
+```
+
+### Version Pinning
+
+Deploy a specific version:
+
+```bash
+jiji deploy --version v1.2.3
+```
+
+Build with version tag:
+
+```bash
+jiji build --version v1.2.3
+jiji deploy --version v1.2.3
+```
+
+### Skip Confirmation
+
+For CI/CD pipelines:
+
+```bash
+jiji deploy -y               # Skip confirmation prompt
+jiji deploy --yes --build
+```
+
+## Rollback
+
+If something goes wrong, deploy a previous version:
+
+```bash
+# Check available versions
+jiji server exec "docker images | grep myapp"
+
+# Deploy previous version
+jiji deploy --version v1.2.2
+```
+
+## Deployment Locks
+
+Prevent concurrent deployments with locking:
+
+### Acquire Lock
+
+```bash
+jiji lock acquire
+jiji lock acquire --message "Deploying v1.2.3"
+jiji lock acquire --timeout 300      # Timeout in seconds
+```
+
+### Release Lock
+
+```bash
+jiji lock release
+```
+
+### Check Lock Status
+
+```bash
+jiji lock status
+jiji lock status --json
+jiji lock show                # Detailed info
+```
+
+### Force Acquire
+
+If a lock is stuck (e.g., from a failed deployment):
+
+```bash
+jiji lock acquire --force --message "Taking over stuck deployment"
+```
+
+### Recommended Workflow
+
+```bash
+# Acquire lock before deploy
+jiji lock acquire --message "Deploying v1.2.3"
+
+# Deploy
+jiji deploy --build
+
+# Release lock
+jiji lock release
+```
+
+## Resource Management
+
+### CPU Limits
+
+```yaml
+services:
+  api:
+    cpus: 2           # 2 CPU cores
+    cpus: 0.5         # Half a CPU core
+    cpus: 1.5         # 1.5 CPU cores
+```
+
+### Memory Limits
+
+```yaml
+services:
+  api:
+    memory: "512m"    # 512 MB
+    memory: "1g"      # 1 GB
+    memory: "2gb"     # 2 GB
+```
+
+Supported units: `b`, `k`, `m`, `g`, `kb`, `mb`, `gb`
+
+### GPU Access
+
+```yaml
+services:
+  ml-worker:
+    gpus: "all"       # All available GPUs
+    gpus: "0"         # GPU 0 only
+    gpus: "0,1"       # GPUs 0 and 1
+```
+
+### Device Mapping
+
+```yaml
+services:
+  video-processor:
+    devices:
+      - "/dev/video0"
+      - "/dev/snd:/dev/snd:rwm"
+```
+
+### Linux Capabilities
+
+```yaml
+services:
+  vpn-client:
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+```
+
+Or for full privileged access:
+
+```yaml
+services:
+  system-tool:
+    privileged: true
+```
+
+## Multi-Architecture Support
+
+Jiji supports deploying to mixed architecture clusters (amd64 and arm64).
+
+### Configuration
+
+```yaml
+servers:
+  x86-server:
+    host: amd64.example.com
+    arch: amd64
+
+  arm-server:
+    host: arm64.example.com
+    arch: arm64
+
+services:
+  api:
+    hosts:
+      - x86-server
+      - arm-server
+    build:
+      context: .
+```
+
+Jiji automatically:
+- Builds the correct architecture for each server
+- Pulls architecture-specific images
+- Handles multi-arch deployments transparently
+
+## Stateful Services
+
+For services that can't run multiple instances simultaneously (databases, etc.):
+
+```yaml
+services:
+  postgres:
+    stop_first: true              # Stop old before starting new
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+```
+
+With `stop_first: true`:
+1. Old container stops first
+2. New container starts
+3. Brief downtime during transition
+
+## File and Directory Transfers
+
+### Transfer Files (Simple)
+
+```yaml
+services:
+  api:
+    files:
+      - ./config.json:/app/config.json
+      - ./secrets.env:/app/.env:600  # With permissions
+```
+
+### Transfer Files (Detailed)
+
+```yaml
+services:
+  api:
+    files:
+      - local: config/secret.key
+        remote: /etc/app/secret.key
+        mode: "0600"
+        owner: "nginx:nginx"
+        options: "ro"
+```
+
+### Transfer Directories
+
+```yaml
+services:
+  api:
+    directories:
+      - ./templates:/app/templates
+      - local: logs
+        remote: /var/log/app
+        mode: "0755"
+        owner: "app:app"
+```
+
+## Volume Mounts
+
+Persist data across deployments:
+
+```yaml
+services:
+  db:
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+      - /config:/app/config:ro  # Read-only
+      - app_storage:/app/data   # Named volume
+```
+
+## Environment Variables
+
+### Clear Variables
+
+Non-sensitive configuration:
+
+```yaml
+services:
+  api:
+    environment:
+      clear:
+        NODE_ENV: production
+        LOG_LEVEL: info
+        PORT: "3000"
+```
+
+### Secret Variables
+
+Sensitive values loaded from `.env` files:
+
+```yaml
+services:
+  api:
+    environment:
+      secrets:
+        - DATABASE_URL
+        - API_KEY
+        - JWT_SECRET
+```
+
+Create a `.env` file in your project root:
+
+```bash
+# .env (or .env.production for environment-specific)
+DATABASE_URL=postgres://user:pass@host:5432/db
+API_KEY=secret123
+JWT_SECRET=your-jwt-secret
+```
+
+Deploy (secrets are automatically loaded from `.env`):
+
+```bash
+jiji deploy
+jiji deploy -e production  # Uses .env.production
+```
+
+### View Configured Secrets
+
+```bash
+jiji secrets print
+jiji secrets print -e production
+jiji secrets print --show-values  # Reveal actual values
+```
+
+### Host Environment Fallback
+
+To use host environment variables when not found in `.env`:
+
+```bash
+jiji --host-env deploy
+```
+
+## Image Retention
+
+Configure how many old images to keep per service:
+
+```yaml
+services:
+  api:
+    retain: 5    # Keep 5 versions (default: 3)
+```
+
+Manual cleanup:
+
+```bash
+jiji services prune
+jiji services prune -S api --retain 3
+```
+
+## Pre-Deployment Checklist
+
+Before deploying to production:
+
+1. **Test locally** - Run your containers locally first
+2. **Check configuration** - Review your deploy.yml
+3. **Review changes** - Know what you're deploying
+4. **Check server connectivity** - `jiji server exec "echo ok"`
+5. **Verify registry access** - `jiji registry login`
+6. **Check secrets** - `jiji secrets print`
+7. **Acquire lock** - `jiji lock acquire --message "Deploying vX.Y.Z"`
+
+## Post-Deployment Verification
+
+After deploying:
+
+```bash
+# Check service logs
+jiji services logs -S api --since 5m
+
+# Verify containers running
+jiji server exec "docker ps"
+
+# Check health endpoints
+jiji server exec "curl localhost:3000/health"
+
+# Monitor proxy logs
+jiji proxy logs --since 5m
+
+# Check network status
+jiji network status
+
+# View DNS records
+jiji network dns
+```
+
+## Cleanup
+
+Remove old images to free disk space:
+
+```bash
+jiji services prune
+jiji services prune --retain 3  # Keep 3 versions
+jiji services prune -S api      # Specific service
+```
+
+Clean up stale DNS records:
+
+```bash
+jiji network gc --force
+```
+
+## CI/CD Integration
+
+For automated deployments, use the `-y` flag and proper locking:
+
+```bash
+#!/bin/bash
+set -e
+
+# Acquire lock
+jiji lock acquire --message "CI Deploy: $CI_COMMIT_SHA"
+
+# Deploy
+jiji deploy --build -y -e production
+
+# Release lock
+jiji lock release
+```
+
+See the [CI/CD Integration](/docs/guides/ci-cd) guide for detailed examples.

@@ -1,0 +1,159 @@
+# Architecture
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Jiji CLI                                │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │ Commands │ │  Config  │ │   SSH    │ │ Services │            │
+│  │  Parser  │ │  Loader  │ │ Manager  │ │  Layer   │            │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ SSH
+                              V
+┌─────────────────────────────────────────────────────────────────┐
+│                      Target Servers                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │   Server 1   │  │   Server 2   │  │   Server N   │           │
+│  │              │  │              │  │              │           │
+│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
+│  │ │Container │ │  │ │Container │ │  │ │Container │ │           │
+│  │ │ Runtime  │ │  │ │ Runtime  │ │  │ │ Runtime  │ │           │
+│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
+│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
+│  │ │  Proxy   │ │  │ │  Proxy   │ │  │ │  Proxy   │ │           │
+│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
+│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
+│  │ │WireGuard │<┼──┼─┤WireGuard │<┼──┼─┤WireGuard │ │           │
+│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
+│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
+│  │ │Corrosion │<┼──┼─┤Corrosion │<┼──┼─┤Corrosion │ │           │
+│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
+│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
+│  │ │ jiji-dns │ │  │ │ jiji-dns │ │  │ │ jiji-dns │ │           │
+│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
+│  └──────────────┘  └──────────────┘  └──────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Component Details
+
+### Jiji CLI
+
+The orchestration engine that runs on your local machine or CI server.
+
+| Component | Purpose |
+|-----------|---------|
+| Commands | CLI interface (init, build, deploy, etc.) |
+| Config | YAML parsing and validation |
+| SSH Manager | Connection pooling, parallel execution |
+| Services Layer | Build, push, deploy, logs operations |
+
+### Container Runtime
+
+Docker or Podman on each target server. Jiji is runtime-agnostic.
+
+### kamal-proxy
+
+HTTP/HTTPS reverse proxy that handles:
+- Zero-downtime deployments
+- SSL/TLS termination
+- Health check routing
+- Path-based routing
+
+### WireGuard
+
+Mesh VPN providing encrypted communication between servers:
+- Each server gets a `/24` subnet
+- Automatic peer configuration
+- IPv4 for container traffic, IPv6 for management
+
+### Corrosion
+
+Distributed CRDT database for service registration:
+- Gossip protocol for data sync
+- Real-time container registration
+- Health status tracking
+
+### jiji-dns
+
+DNS server for service discovery:
+- Resolves `{project}-{service}.jiji` for service discovery (returns all healthy IPs)
+- Resolves `{project}-{service}-{server}.jiji` for specific instance
+- Only returns healthy containers
+- Subscribes to Corrosion for real-time updates
+
+## Deployment Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│    Build    │────>│    Push     │────>│   Deploy    │
+│   Image     │     │  to Registry│     │  Container  │
+└─────────────┘     └─────────────┘     └─────────────┘
+                                               │
+                    ┌──────────────────────────┘
+                    V
+┌─────────────────────────────────────────────────────┐
+│                 Zero-Downtime Deploy                │
+│  1. Keep old container running                      │
+│  2. Start new container                             │
+│  3. Run health checks                               │
+│  4. Route traffic to new container                  │
+│  5. Stop old container                              │
+│  6. Cleanup old images                              │
+└─────────────────────────────────────────────────────┘
+```
+
+## Network Architecture
+
+### IP Allocation
+
+Jiji uses a `10.210.0.0/16` network (configurable):
+
+| Server | WireGuard IP | Container Subnet |
+|--------|--------------|------------------|
+| Server 0 | 10.210.0.1 | 10.210.0.0/24 |
+| Server 1 | 10.210.1.1 | 10.210.1.0/24 |
+| Server N | 10.210.N.1 | 10.210.N.0/24 |
+
+### Service Discovery Flow
+
+```
+Container A                    jiji-dns                    Corrosion
+     │                            │                            │
+     │  DNS query:                │                            │
+     │  myapp-api.jiji            │                            │
+     │───────────────────────────>│                            │
+     │                            │  Lookup in cache           │
+     │                            │  (synced from Corrosion)   │
+     │                            │<───────────────────────────│
+     │  Response:                 │                            │
+     │  10.210.1.5, 10.210.2.5    │                            │
+     │<───────────────────────────│                            │
+     │                            │                            │
+     │  Connect to 10.210.1.5     │                            │
+     │────────────────────────────┼────────────────────────────>
+```
+
+## Security Model
+
+### Network Security
+- WireGuard encryption with Curve25519
+- Perfect forward secrecy
+- Containers isolated in private network
+
+### Authentication
+- SSH keys for server access
+- Registry authentication with tokens
+- Secrets loaded from `.env` files (with optional host env fallback via `--host-env`)
+
+### Firewall Requirements
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 22 | TCP | SSH |
+| 80/443 | TCP | HTTP/HTTPS |
+| 51820 | UDP | WireGuard |
+| 9280 | TCP | Corrosion gossip |

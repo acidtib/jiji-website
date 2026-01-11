@@ -1,0 +1,451 @@
+# Commands Reference
+
+## Global Options
+
+All commands support these options:
+
+| Option | Description |
+|--------|-------------|
+| `-v, --verbose` | Detailed logging output |
+| `-q, --quiet` | Minimal output |
+| `-c, --config-file <path>` | Path to config file (default: `.jiji/deploy.yml`) |
+| `-e, --environment <env>` | Use environment-specific config (e.g., `staging` → `.jiji/deploy.staging.yml`) |
+| `--version <version>` | Run against specific app version |
+| `-H, --hosts <pattern>` | Target specific hosts (supports wildcards, comma-separated) |
+| `-S, --services <pattern>` | Target specific services (supports wildcards, comma-separated) |
+| `--host-env` | Fallback to host environment variables when secrets not found in .env |
+
+### Wildcard Patterns
+
+Host and service filters support wildcards:
+
+```bash
+jiji deploy -H "web*"           # All hosts starting with "web"
+jiji deploy -S "*-backend"      # All services ending with "-backend"
+jiji deploy -H "prod*" -S "api" # Combine filters
+jiji deploy -S "api,worker"     # Multiple services
+```
+
+## Initialization
+
+### `jiji init`
+
+Create a new configuration file.
+
+```bash
+jiji init
+```
+
+Creates `.jiji/deploy.yml` with a starter template.
+
+## Server Management
+
+### `jiji server init`
+
+Initialize servers with required components.
+
+```bash
+jiji server init
+jiji server init -H "web*"  # Only web servers
+```
+
+Installs WireGuard, Corrosion, jiji-dns, and kamal-proxy.
+
+### `jiji server exec`
+
+Execute commands on servers.
+
+```bash
+jiji server exec "docker ps"
+jiji server exec "df -h" -H web1
+jiji server exec "systemctl status jiji-dns"
+```
+
+### `jiji server teardown`
+
+Remove all Jiji components from servers.
+
+```bash
+jiji server teardown
+jiji server teardown -H web1  # Specific server
+```
+
+## Build
+
+### `jiji build`
+
+Build container images.
+
+```bash
+jiji build
+jiji build -S api              # Build specific service
+jiji build --version v1.2.3    # Tag with version
+jiji build --no-cache          # Build without cache
+jiji build --no-push           # Build without pushing to registry
+```
+
+| Option | Description |
+|--------|-------------|
+| `-S, --services` | Target specific services |
+| `--version` | Version tag for images |
+| `--no-cache` | Disable build cache |
+| `--push` / `--no-push` | Push to registry (default: true) |
+
+## Deploy
+
+### `jiji deploy`
+
+Deploy services to servers.
+
+```bash
+jiji deploy
+jiji deploy --build              # Build before deploy
+jiji deploy --build --no-cache   # Build without cache before deploy
+jiji deploy --version v1.2.3     # Deploy specific version
+jiji deploy -S "api,worker"      # Deploy specific services
+jiji deploy -H "prod*"           # Deploy to matching hosts
+jiji deploy -e production        # Use production config
+jiji deploy -y                   # Skip confirmation prompt
+```
+
+| Option | Description |
+|--------|-------------|
+| `--build` | Build images before deploying |
+| `--no-cache` | Build without cache (requires `--build`) |
+| `--version` | Deploy specific version |
+| `-y, --yes` | Skip confirmation prompt |
+| `-S, --services` | Target specific services |
+| `-H, --hosts` | Target specific hosts |
+| `-e, --environment` | Use environment-specific config |
+
+## Service Management
+
+### `jiji services logs`
+
+View service logs.
+
+```bash
+jiji services logs
+jiji services logs -S api
+jiji services logs --lines 100
+jiji services logs --since 30m
+jiji services logs --since 2h
+jiji services logs --grep "error"
+jiji services logs --follow
+jiji services logs -H web1 -S api
+```
+
+| Option | Description |
+|--------|-------------|
+| `--lines, -n` | Number of lines |
+| `--since` | Time filter (30m, 2h, 1d) |
+| `--grep` | Filter by pattern |
+| `--follow, -f` | Stream logs |
+| `--container-id` | Show container IDs |
+
+### `jiji services restart`
+
+Restart running services.
+
+```bash
+jiji services restart
+jiji services restart -S api
+jiji services restart -H web1
+```
+
+### `jiji services remove`
+
+Remove services from servers.
+
+```bash
+jiji services remove
+jiji services remove -S api
+```
+
+### `jiji services prune`
+
+Clean up old container images.
+
+```bash
+jiji services prune
+jiji services prune -S api
+jiji services prune --retain 5   # Keep 5 versions (default: 3)
+```
+
+| Option | Description |
+|--------|-------------|
+| `-S, --services` | Target specific services |
+| `--retain` | Number of image versions to keep (default: 3) |
+
+## Proxy Management
+
+### `jiji proxy logs`
+
+View kamal-proxy logs.
+
+```bash
+jiji proxy logs
+jiji proxy logs -H web1
+jiji proxy logs --since 1h
+jiji proxy logs --grep "error"
+```
+
+## Registry
+
+### `jiji registry setup`
+
+Setup container registry on servers.
+
+```bash
+jiji registry setup
+```
+
+### `jiji registry login`
+
+Authenticate with container registry.
+
+```bash
+jiji registry login
+```
+
+### `jiji registry logout`
+
+Logout from container registry.
+
+```bash
+jiji registry logout
+```
+
+### `jiji registry remove`
+
+Remove registry configuration from servers.
+
+```bash
+jiji registry remove
+```
+
+## Network
+
+### `jiji network status`
+
+Show network topology and connectivity.
+
+```bash
+jiji network status
+```
+
+Shows WireGuard peer connections, Corrosion cluster state, and DNS service status.
+
+### `jiji network dns`
+
+Show DNS records from service discovery.
+
+```bash
+jiji network dns
+jiji network dns --service api
+```
+
+### `jiji network inspect`
+
+Inspect container networking details.
+
+```bash
+jiji network inspect
+jiji network inspect -S api
+jiji network inspect --container abc123
+```
+
+| Option | Description |
+|--------|-------------|
+| `-S, --services` | Filter by service |
+| `--container` | Inspect specific container by ID |
+
+### `jiji network gc`
+
+Garbage collect stale DNS records.
+
+```bash
+jiji network gc          # Dry run - shows what would be deleted
+jiji network gc --force  # Actually delete stale records
+```
+
+| Option | Description |
+|--------|-------------|
+| `--force` | Actually delete stale records (without this, only shows what would be deleted) |
+
+### `jiji network db stats`
+
+Show Corrosion database statistics.
+
+```bash
+jiji network db stats
+```
+
+### `jiji network db query`
+
+Execute raw SQL query on Corrosion database.
+
+```bash
+jiji network db query "SELECT * FROM containers"
+jiji network db query "SELECT * FROM services WHERE project = 'myapp'"
+```
+
+### `jiji network teardown`
+
+Remove network infrastructure from servers.
+
+```bash
+jiji network teardown
+jiji network teardown -H web1  # Specific server
+```
+
+Removes WireGuard, Corrosion, and jiji-dns.
+
+## Secrets
+
+### `jiji secrets print`
+
+Display configured secrets and their resolution status.
+
+```bash
+jiji secrets print
+jiji secrets print -e production
+jiji secrets print --show-values  # Reveal actual values (use with caution)
+```
+
+| Option | Description |
+|--------|-------------|
+| `-e, --environment` | Check secrets for specific environment |
+| `--show-values` | Reveal actual secret values |
+
+Shows which secrets are defined and whether they can be resolved from `.env` files.
+
+## Audit Trail
+
+### `jiji audit`
+
+View deployment audit trail.
+
+```bash
+jiji audit
+jiji audit --lines 50
+jiji audit --filter deploy
+jiji audit --status success
+jiji audit --since 2024-01-01
+jiji audit --follow
+jiji audit --json
+jiji audit --aggregate  # Combine logs chronologically from all hosts
+```
+
+| Option | Description |
+|--------|-------------|
+| `-n, --lines` | Number of recent entries (default: 20) |
+| `--filter <action>` | Filter by action type (e.g., deploy, build) |
+| `--status <status>` | Filter by status (started, success, failed, warning) |
+| `--since <date>` | Show entries since date |
+| `--until <date>` | Show entries until date |
+| `--raw` | Show raw format |
+| `--json` | Output as JSON |
+| `--follow, -f` | Follow like tail -f |
+| `--aggregate` | Combine logs chronologically from all hosts |
+
+Audit logs are stored at `/var/log/jiji/{project}/` on remote hosts.
+
+## Deployment Locks
+
+### `jiji lock acquire`
+
+Acquire deployment lock to prevent concurrent deployments.
+
+```bash
+jiji lock acquire
+jiji lock acquire --message "Deploying v1.2.3"
+jiji lock acquire --timeout 300      # Timeout in seconds
+jiji lock acquire --force            # Force acquire even if locked
+```
+
+| Option | Description |
+|--------|-------------|
+| `--message, -m` | Lock message |
+| `--timeout` | Timeout in seconds |
+| `--force` | Force acquire even if already locked |
+
+### `jiji lock release`
+
+Release deployment lock.
+
+```bash
+jiji lock release
+```
+
+### `jiji lock status`
+
+Check current lock status.
+
+```bash
+jiji lock status
+jiji lock status --json  # Output as JSON
+```
+
+### `jiji lock show`
+
+Show detailed lock information.
+
+```bash
+jiji lock show
+```
+
+## Version
+
+### `jiji version`
+
+Show Jiji version.
+
+```bash
+jiji version
+```
+
+## Examples
+
+### Deploy to staging
+
+```bash
+jiji deploy --build -e staging
+```
+
+### Deploy specific service to specific host
+
+```bash
+jiji deploy -S api -H web1
+```
+
+### View logs with filtering
+
+```bash
+jiji services logs -S api --since 1h --grep "ERROR" --follow
+```
+
+### Execute command across all servers
+
+```bash
+jiji server exec "docker system prune -f"
+```
+
+### Check network health
+
+```bash
+jiji network status
+jiji network dns
+```
+
+### View audit trail for failed deployments
+
+```bash
+jiji audit --status failed --since 7d
+```
+
+### Force release a stuck lock
+
+```bash
+jiji lock acquire --force --message "Taking over stuck deployment"
+```

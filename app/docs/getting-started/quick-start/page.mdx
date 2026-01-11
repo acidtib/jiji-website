@@ -1,0 +1,122 @@
+# Quick Start
+
+This guide walks you through deploying your first application with Jiji.
+
+## 1. Create Configuration
+
+Initialize Jiji in your project:
+
+```bash
+jiji init
+```
+
+Edit `.jiji/deploy.yml`:
+
+```yaml
+project: myapp
+
+builder:
+  engine: docker
+  local: true
+  registry:
+    type: local
+
+ssh:
+  user: deploy
+
+servers:
+  web1:
+    host: server1.example.com
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hosts:
+      - web1
+    proxy:
+      app_port: 3000
+      host: myapp.example.com
+      ssl: true
+      healthcheck:
+        path: /health
+        interval: 10s
+        timeout: 5s
+```
+
+## 2. Initialize Servers
+
+Set up your servers with the required components:
+
+```bash
+jiji server init
+```
+
+## 3. Setup Registry
+
+Configure your container registry:
+
+```bash
+jiji registry setup
+```
+
+## 4. Build and Deploy
+
+Deploy your application:
+
+```bash
+# Build and deploy in one command
+jiji deploy --build
+
+# Or separately
+jiji build
+jiji deploy
+```
+
+## 5. Verify Deployment
+
+Check your services:
+
+```bash
+# View logs
+jiji services logs
+
+# Check service status on servers
+jiji server exec "docker ps"
+```
+
+## What Happens During Deployment
+
+1. **Build Phase** - Container image is built locally or remotely
+2. **Push Phase** - Image is pushed to the configured registry
+3. **Deploy Phase**:
+   - Old container keeps running
+   - New container starts alongside
+   - Health checks run until ready
+   - Proxy routes traffic to new container
+   - Old container is stopped and removed
+4. **Cleanup** - Old images are pruned (keeping recent versions)
+
+## Environment-Specific Deployments
+
+Create environment-specific configs:
+
+```bash
+# .jiji/deploy.yml        - base config
+# .jiji/deploy.staging.yml - staging overrides
+# .jiji/deploy.production.yml - production overrides
+```
+
+Deploy to a specific environment:
+
+```bash
+jiji deploy -e staging
+jiji deploy -e production
+```
+
+## Next Steps
+
+- [Configuration Reference](/docs/reference/configuration) - Full configuration options
+- [Deployment Guide](/docs/guides/deployment) - Advanced deployment strategies
+- [Network Reference](/docs/reference/network) - Private networking setup

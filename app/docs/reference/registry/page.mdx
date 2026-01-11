@@ -1,0 +1,238 @@
+# Registry Reference
+
+Jiji supports multiple container registry types for storing and distributing images.
+
+## Registry Types
+
+### Local Registry
+
+Best for development and simple deployments. Runs on your local machine and is forwarded to servers via SSH tunnel.
+
+```yaml
+builder:
+  registry:
+    type: local
+```
+
+- Registry runs at `localhost:9270`
+- SSH reverse tunnel forwards to each server
+- No authentication required
+- Images stay on your network
+
+### GitHub Container Registry (GHCR)
+
+```yaml
+builder:
+  registry:
+    type: remote
+    server: ghcr.io
+    username: your-github-username
+    password: GITHUB_TOKEN
+```
+
+**Image naming:** `ghcr.io/username/project-service:version`
+
+**Setup:**
+1. Create a GitHub Personal Access Token with `write:packages` scope
+2. Add `GITHUB_TOKEN=ghp_xxx` to your `.env` file
+
+### Docker Hub
+
+```yaml
+builder:
+  registry:
+    type: remote
+    server: docker.io
+    username: your-dockerhub-username
+    password: DOCKER_TOKEN
+```
+
+**Image naming:** `docker.io/username/project-service:version`
+
+### Custom Registry
+
+```yaml
+builder:
+  registry:
+    type: remote
+    server: registry.example.com
+    username: myuser
+    password: REGISTRY_PASSWORD
+```
+
+## Image Naming
+
+Jiji automatically namespaces images based on registry type:
+
+| Registry | Image Format |
+|----------|--------------|
+| Local | `localhost:9270/project-service:version` |
+| GHCR | `ghcr.io/username/project-service:version` |
+| Docker Hub | `docker.io/username/project-service:version` |
+| Custom | `registry.example.com/project-service:version` |
+
+## Registry Password
+
+Never store credentials in config files. Use secret references:
+
+```yaml
+builder:
+  registry:
+    password: GITHUB_TOKEN
+```
+
+When the password is an ALL_CAPS name like `GITHUB_TOKEN`, it will be resolved from your `.env` file. See the [Secrets Configuration](/docs/reference/configuration#secrets-configuration) for details on how `.env` files work.
+
+## Registry Commands
+
+### Setup Registry
+
+Configure registry on servers:
+
+```bash
+jiji registry setup
+```
+
+For remote registries, this authenticates each server with the registry.
+
+### Login
+
+Manually authenticate with the registry:
+
+```bash
+jiji registry login
+```
+
+### Logout
+
+Remove registry credentials:
+
+```bash
+jiji registry logout
+```
+
+## Local Registry Details
+
+### How it works
+
+1. Local Docker registry runs on your machine at port 9270
+2. `jiji build` pushes images to local registry
+3. `jiji deploy` creates SSH tunnel from server to your machine
+4. Server pulls image through the tunnel
+5. Tunnel closed after pull completes
+
+### Starting Local Registry
+
+```bash
+docker run -d -p 9270:5000 --name jiji-registry registry:2
+```
+
+Or let Jiji manage it automatically.
+
+### Advantages
+
+- No external registry needed
+- Images never leave your network
+- No authentication setup
+- Fast for local development
+
+### Limitations
+
+- Requires your machine to be accessible during deploy
+- Not suitable for CI/CD pipelines
+- Single point of failure
+
+## Remote Registry Authentication
+
+### Per-Environment Credentials
+
+Use different secrets per environment with `.env.{environment}` files:
+
+**Staging** (`.env.staging`):
+```bash
+GITHUB_TOKEN=ghp_staging_token_xxx
+```
+
+**Production** (`.env.production`):
+```bash
+GITHUB_TOKEN=ghp_production_token_xxx
+```
+
+**Configuration** (`.jiji/deploy.yml`):
+```yaml
+builder:
+  registry:
+    type: remote
+    server: ghcr.io
+    username: myorg
+    password: GITHUB_TOKEN
+```
+
+Deploy with the appropriate environment:
+```bash
+jiji deploy -e staging    # Uses .env.staging
+jiji deploy -e production # Uses .env.production
+```
+
+### CI/CD Setup
+
+In your CI pipeline, set the token as an environment variable:
+
+**GitHub Actions:**
+```yaml
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**GitLab CI:**
+```yaml
+variables:
+  DOCKER_TOKEN: $CI_REGISTRY_PASSWORD
+```
+
+## Troubleshooting
+
+### 401 Unauthorized
+
+```bash
+# Check secrets are configured
+jiji secrets print
+
+# Test login manually (reads from .env)
+jiji registry login
+
+# Or with host env fallback
+jiji --host-env registry login
+```
+
+### 403 Forbidden
+
+- Verify token has `write:packages` scope (GHCR)
+- Check repository visibility settings
+- Ensure username matches token owner
+
+### Push Failed
+
+```bash
+# Check local registry is running
+docker ps | grep registry
+
+# Check disk space
+df -h
+
+# Try manual push
+docker push ghcr.io/username/project-service:latest
+```
+
+### Pull Failed on Server
+
+```bash
+# Check server authentication
+jiji server exec "docker login ghcr.io"
+
+# Check network connectivity
+jiji server exec "curl -I https://ghcr.io"
+
+# For local registry, check SSH tunnel
+jiji server exec "curl http://localhost:9270/v2/"
+```

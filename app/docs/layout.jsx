@@ -17,7 +17,7 @@ const footer = <Footer>MIT {new Date().getFullYear()} Jiji.</Footer>
 export default async function DocsLayout({ children }) {
   return (
     <Layout
-      banner={banner}
+      // banner={banner}
       navbar={navbar}
       pageMap={await getPageMap()}
       docsRepositoryBase="https://github.com/acitib/jiji-website"

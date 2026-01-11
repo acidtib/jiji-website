@@ -1,7 +1,75 @@
-# Welcome to Jiji
+# Introduction
 
-Hello, world! This is the documentation for **Jiji**.
+Jiji is a lightweight container deployment orchestration tool designed to deploy containerized applications across multiple servers with simplicity, speed, and portability.
 
-## Getting Started
+## Why Jiji?
 
-Start by installing Jiji...
+- **Zero-Downtime Deployments** - Health checks and automatic rollback ensure your services stay available
+- **Multi Server Support** - Deploy across multiple servers with parallel SSH execution
+- **Container Engine Agnostic** - Works with Docker or Podman
+- **Private Networking** - WireGuard mesh VPN with encrypted inter-server communication
+- **Service Discovery** - Automatic DNS resolution for service-to-service communication
+- **Simple Configuration** - YAML-based configuration-as-code
+
+## Core Components
+
+### Jiji CLI
+
+The main orchestration tool built on Deno/TypeScript. Handles building, deploying, and managing containerized applications across your infrastructure.
+
+### jiji-dns
+
+A lightweight DNS server that provides automatic service discovery for containers. Enables services to communicate using friendly names like `myproject-api.jiji` instead of IP addresses.
+
+### Network Stack
+
+- **WireGuard** - Encrypted peer-to-peer mesh VPN between servers
+- **Corrosion** - Distributed CRDT database for service registration
+- **kamal-proxy** - HTTP/HTTPS routing with SSL termination
+
+## Quick Example
+
+```yaml
+# .jiji/deploy.yml
+project: myapp
+
+builder:
+  engine: docker
+  registry:
+    type: local
+
+servers:
+  web1:
+    host: server1.example.com
+  web2:
+    host: server2.example.com
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hosts: [web1, web2]
+    proxy:
+      app_port: 3000
+      host: api.example.com
+      ssl: true
+      healthcheck:
+        path: /health
+```
+
+```bash
+# Bootstrap the servers
+jiji server init
+```
+
+```bash
+# Deploy with zero downtime
+jiji deploy --build
+```
+
+## Next Steps
+
+- [Installation](/docs/getting-started/installation) - Get Jiji installed on your system
+- [Quick Start](/docs/getting-started/quick-start) - Deploy your first application
+- [Architecture](/docs/getting-started/architecture) - Understand how Jiji works

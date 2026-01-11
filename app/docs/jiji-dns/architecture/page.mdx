@@ -1,0 +1,389 @@
+# jiji-dns Architecture
+
+## Component Overview
+
+jiji-dns consists of four main components:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       jiji-dns                                  │
+│                                                                 │
+│  ┌──────────────────┐    ┌──────────────────┐                  │
+│  │   DNS Server     │◀───│    DNS Cache     │                  │
+│  │   (UDP :53)      │    │   (In-Memory)    │                  │
+│  └──────────────────┘    └──────────────────┘                  │
+│           │                       ▲                             │
+│           │                       │                             │
+│           ▼                       │                             │
+│  ┌──────────────────┐    ┌──────────────────┐                  │
+│  │  DNS Protocol    │    │    Corrosion     │                  │
+│  │  (RFC 1035)      │    │   Subscriber     │                  │
+│  └──────────────────┘    └──────────────────┘                  │
+│                                   │                             │
+│                                   │ HTTP Stream                 │
+│                                   ▼                             │
+│                          ┌──────────────────┐                  │
+│                          │    Corrosion     │                  │
+│                          │    Database      │                  │
+│                          └──────────────────┘                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Components
+
+### DNS Server
+
+- Listens on UDP port 53 (one listener per configured address)
+- Routes `.jiji` queries to DNS Cache
+- Forwards other queries to system resolvers
+- Implements RFC 1035 DNS protocol
+- Supports label compression for efficient responses
+
+### DNS Cache
+
+- In-memory store indexed by hostname and container ID
+- Updated in real-time from Corrosion subscription
+- Implements "newest-container-wins" logic per service/server
+- Returns only healthy containers
+- Thread-safe for concurrent access
+
+### Corrosion Subscriber
+
+- Maintains HTTP streaming connection to Corrosion API
+- Parses NDJSON (Newline Delimited JSON) messages from `/v1/subscriptions`
+- Emits upsert/delete/ready events
+- Auto-reconnects with exponential backoff (max 60s)
+- Adds jitter to prevent thundering herd
+
+### DNS Protocol
+
+- Low-level DNS packet parsing and building
+- Handles label compression (RFC 1035)
+- Supports A record responses
+- Response codes: NOERROR, NXDOMAIN, SERVFAIL, FORMERR, NOTIMP, REFUSED
+
+## Data Flow
+
+### Container Registration
+
+```
+1. jiji deploy
+   │
+   ▼
+2. Container starts
+   │
+   ▼
+3. Health check passes
+   │
+   ▼
+4. jiji registers container in Corrosion
+   │
+   ▼
+5. Corrosion streams update to jiji-dns
+   │
+   ▼
+6. DNS Cache updated with container IP
+   │
+   ▼
+7. DNS queries return new container
+```
+
+### DNS Query Resolution
+
+```
+1. Container makes DNS query
+   │
+   ▼
+2. Query reaches jiji-dns (10.210.X.1:53)
+   │
+   ▼
+3. Check if domain ends with .jiji
+   │
+   ├── Yes: Lookup in DNS Cache
+   │         │
+   │         ├── Found: Return A records for healthy containers
+   │         │
+   │         └── Not Found: Return NXDOMAIN
+   │
+   └── No: Forward to system resolver
+            │
+            ├── Resolver responds: Return response
+            │
+            └── All resolvers fail: Return SERVFAIL
+```
+
+## Database Schema
+
+Corrosion stores container registrations with this structure:
+
+### SQL Query Used by jiji-dns
+
+```sql
+SELECT
+  c.id,
+  c.service,
+  c.server_id,
+  c.ip,
+  c.health_status,
+  c.started_at,
+  c.instance_id,
+  s.project
+FROM containers c
+JOIN services s ON c.service = s.name
+WHERE c.health_status = 'healthy'
+```
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique container ID (e.g., `abc123def456`) |
+| `project` | string | Project name (e.g., `myapp`) |
+| `service` | string | Service name (e.g., `api`) |
+| `instance_id` | string | Instance identifier (e.g., `primary`, `157-230-162-210`) |
+| `ip` | string | Container IP address (e.g., `10.210.0.5`) |
+| `health_status` | string | healthy, degraded, unhealthy, unknown |
+| `server_id` | string | Server identifier |
+| `started_at` | string | Container start timestamp (ISO 8601) |
+
+## Health Filtering
+
+jiji-dns only returns containers where `health_status = 'healthy'`:
+
+### Health Status Lifecycle
+
+```
+1. Container starts
+   │
+   └── Registered as 'unknown'
+
+2. First health check runs
+   │
+   ├── Pass: Updated to 'healthy'
+   │         └── Included in DNS responses
+   │
+   └── Fail: Updated to 'unhealthy'
+             └── Excluded from DNS responses
+
+3. Subsequent health checks
+   │
+   ├── Consistent passes: Stays 'healthy'
+   │
+   ├── Intermittent failures: May become 'degraded'
+   │
+   └── Consistent failures: Becomes 'unhealthy'
+             └── Removed from DNS responses
+
+4. Container removed
+   │
+   └── Deleted from Corrosion
+       └── Removed from DNS cache
+```
+
+### Health Status Values
+
+| Status | Description | In DNS? |
+|--------|-------------|---------|
+| `healthy` | Passing health checks | Yes |
+| `degraded` | Intermittent failures | No |
+| `unhealthy` | Consistently failing | No |
+| `unknown` | No check run yet | No |
+
+## Load Balancing
+
+DNS-based load balancing with intelligent container selection:
+
+### Newest-Container-Wins Logic
+
+For each service/server combination, only the newest container is returned:
+
+```
+Server 1:
+  - container-old (started 10:00) → excluded
+  - container-new (started 10:05) → included ✓
+
+Server 2:
+  - container-a (started 10:02) → included ✓
+
+DNS Response for myapp-api.jiji:
+  - 10.210.0.10 (container-new on Server 1)
+  - 10.210.1.5 (container-a on Server 2)
+```
+
+This ensures:
+- During rolling deployments, only the newest healthy container per server is returned
+- Old containers are automatically phased out
+- No manual intervention needed
+
+### Multi-Record Responses
+
+- Returns all healthy containers across different servers
+- Records are included in DNS response as multiple A records
+- Clients typically use first record (but may implement their own selection)
+- Short TTL (default 60s) ensures quick failover
+
+## Failure Handling
+
+### Corrosion Connection Lost
+
+```
+1. jiji-dns detects disconnection
+   │
+   ▼
+2. Logs: [RECONNECT] Attempting reconnection (attempt 1)
+   │
+   ▼
+3. Waits RECONNECT_INTERVAL ms (with jitter)
+   │
+   ▼
+4. Attempts reconnection
+   │
+   ├── Success:
+   │   │
+   │   ├── Re-subscribes to updates
+   │   ├── Receives full initial sync
+   │   ├── Resets reconnection counter
+   │   └── Logs: [READY] Initial sync complete
+   │
+   └── Failure:
+       │
+       ├── Increases backoff (exponential, max 60s)
+       ├── Adds jitter (random 0-1s)
+       └── Returns to step 3
+
+5. During reconnection:
+   │
+   └── DNS cache remains valid
+       └── Queries still answered from cache
+```
+
+### Container Becomes Unhealthy
+
+```
+1. Health check fails
+   │
+   ▼
+2. jiji updates container in Corrosion
+   │
+   ▼
+3. Corrosion streams update: health_status = 'unhealthy'
+   │
+   ▼
+4. jiji-dns receives stream event
+   │
+   ▼
+5. DNS cache updated immediately
+   │
+   ▼
+6. Container excluded from subsequent DNS responses
+```
+
+### Server Failure
+
+```
+1. Server becomes unreachable
+   │
+   ▼
+2. WireGuard detects peer offline
+   │
+   ▼
+3. Containers on failed server stop responding
+   │
+   ▼
+4. Health checks fail
+   │
+   ▼
+5. jiji updates containers as unhealthy
+   │
+   ▼
+6. Corrosion garbage collects stale entries
+   │
+   ▼
+7. jiji-dns cache updated via subscription
+   │
+   ▼
+8. Failed server's containers removed from DNS
+```
+
+### Upstream DNS Failure
+
+```
+1. Non-.jiji query received (e.g., google.com)
+   │
+   ▼
+2. Forward to first system resolver
+   │
+   ├── Success: Return response
+   │
+   └── Failure (5s timeout):
+       │
+       ▼
+3. Try next resolver
+   │
+   ├── Success: Return response
+   │
+   └── Failure:
+       │
+       ▼
+4. Continue until all resolvers tried
+   │
+   ▼
+5. If all fail: Return SERVFAIL
+```
+
+## Upstream Resolver Selection
+
+jiji-dns loads resolvers from `/etc/resolv.conf`:
+
+1. Parses all `nameserver` lines
+2. Filters out:
+   - Localhost addresses (`127.0.0.1`, `::1`)
+   - jiji-dns's own listen addresses
+3. Falls back to `8.8.8.8` and `1.1.1.1` if no valid resolvers
+
+## Why Host-Level?
+
+jiji-dns runs at the host level (not containerized) to avoid circular DNS dependencies:
+
+```
+Problem with containerized DNS:
+┌─────────────────────────────────────┐
+│ Container wants to start            │
+│ ↓                                   │
+│ Needs to resolve image registry DNS │
+│ ↓                                   │
+│ DNS server is in a container        │
+│ ↓                                   │
+│ That container needs DNS to start   │
+│ ↓                                   │
+│ DEADLOCK                            │
+└─────────────────────────────────────┘
+
+Solution with host-level DNS:
+┌─────────────────────────────────────┐
+│ jiji-dns runs on host (systemd)     │
+│ ↓                                   │
+│ Always available before containers  │
+│ ↓                                   │
+│ Containers can resolve DNS          │
+│ ↓                                   │
+│ All containers start normally       │
+└─────────────────────────────────────┘
+```
+
+Additional benefits:
+- Faster performance (no container overhead)
+- Simpler networking (direct access to WireGuard interface)
+- More reliable (managed by systemd)
+- Easier debugging (standard service logs)
+
+## Source Files Summary
+
+| File | Purpose |
+|------|---------|
+| `src/main.ts` | Entry point, component orchestration, signal handling |
+| `src/types.ts` | TypeScript interfaces, enums, configuration parsing |
+| `src/corrosion_subscriber.ts` | HTTP streaming client, NDJSON parsing, auto-reconnect |
+| `src/dns_cache.ts` | In-memory cache indexed by hostname and container ID |
+| `src/dns_server.ts` | UDP DNS server, query routing, upstream forwarding |
+| `src/dns_protocol.ts` | RFC 1035 DNS packet parsing and building |

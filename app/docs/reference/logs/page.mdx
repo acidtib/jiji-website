@@ -1,0 +1,361 @@
+# Logs Reference
+
+Jiji provides unified log viewing across all services and servers, plus comprehensive audit trails for deployment tracking.
+
+## Log Levels
+
+Jiji supports multiple log levels that can be configured globally or per-command:
+
+| Level | Description |
+|-------|-------------|
+| `debug` | Detailed debugging information |
+| `info` | General information |
+| `warn` | Warnings |
+| `error` | Errors only |
+| `fatal` | Critical failures only |
+| `success` | Success messages |
+| `trace` | Detailed trace (most verbose) |
+
+### Global Options
+
+```bash
+jiji -v deploy         # Verbose mode (debug level)
+jiji -q deploy         # Quiet mode (warn level only)
+```
+
+### SSH Logging
+
+SSH logging can be configured in your deploy.yml:
+
+```yaml
+ssh:
+  log_level: error     # debug | info | warn | error | fatal
+```
+
+## Service Logs
+
+View logs from your deployed services:
+
+```bash
+jiji services logs
+```
+
+### Filtering Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--services` | `-S` | Filter by service name (supports wildcards) |
+| `--hosts` | `-H` | Filter by host (supports wildcards) |
+| `--lines` | `-n` | Number of lines to show |
+| `--since` | | Show logs since time |
+| `--grep` | | Filter by pattern |
+| `--follow` | `-f` | Stream logs in real-time |
+| `--quiet` | `-q` | Minimal output |
+| `--container-id` | | Show container IDs in output |
+
+### Examples
+
+**View recent logs:**
+```bash
+jiji services logs -n 100
+```
+
+**Filter by service:**
+```bash
+jiji services logs -S api
+jiji services logs -S "api,worker"
+jiji services logs -S "web*"
+```
+
+**Filter by host:**
+```bash
+jiji services logs -H web1
+jiji services logs -H "prod*"
+```
+
+**Time-based filtering:**
+```bash
+jiji services logs --since 30m    # Last 30 minutes
+jiji services logs --since 2h     # Last 2 hours
+jiji services logs --since 1d     # Last day
+```
+
+**Search logs:**
+```bash
+jiji services logs --grep "error"
+jiji services logs --grep "ERROR|WARN"
+jiji services logs -S api --grep "timeout"
+```
+
+**Stream logs:**
+```bash
+jiji services logs -f
+jiji services logs -S api -f --grep "request"
+```
+
+**Combined filters:**
+```bash
+jiji services logs -S api -H "prod*" --since 1h --grep "ERROR" -n 50
+```
+
+## Proxy Logs
+
+View kamal-proxy logs for HTTP routing information:
+
+```bash
+jiji proxy logs
+```
+
+Supports the same filtering options as service logs.
+
+### Examples
+
+**View proxy logs:**
+```bash
+jiji proxy logs -n 100
+```
+
+**Filter by host:**
+```bash
+jiji proxy logs -H web1
+```
+
+**Search for errors:**
+```bash
+jiji proxy logs --grep "error"
+jiji proxy logs --grep "502|503|504"
+```
+
+**Stream proxy logs:**
+```bash
+jiji proxy logs -f
+```
+
+## Log Output Format
+
+Default output includes:
+- Timestamp
+- Host name
+- Service name
+- Log message
+
+With `--container-id`:
+- Container ID is prepended to each line
+
+With `--quiet`:
+- Only log messages, no metadata
+
+## Audit Trail
+
+The audit trail provides a comprehensive history of all operations performed by Jiji.
+
+### Viewing Audit Logs
+
+```bash
+jiji audit
+jiji audit --lines 50
+```
+
+### Audit Log Location
+
+Audit logs are stored on remote hosts at:
+```
+/var/log/jiji/{project}/
+```
+
+### Filtering Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--lines` | `-n` | Number of recent entries (default: 20) |
+| `--filter` | | Filter by action type |
+| `--status` | | Filter by status |
+| `--since` | | Show entries since date |
+| `--until` | | Show entries until date |
+| `--raw` | | Show raw format |
+| `--json` | | Output as JSON |
+| `--follow` | `-f` | Follow like tail -f |
+| `--aggregate` | | Combine logs chronologically from all hosts |
+
+### Action Types
+
+Filter by specific action types:
+- `deploy` - Deployment operations
+- `build` - Build operations
+- `lock` - Lock acquire/release
+- `restart` - Service restarts
+- `remove` - Service removals
+- `prune` - Image cleanup
+
+### Status Values
+
+Filter by operation status:
+- `started` - Operation started
+- `success` - Operation completed successfully
+- `failed` - Operation failed
+- `warning` - Operation completed with warnings
+
+### Examples
+
+**View recent audit entries:**
+```bash
+jiji audit
+jiji audit --lines 50
+```
+
+**Filter by action:**
+```bash
+jiji audit --filter deploy
+jiji audit --filter build
+```
+
+**Filter by status:**
+```bash
+jiji audit --status success
+jiji audit --status failed
+```
+
+**Date range filtering:**
+```bash
+jiji audit --since 2024-01-01
+jiji audit --since 2024-01-01 --until 2024-01-31
+```
+
+**Real-time monitoring:**
+```bash
+jiji audit --follow
+jiji audit -f --filter deploy
+```
+
+**JSON output for scripting:**
+```bash
+jiji audit --json
+jiji audit --json --filter deploy --status failed
+```
+
+**Aggregate logs from all hosts:**
+```bash
+jiji audit --aggregate
+```
+
+### Audit Entry Contents
+
+Each audit entry includes:
+- Timestamp
+- Action type
+- Status (started/success/failed/warning)
+- User or CI that triggered the operation
+- Services affected
+- Version information
+- Duration (for completed operations)
+- Error messages (for failed operations)
+
+## Direct Container Logs
+
+For more control, access container logs directly:
+
+```bash
+jiji server exec "docker logs <container-id>"
+jiji server exec "docker logs --tail 100 -f <container-id>"
+```
+
+## Component Logs
+
+### jiji-dns Logs
+
+```bash
+jiji server exec "journalctl -u jiji-dns -f"
+jiji server exec "journalctl -u jiji-dns --since '1 hour ago'"
+```
+
+### Corrosion Logs
+
+```bash
+jiji server exec "journalctl -u jiji-corrosion -f"
+jiji server exec "journalctl -u jiji-corrosion --since '1 hour ago'"
+```
+
+### WireGuard Logs
+
+```bash
+jiji server exec "journalctl -u wg-quick@jiji0 -f"
+```
+
+### kamal-proxy Logs
+
+```bash
+jiji proxy logs
+jiji proxy logs -H web1 -f
+```
+
+## Log Aggregation
+
+For production environments, consider forwarding logs to a centralized system.
+
+### Docker Log Driver
+
+Configure in your service:
+
+```yaml
+services:
+  api:
+    # ... other config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+### Syslog Forwarding
+
+```bash
+jiji server exec "docker logs <container> | logger -t myapp-api"
+```
+
+### Third-Party Integrations
+
+Common log aggregation solutions:
+- Datadog
+- Papertrail
+- Logtail
+- Grafana Loki
+- ELK Stack
+
+Configure your containers to send logs to these services using their respective log drivers or agents.
+
+## Troubleshooting
+
+### No logs appearing
+
+```bash
+# Check if container is running
+jiji server exec "docker ps" -H web1
+
+# Check container directly
+jiji server exec "docker logs <container-id>"
+```
+
+### Logs truncated
+
+Increase the line limit:
+```bash
+jiji services logs -n 1000
+```
+
+### Old logs not available
+
+Docker rotates logs. Check log driver settings:
+```bash
+jiji server exec "docker inspect <container> | grep -A10 LogConfig"
+```
+
+### Finding container IDs
+
+```bash
+# List running containers
+jiji server exec "docker ps"
+
+# Show container IDs in logs
+jiji services logs --container-id
+```

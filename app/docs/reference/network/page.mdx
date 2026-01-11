@@ -1,0 +1,369 @@
+# Network Reference
+
+Jiji provides private networking between servers using WireGuard mesh VPN, with automatic service discovery through Corrosion and jiji-dns.
+
+## Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Private Network (10.210.0.0/16)              │
+│                                                                 │
+│  ┌──────────────────┐        ┌──────────────────┐              │
+│  │    Server 0      │        │    Server 1      │              │
+│  │  10.210.0.1      │◀──────▶│  10.210.1.1      │              │
+│  │                  │WireGuard│                  │              │
+│  │  ┌────────────┐  │        │  ┌────────────┐  │              │
+│  │  │ Container  │  │        │  │ Container  │  │              │
+│  │  │ 10.210.0.5 │  │        │  │ 10.210.1.5 │  │              │
+│  │  └────────────┘  │        │  └────────────┘  │              │
+│  │                  │        │                  │              │
+│  │  ┌────────────┐  │        │  ┌────────────┐  │              │
+│  │  │ Corrosion  │◀─┼────────┼─▶│ Corrosion  │  │              │
+│  │  └────────────┘  │ Gossip │  └────────────┘  │              │
+│  │                  │        │                  │              │
+│  │  ┌────────────┐  │        │  ┌────────────┐  │              │
+│  │  │  jiji-dns  │  │        │  │  jiji-dns  │  │              │
+│  │  └────────────┘  │        │  └────────────┘  │              │
+│  └──────────────────┘        └──────────────────┘              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Network Stack
+
+The network consists of three layers:
+
+| Component | Port | Purpose |
+|-----------|------|---------|
+| WireGuard | 51820/UDP | Encrypted mesh VPN between servers |
+| Corrosion | 9280/TCP (gossip), 9220/TCP (API) | Distributed service registry |
+| jiji-dns | 53/UDP | DNS-based service discovery |
+
+## IP Allocation
+
+Default network: `10.210.0.0/16` (configurable via `cluster_cidr`)
+
+| Server Index | WireGuard IP | Container Subnet | Usable Container IPs |
+|--------------|--------------|------------------|---------------------|
+| 0 | 10.210.0.1 | 10.210.0.0/24 | 10.210.0.2 - 10.210.0.254 |
+| 1 | 10.210.1.1 | 10.210.1.0/24 | 10.210.1.2 - 10.210.1.254 |
+| 2 | 10.210.2.1 | 10.210.2.0/24 | 10.210.2.2 - 10.210.2.254 |
+| N | 10.210.N.1 | 10.210.N.0/24 | 10.210.N.2 - 10.210.N.254 |
+
+Maximum: 256 servers, 253 containers per server.
+
+## WireGuard Configuration
+
+WireGuard creates an encrypted mesh VPN between all servers.
+
+**Configuration location:** `/etc/wireguard/jiji0.conf`
+
+**Interface:**
+- Name: `jiji0`
+- Port: 51820/UDP
+- Encryption: Curve25519
+
+**Peer configuration is automatic.** Each server gets peer entries for all other servers.
+
+### Verify WireGuard
+
+```bash
+# Check interface status
+jiji server exec "wg show jiji0"
+
+# Check connectivity to another server
+jiji server exec "ping -c 3 10.210.1.1" -H web1
+
+# View WireGuard config
+jiji server exec "cat /etc/wireguard/jiji0.conf"
+```
+
+## Corrosion Database
+
+Corrosion is a CRDT-based (Conflict-free Replicated Data Type) distributed database that stores container registrations. It uses a gossip protocol with no central coordinator.
+
+### Database Location
+
+```
+/opt/jiji/corrosion/state.db
+/opt/jiji/corrosion/config.toml
+```
+
+### Database Schema
+
+**containers table:**
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT | Unique container ID |
+| `service` | TEXT | Service name |
+| `server_id` | TEXT | Server identifier |
+| `ip` | TEXT | Container IP address |
+| `health_status` | TEXT | healthy, degraded, unhealthy, unknown |
+| `started_at` | TEXT | Container start timestamp |
+| `instance_id` | TEXT | Instance identifier (e.g., "primary", server IP) |
+
+**services table:**
+| Column | Type | Description |
+|--------|------|-------------|
+| `name` | TEXT | Service name |
+| `project` | TEXT | Project name |
+
+**servers table:**
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT | Server identifier |
+| `hostname` | TEXT | Server hostname |
+| `wireguard_ip` | TEXT | WireGuard interface IP |
+
+**cluster_metadata table:**
+| Column | Type | Description |
+|--------|------|-------------|
+| `key` | TEXT | Metadata key |
+| `value` | TEXT | Metadata value |
+
+### Corrosion Ports
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 9280 | TCP | Gossip protocol (peer-to-peer sync) |
+| 9220 | TCP | HTTP API |
+
+### Sync Timeout
+
+Corrosion uses a 300-second (5 minute) sync timeout for data replication across the cluster.
+
+## Service Discovery
+
+### jiji-dns
+
+jiji-dns subscribes to Corrosion and serves DNS queries for the `.jiji` domain.
+
+**Listening:** 10.210.X.1:53 (WireGuard IP)
+
+**DNS format:**
+```
+{project}-{service}.jiji
+```
+
+**Instance-specific format:**
+```
+{project}-{service}-{instance}.jiji
+```
+
+**Example queries:**
+```bash
+# Resolve service (returns all healthy container IPs)
+dig @10.210.0.1 myapp-api.jiji
+
+# Returns:
+# 10.210.0.5
+# 10.210.1.5
+
+# Resolve specific instance
+dig @10.210.0.1 myapp-api-primary.jiji
+```
+
+### Container DNS Configuration
+
+Containers are automatically configured to use jiji-dns:
+
+**Docker:** `/etc/docker/daemon.json`
+```json
+{
+  "dns": ["10.210.0.1"]
+}
+```
+
+**Podman:** `/etc/containers/containers.conf`
+```ini
+[containers]
+dns_servers = ["10.210.0.1"]
+```
+
+## Service Communication
+
+### Service-to-Service
+
+From within a container:
+```bash
+# Connect to another service
+curl http://myapp-api.jiji:3000/endpoint
+
+# DNS returns healthy containers
+# Client-side load balancing via multiple A records
+```
+
+### Health-Based Routing
+
+jiji-dns only returns healthy containers:
+
+1. Container starts, registers with Corrosion
+2. Health checks run on the container
+3. Container marked as `healthy` in Corrosion
+4. jiji-dns includes container IP in DNS responses
+5. If container becomes unhealthy, removed from DNS
+
+### Load Balancing
+
+jiji-dns implements "newest-container-wins" logic per service/server combination:
+- Returns all healthy containers across different servers
+- During rolling deployments, only the newest container per server is returned
+- DNS responses include multiple A records for client-side load balancing
+- Short TTL (default: 60s) ensures quick failover
+
+## Network Commands
+
+### Check Network Status
+
+```bash
+jiji network status
+```
+
+Shows:
+- WireGuard peer connections
+- Corrosion cluster state
+- DNS service status
+- Container health summary
+
+### View DNS Records
+
+```bash
+jiji network dns
+jiji network dns --service api
+```
+
+### Inspect Container Networking
+
+```bash
+jiji network inspect
+jiji network inspect -S api
+jiji network inspect --container abc123
+```
+
+Shows container network details including IP addresses.
+
+### Garbage Collection
+
+```bash
+jiji network gc          # Dry run - shows what would be deleted
+jiji network gc --force  # Actually delete stale records
+```
+
+Removes DNS records for containers that no longer exist.
+
+### Database Operations
+
+```bash
+# View database statistics
+jiji network db stats
+
+# Execute raw SQL query
+jiji network db query "SELECT * FROM containers"
+jiji network db query "SELECT * FROM containers WHERE health_status = 'healthy'"
+jiji network db query "SELECT c.*, s.project FROM containers c JOIN services s ON c.service = s.name"
+```
+
+### Teardown Network
+
+```bash
+jiji network teardown
+jiji network teardown -H web1  # Specific server
+```
+
+Removes WireGuard, Corrosion, and jiji-dns from servers.
+
+## Firewall Requirements
+
+Ensure these ports are open between servers:
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 51820 | UDP | WireGuard VPN |
+| 9280 | TCP | Corrosion gossip |
+| 9220 | TCP | Corrosion HTTP API |
+
+## Component Locations
+
+| Component | Binary/Config | Service |
+|-----------|--------------|---------|
+| WireGuard | `/etc/wireguard/jiji0.conf` | `wg-quick@jiji0` |
+| Corrosion | `/opt/jiji/corrosion/` | `jiji-corrosion.service` |
+| jiji-dns | `/opt/jiji/dns/jiji-dns` | `jiji-dns.service` |
+
+## Troubleshooting
+
+### WireGuard not connecting
+
+```bash
+# Check WireGuard status
+jiji server exec "wg show jiji0"
+
+# Check firewall
+jiji server exec "iptables -L -n | grep 51820"
+
+# Check systemd service
+jiji server exec "systemctl status wg-quick@jiji0"
+
+# View WireGuard logs
+jiji server exec "journalctl -u wg-quick@jiji0 --since '1 hour ago'"
+```
+
+### Corrosion not syncing
+
+```bash
+# Check Corrosion service
+jiji server exec "systemctl status jiji-corrosion"
+
+# Check Corrosion logs
+jiji server exec "journalctl -u jiji-corrosion -f"
+
+# Test Corrosion API
+jiji server exec "curl http://127.0.0.1:9220/v1/queries"
+
+# Check database statistics
+jiji network db stats
+```
+
+### DNS not resolving
+
+```bash
+# Check jiji-dns service
+jiji server exec "systemctl status jiji-dns"
+
+# View jiji-dns logs
+jiji server exec "journalctl -u jiji-dns -f"
+
+# Test DNS directly
+jiji server exec "dig @10.210.0.1 myapp-api.jiji"
+
+# Check if DNS is listening
+jiji server exec "ss -ulnp | grep 53"
+```
+
+### Containers can't reach each other
+
+```bash
+# Verify container DNS setting
+jiji server exec "docker inspect <container> | grep -A5 Dns"
+
+# Test from container
+jiji server exec "docker exec <container> ping 10.210.1.1"
+
+# Check container can resolve DNS
+jiji server exec "docker exec <container> nslookup myapp-api.jiji"
+
+# Verify routes
+jiji server exec "docker exec <container> ip route"
+```
+
+### Stale DNS records
+
+```bash
+# View current DNS records
+jiji network dns
+
+# Check for stale records
+jiji network gc
+
+# Clean up stale records
+jiji network gc --force
+```

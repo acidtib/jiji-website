@@ -1,0 +1,253 @@
+# CI/CD Integration
+
+Jiji integrates easily with CI/CD pipelines for automated deployments.
+
+## GitHub Actions
+
+### Basic Deployment
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install Jiji
+        run: deno install -gArf jsr:@mywl/jiji
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: jiji --host-env deploy --build -e production
+```
+
+### With Version Tags
+
+```yaml
+name: Deploy Tagged Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+
+      - name: Install Jiji
+        run: deno install -gArf jsr:@mywl/jiji
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          jiji --host-env deploy --build --version $VERSION -e production
+```
+
+### Staging and Production
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main, develop]
+
+jobs:
+  deploy-staging:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - run: deno install -gArf jsr:@mywl/jiji
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Deploy to Staging
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: jiji --host-env deploy --build -e staging
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - run: deno install -gArf jsr:@mywl/jiji
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Deploy to Production
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: jiji --host-env deploy --build -e production
+```
+
+## GitLab CI
+
+```yaml
+# .gitlab-ci.yml
+stages:
+  - deploy
+
+deploy:
+  stage: deploy
+  image: denoland/deno:2
+  before_script:
+    - deno install -gArf jsr:@mywl/jiji
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+  script:
+    - jiji --host-env deploy --build -e production
+  only:
+    - main
+  variables:
+    GITHUB_TOKEN: $CI_REGISTRY_PASSWORD
+```
+
+## Required Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `SSH_PRIVATE_KEY` | Private key for server access |
+| `SERVER_HOST` | Server hostname (for ssh-keyscan) |
+| `GITHUB_TOKEN` | Registry authentication (GHCR) |
+
+## SSH Key Setup
+
+Generate a dedicated deployment key:
+
+```bash
+ssh-keygen -t ed25519 -C "deploy@ci" -f deploy_key
+```
+
+Add the public key to your servers:
+
+```bash
+# On each server
+echo "ssh-ed25519 AAAA... deploy@ci" >> ~/.ssh/authorized_keys
+```
+
+Add the private key as a CI secret.
+
+## Best Practices
+
+### Use Deployment Locks
+
+Prevent concurrent deployments:
+
+```yaml
+- name: Acquire Lock
+  run: jiji lock acquire --message "CI deploy ${{ github.sha }}"
+
+- name: Deploy
+  run: jiji deploy --build
+
+- name: Release Lock
+  if: always()
+  run: jiji lock release
+```
+
+### Version Tagging
+
+Always tag deployments:
+
+```yaml
+- name: Deploy
+  run: |
+    VERSION=$(git rev-parse --short HEAD)
+    jiji deploy --build --version $VERSION
+```
+
+### Health Check Verification
+
+Verify deployment success:
+
+```yaml
+- name: Deploy
+  run: jiji deploy --build
+
+- name: Verify
+  run: |
+    sleep 10
+    jiji services logs -S api --since 1m | grep -v ERROR
+```
+
+### Notifications
+
+Add deployment notifications:
+
+```yaml
+- name: Notify Success
+  if: success()
+  run: |
+    curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+      -d '{"text":"Deployed to production successfully"}'
+
+- name: Notify Failure
+  if: failure()
+  run: |
+    curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+      -d '{"text":"Deployment failed!"}'
+```
+
+## Troubleshooting CI Deployments
+
+### SSH Connection Failed
+
+- Verify SSH key is correctly formatted in secrets
+- Check ssh-keyscan includes all server hosts
+- Ensure server allows key-based auth
+
+### Registry Authentication Failed
+
+- Verify token has correct scopes
+- Check token hasn't expired
+- Ensure environment variable is set correctly
+
+### Deployment Timeout
+
+- Increase health check `deploy_timeout`
+- Check container logs: `jiji services logs`
+- Verify container starts correctly locally

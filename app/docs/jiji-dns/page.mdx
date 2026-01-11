@@ -1,0 +1,196 @@
+# jiji-dns
+
+jiji-dns is a lightweight DNS server that provides automatic service discovery for containers deployed with Jiji.
+
+## Overview
+
+jiji-dns enables containers to communicate using friendly DNS names instead of IP addresses:
+
+```bash
+# Instead of hardcoding IPs
+curl http://10.210.1.5:3000/api
+
+# Use service names
+curl http://myapp-api.jiji:3000/api
+```
+
+## Key Features
+
+- **Real-time Updates** - Subscribes to Corrosion for instant DNS record changes
+- **Health-Aware** - Only returns healthy containers in DNS responses
+- **In-Memory Cache** - Fast lookups with no disk I/O
+- **Auto-Reconnect** - Automatically reconnects to Corrosion with exponential backoff
+- **Multi-Instance Support** - Query all instances or specific containers
+- **Multi-Address Binding** - Listen on multiple network interfaces simultaneously
+- **Load Balancing** - DNS-based load balancing across multiple containers
+
+## DNS Resolution Patterns
+
+### Service-Level Resolution
+
+Query all healthy containers for a service:
+
+```
+{project}-{service}.jiji
+```
+
+Example:
+```bash
+dig myapp-api.jiji
+# Returns:
+# 10.210.0.5
+# 10.210.1.5
+# 10.210.2.5
+```
+
+### Instance-Level Resolution
+
+Query a specific container by instance ID:
+
+```
+{project}-{service}-{instance}.jiji
+```
+
+Example:
+```bash
+dig myapp-api-primary.jiji
+# Returns:
+# 10.210.0.5
+
+dig myapp-api-157-230-162-210.jiji
+# Returns container on specific server
+```
+
+Instance IDs can be:
+- Custom identifiers like `primary`, `secondary`
+- Server IP-based identifiers (auto-generated)
+
+## DNS Record Types
+
+jiji-dns implements:
+- **A Records** (IPv4 addresses) - Fully supported
+- AAAA, CNAME, MX, TXT, NS, SOA, PTR - Recognized but return empty responses
+
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Service Discovery Flow                       │
+│                                                                 │
+│  Container A         jiji-dns            Corrosion              │
+│       │                  │                   │                  │
+│       │  DNS query:      │                   │                  │
+│       │  myapp-api.jiji  │                   │                  │
+│       │─────────────────▶│                   │                  │
+│       │                  │   Lookup cache    │                  │
+│       │                  │   (synced via     │                  │
+│       │                  │   subscription)   │                  │
+│       │                  │◀──────────────────│                  │
+│       │  A records:      │                   │                  │
+│       │  10.210.0.5      │                   │                  │
+│       │  10.210.1.5      │                   │                  │
+│       │◀─────────────────│                   │                  │
+│       │                  │                   │                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+1. **Container Registration** - Jiji registers containers with Corrosion on deploy
+2. **Subscription** - jiji-dns subscribes to Corrosion's HTTP streaming API
+3. **Cache Update** - DNS cache updated in real-time as containers start/stop
+4. **Query Resolution** - DNS queries resolved from in-memory cache
+5. **Health Filtering** - Only healthy containers returned in responses
+
+## Load Balancing
+
+jiji-dns provides DNS-based load balancing:
+
+- **Multiple A Records** - Returns all healthy container IPs for a service
+- **Newest-Container-Wins** - Per service/server, only the newest container is returned
+- **Rolling Deployment Support** - During deployments, seamlessly transitions to new containers
+- **Short TTL** - Default 60-second TTL ensures quick failover
+- **Health-Aware** - Unhealthy containers are automatically excluded
+
+### Example During Rolling Deployment
+
+```
+Before deployment:
+myapp-api.jiji → 10.210.0.5 (old container)
+
+During deployment:
+myapp-api.jiji → 10.210.0.5 (old still serving while new starts)
+
+After health check passes:
+myapp-api.jiji → 10.210.0.10 (new container only)
+```
+
+## Non-.jiji Queries
+
+Queries for domains outside `.jiji` are forwarded to system resolvers:
+
+- Reads from `/etc/resolv.conf`
+- Falls back to `8.8.8.8` and `1.1.1.1` if no system resolvers found
+- Skips localhost and jiji-dns's own addresses
+- 5-second timeout per upstream query
+
+## Multi-Address Binding
+
+jiji-dns can listen on multiple addresses simultaneously:
+
+```bash
+# Single address
+LISTEN_ADDR=10.210.0.1:53
+
+# Multiple addresses (comma-separated)
+LISTEN_ADDR=10.210.0.1:53,10.210.128.1:53
+```
+
+Use cases:
+- Listen on WireGuard interface for container traffic
+- Listen on container gateway for host-level queries
+- Support multiple network segments
+
+## Installation
+
+jiji-dns is automatically installed when you run:
+
+```bash
+jiji server init
+```
+
+It's installed to `/opt/jiji/dns/jiji-dns` and managed by systemd as `jiji-dns.service`.
+
+## Verification
+
+Check if jiji-dns is running:
+
+```bash
+jiji server exec "systemctl status jiji-dns"
+```
+
+Test DNS resolution:
+
+```bash
+jiji server exec "dig @10.210.0.1 myapp-api.jiji"
+```
+
+View logs:
+
+```bash
+jiji server exec "journalctl -u jiji-dns -f"
+```
+
+Check cache statistics (from logs):
+
+```bash
+jiji server exec "journalctl -u jiji-dns | grep READY"
+# Shows: totalRecords, healthyRecords, hostnames
+```
+
+## Why Host-Level?
+
+jiji-dns runs at the host level (not containerized) to avoid circular DNS dependencies:
+
+- Containers need DNS to resolve service names
+- If DNS server was containerized, it would need DNS to start
+- Host-level installation breaks this cycle
+- Also provides faster performance and simpler networking
