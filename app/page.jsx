@@ -918,7 +918,7 @@ function FooterLink({ href, children }) {
 
 function InstallCommand() {
   const [copied, setCopied] = useState(false);
-  const command = "curl -fsSL https://jiji.run/install.sh | bash";
+  const command = "curl -fsSL https://get.jiji.run/install.sh | sh";
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(command);
