@@ -118,7 +118,7 @@ export default function LandingPage() {
               <div className="flex items-center gap-3 mb-8 opacity-0 animate-fade-in-up">
                 <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 font-mono text-xs">
                   <span className="w-2 h-2 bg-primary rounded-full mr-2 animate-pulse" />
-                  v0.2.1 STABLE
+                  v0.3.0 Latest
                 </Badge>
               </div>
 
