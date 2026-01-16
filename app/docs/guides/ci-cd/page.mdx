@@ -26,7 +26,7 @@ jobs:
           deno-version: v2.x
 
       - name: Install Jiji
-        run: deno install -gArf jsr:@mywl/jiji
+        run: deno install -gArf jsr:@jiji/cli
 
       - name: Setup SSH
         run: |
@@ -61,7 +61,7 @@ jobs:
         uses: denoland/setup-deno@v2
 
       - name: Install Jiji
-        run: deno install -gArf jsr:@mywl/jiji
+        run: deno install -gArf jsr:@jiji/cli
 
       - name: Setup SSH
         run: |
@@ -94,7 +94,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-      - run: deno install -gArf jsr:@mywl/jiji
+      - run: deno install -gArf jsr:@jiji/cli
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -111,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-      - run: deno install -gArf jsr:@mywl/jiji
+      - run: deno install -gArf jsr:@jiji/cli
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -134,7 +134,7 @@ deploy:
   stage: deploy
   image: denoland/deno:2
   before_script:
-    - deno install -gArf jsr:@mywl/jiji
+    - deno install -gArf jsr:@jiji/cli
     - mkdir -p ~/.ssh
     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
     - chmod 600 ~/.ssh/id_ed25519
@@ -179,7 +179,7 @@ Prevent concurrent deployments:
 
 ```yaml
 - name: Acquire Lock
-  run: jiji lock acquire --message "CI deploy ${{ github.sha }}"
+  run: jiji lock acquire "CI deploy ${{ github.sha }}"
 
 - name: Deploy
   run: jiji deploy --build
