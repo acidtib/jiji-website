@@ -149,9 +149,8 @@ Prevent concurrent deployments with locking:
 ### Acquire Lock
 
 ```bash
-jiji lock acquire
-jiji lock acquire --message "Deploying v1.2.3"
-jiji lock acquire --timeout 300      # Timeout in seconds
+jiji lock acquire "Deploying v1.2.3"
+jiji lock acquire "Deploying v1.2.3" --timeout 300   # Timeout in seconds
 ```
 
 ### Release Lock
@@ -173,14 +172,14 @@ jiji lock show                # Detailed info
 If a lock is stuck (e.g., from a failed deployment):
 
 ```bash
-jiji lock acquire --force --message "Taking over stuck deployment"
+jiji lock acquire "Taking over stuck deployment" --force
 ```
 
 ### Recommended Workflow
 
 ```bash
 # Acquire lock before deploy
-jiji lock acquire --message "Deploying v1.2.3"
+jiji lock acquire "Deploying v1.2.3"
 
 # Deploy
 jiji deploy --build
@@ -438,7 +437,7 @@ Before deploying to production:
 4. **Check server connectivity** - `jiji server exec "echo ok"`
 5. **Verify registry access** - `jiji registry login`
 6. **Check secrets** - `jiji secrets print`
-7. **Acquire lock** - `jiji lock acquire --message "Deploying vX.Y.Z"`
+7. **Acquire lock** - `jiji lock acquire "Deploying vX.Y.Z"`
 
 ## Post-Deployment Verification
 
@@ -489,7 +488,7 @@ For automated deployments, use the `-y` flag and proper locking:
 set -e
 
 # Acquire lock
-jiji lock acquire --message "CI Deploy: $CI_COMMIT_SHA"
+jiji lock acquire "CI Deploy: $CI_COMMIT_SHA"
 
 # Deploy
 jiji deploy --build -y -e production

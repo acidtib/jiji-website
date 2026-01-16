@@ -140,6 +140,7 @@ jiji services logs -H web1 -S api
 | `--lines, -n` | Number of lines |
 | `--since` | Time filter (30m, 2h, 1d) |
 | `--grep` | Filter by pattern |
+| `--grep-options` | Options for grep (e.g., `-i` for case-insensitive) |
 | `--follow, -f` | Stream logs |
 | `--container-id` | Show container IDs |
 
@@ -242,7 +243,8 @@ Show DNS records from service discovery.
 
 ```bash
 jiji network dns
-jiji network dns --service api
+jiji network dns -S api        # Filter by service
+jiji network dns -S "api,web"  # Multiple services
 ```
 
 ### `jiji network inspect`
@@ -358,16 +360,15 @@ Audit logs are stored at `/var/log/jiji/{project}/` on remote hosts.
 Acquire deployment lock to prevent concurrent deployments.
 
 ```bash
-jiji lock acquire
-jiji lock acquire --message "Deploying v1.2.3"
-jiji lock acquire --timeout 300      # Timeout in seconds
-jiji lock acquire --force            # Force acquire even if locked
+jiji lock acquire "Deploying v1.2.3"
+jiji lock acquire "CI deploy" --timeout 300   # Timeout in seconds
+jiji lock acquire "Emergency fix" --force     # Force acquire even if locked
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--message, -m` | Lock message |
-| `--timeout` | Timeout in seconds |
+| Argument/Option | Description |
+|-----------------|-------------|
+| `<message>` | Lock message (required) |
+| `--timeout` | Timeout in seconds (default: 300) |
 | `--force` | Force acquire even if already locked |
 
 ### `jiji lock release`
@@ -444,8 +445,8 @@ jiji network dns
 jiji audit --status failed --since 7d
 ```
 
-### Force release a stuck lock
+### Force acquire a stuck lock
 
 ```bash
-jiji lock acquire --force --message "Taking over stuck deployment"
+jiji lock acquire "Taking over stuck deployment" --force
 ```
