@@ -348,6 +348,10 @@ services:
       - app_storage:/app/data   # Named volume
 ```
 
+<Callout type="info">
+Named volumes (those not starting with `/` or `./`) are automatically prefixed with the service name to prevent conflicts between services. For example, `app_storage` becomes `db-app_storage` when used by the `db` service.
+</Callout>
+
 ## Environment Variables
 
 ### Clear Variables
