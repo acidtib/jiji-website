@@ -240,9 +240,7 @@ services:
       - /config:/app/config:ro    # Read-only
       - web_storage:/opt/uploads  # Named volume
 
-<Callout type="info">
-Named volumes (those not starting with `/` or `./`) are automatically prefixed with the service name to prevent conflicts between services. For example, if a service named `web` defines `web_storage:/opt/uploads`, the actual volume created will be `web-web_storage`. Host path mounts are not modified.
-</Callout>
+> **Note:** Named volumes (those not starting with `/` or `./`) are automatically prefixed with the service name to prevent conflicts between services. For example, if a service named `web` defines `web_storage:/opt/uploads`, the actual volume created will be `web-web_storage`. Host path mounts are not modified.
 
     # File transfers (simple format)
     files:
