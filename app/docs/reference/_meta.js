@@ -5,6 +5,9 @@ export default {
   commands: {
     title: 'Commands'
   },
+  features: {
+    title: 'Features'
+  },
   network: {
     title: 'Network'
   },

@@ -1,0 +1,100 @@
+# Features Reference
+
+Every built-in feature, organized by area.
+
+## Core
+
+- **Private Mesh Network** — WireGuard VPN between all servers. Encrypted by default.
+- **Automatic DNS** — Built-in `.jiji` DNS resolution. Access services by name.
+- **Zero-Downtime** — Old version keeps serving until the new one passes its health check.
+- **Runtime Agnostic** — Docker or Podman. Same config, your choice.
+- **Multi Server** — Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
+- **Multi Project** — Run multiple apps on one server. Perfect for small teams and hobby projects.
+
+## Proxy & SSL
+
+- **Auto SSL/TLS** — Automatic HTTPS certificates via kamal-proxy. Zero config.
+- **Path-based Routing** — Route traffic based on URL path prefix to different services.
+- **Wildcard Domains** — Support for wildcard domain matching like `*.example.com`.
+- **Multi-port Services** — Route multiple ports on a single service to different domains.
+- **HTTP Health Checks** — Health checking via HTTP endpoints with configurable paths.
+- **Command Health Checks** — Custom shell commands for health verification.
+- **Health Check Timing** — Configurable intervals, timeouts, and deploy timeouts.
+
+## Build
+
+- **Multi-stage Builds** — Support Docker multi-stage builds with target specification.
+- **Custom Dockerfile** — Specify a non-standard Dockerfile path for builds.
+- **Build Arguments** — Pass build-time arguments (ARGs) to Docker.
+- **Remote Builds** — Execute builds on remote SSH hosts for faster CI/CD.
+- **Build Cache** — Control whether to use Docker layer cache for builds.
+
+## Container Config
+
+- **Resource Limits** — CPU, memory, GPU limits. Device mapping support.
+- **Privileged Mode** — Run containers with extended privileges when needed.
+- **Linux Capabilities** — Add specific capabilities like `SYS_ADMIN`, `NET_ADMIN`.
+- **Device Mappings** — Mount host devices into containers (`/dev/video0`, `/dev/snd`).
+- **Named Volumes** — Use Docker named volumes instead of host paths.
+- **File & Directory Mounts** — Mount files/directories with fine grained permissions.
+- **Custom Commands** — Override container ENTRYPOINT/CMD as needed.
+- **Restart Policy** — Configure restart behavior: unless-stopped, always, on-failure, no.
+- **Network Mode** — Set custom network modes (bridge, host, etc.).
+
+## Deployment
+
+- **Rolling Deployments** — Zero-downtime deployments with old container cleanup.
+- **Stop-First Mode** — For stateful services like SQLite — stop old before starting new.
+- **Fail-Safe Health Checks** — A failed candidate is discarded; the previous version is never touched.
+- **Image Retention** — Control how many images to keep per service.
+- **Deployment Locks** — Prevent concurrent deploys. Team safe operations.
+- **Service Filtering** — Deploy specific services by name patterns.
+
+## SSH & Connections
+
+- **SSH Jump Host** — Connect through bastion/intermediate hosts via SSH proxy.
+- **Multiple SSH Keys** — Support multiple SSH keys for authentication.
+- **Key Passphrase** — Support encrypted SSH keys with passphrases.
+- **SSH Config Support** — Use system SSH config (`~/.ssh/config`).
+- **Bounded Concurrency** — Run SSH operations across many hosts without overwhelming any one connection limit.
+- **Interactive SSH** — Shell access to servers via `jiji server exec`.
+
+## Environment & Secrets
+
+- **Secrets Management** — Reference secrets from `.env` files securely.
+- **Shared Environment** — Project level env vars inherited by all services.
+- **Multi-environment** — Load different configurations per environment.
+- **Custom Secrets Path** — Specify a custom location for `.env` files.
+
+## Network
+
+- **Custom Network CIDR** — Configure management and container IP ranges per project.
+- **Network Plan Preview** — See interfaces, ports, and VIPs before touching a server.
+- **Per-Replica DNS Records** — Resolve every replica together, or reach one server directly.
+- **Clean Teardown** — Remove a project's network, containers, and routes in one command.
+- **Multi-Project Isolation** — Independent projects share a host with zero shared network state.
+
+## Registry
+
+- **Registry Support** — Local registry, GHCR, Docker Hub, ECR, GCP Artifact Registry, or any custom registry.
+- **Registry Login** — Authenticate to remote container registries.
+- **Local Registry Tunneling** — Automatic SSH reverse tunnels let remote servers pull from your local build.
+
+## Logging & Monitoring
+
+- **Centralized Logs** — Fetch logs from services with filtering.
+- **Log Grep** — Filter logs by pattern with grep options.
+- **Time-based Filtering** — Show logs since timestamp or relative time.
+- **Log Follow Mode** — Stream logs in real-time like `tail -f`.
+- **Audit Trail** — Complete deployment history with filtering.
+- **Deployment Timing** — Every audit entry records how long the operation took.
+
+## Operations
+
+- **Remote Execution** — Run commands across servers in parallel or sequential, or drop into an interactive shell.
+- **Service Restart** — Restart services without full redeployment.
+- **Service Removal** — Clean removal with network unregistration.
+- **Image Pruning** — Automatic cleanup of old service images.
+- **Server Teardown** — Clean server removal from cluster.
+- **Auto-install Engine** — Install Docker/Podman automatically on servers.
+- **Architecture Support** — Explicitly set server architecture (amd64/arm64).

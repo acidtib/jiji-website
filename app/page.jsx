@@ -6,52 +6,22 @@ import { Button } from "@/components/ui/button";
 import {
   Activity,
   ArrowRight,
-  Binary,
   BookOpen,
-  Box,
   Check,
-  ChevronRight,
-  Clock,
-  Cloud,
-  Container,
   Copy,
-  Cpu,
-  Database,
   ExternalLink,
-  Eye,
   FileCode,
-  FileText,
-  Filter,
-  FolderOpen,
-  GitBranch,
   Globe,
-  Hammer,
   HardDrive,
-  Key,
   KeyRound,
-  Layers,
-  Link2,
   Lock,
   Network,
-  Package,
-  Pause,
-  Play,
-  Plug,
   RefreshCw,
-  Route,
   ScrollText,
   Server,
-  Settings,
-  Share2,
   Shield,
   ShieldCheck,
-  Sparkles,
-  Split,
   Terminal,
-  Timer,
-  Trash2,
-  Users,
-  Workflow,
   Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -94,128 +64,16 @@ const MESH_TRAFFIC_EDGES = [
   [[2, 1], [3, 1]], // app1:worker -> data1:redis
 ];
 
-// Every feature from the original flat grid, now organized as a manifest a
-// visitor browses category by category instead of scrolling past all ~64 at once.
-const FEATURE_MANIFEST = [
-  {
-    title: "Core",
-    features: [
-      { icon: Network, title: "Private Mesh Network", description: "WireGuard VPN between all servers. Encrypted by default." },
-      { icon: Globe, title: "Automatic DNS", description: "Built-in .jiji DNS resolution. Access services by name." },
-      { icon: RefreshCw, title: "Zero-Downtime", description: "Old version keeps serving until the new one passes its health check." },
-      { icon: Container, title: "Runtime Agnostic", description: "Docker or Podman. Same config, your choice." },
-      { icon: GitBranch, title: "Multi Server", description: "Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety." },
-      { icon: Layers, title: "Multi Project", description: "Run multiple apps on one server. Perfect for small teams and hobby projects." },
-    ],
-  },
-  {
-    title: "Proxy & SSL",
-    features: [
-      { icon: Lock, title: "Auto SSL/TLS", description: "Automatic HTTPS certificates via kamal-proxy. Zero config." },
-      { icon: Route, title: "Path-based Routing", description: "Route traffic based on URL path prefix to different services." },
-      { icon: Sparkles, title: "Wildcard Domains", description: "Support for wildcard domain matching like *.example.com." },
-      { icon: Split, title: "Multi-port Services", description: "Route multiple ports on single service to different domains." },
-      { icon: Activity, title: "HTTP Health Checks", description: "Health checking via HTTP endpoints with configurable paths." },
-      { icon: Terminal, title: "Command Health Checks", description: "Custom shell commands for health verification." },
-      { icon: Clock, title: "Health Check Timing", description: "Configurable intervals, timeouts, and deploy timeouts." },
-    ],
-  },
-  {
-    title: "Build",
-    features: [
-      { icon: Workflow, title: "Multi-stage Builds", description: "Support Docker multi-stage builds with target specification." },
-      { icon: FileCode, title: "Custom Dockerfile", description: "Specify non-standard Dockerfile path for builds." },
-      { icon: Settings, title: "Build Arguments", description: "Pass build-time arguments (ARGs) to Docker." },
-      { icon: Cloud, title: "Remote Builds", description: "Execute builds on remote SSH hosts for faster CI/CD." },
-      { icon: Package, title: "Build Cache", description: "Control whether to use Docker layer cache for builds." },
-    ],
-  },
-  {
-    title: "Container Config",
-    features: [
-      { icon: Cpu, title: "Resource Limits", description: "CPU, memory, GPU limits. Device mapping support." },
-      { icon: ShieldCheck, title: "Privileged Mode", description: "Run containers with extended privileges when needed." },
-      { icon: Binary, title: "Linux Capabilities", description: "Add specific capabilities like SYS_ADMIN, NET_ADMIN." },
-      { icon: Plug, title: "Device Mappings", description: "Mount host devices into containers (/dev/video0, /dev/snd)." },
-      { icon: Database, title: "Named Volumes", description: "Use Docker named volumes instead of host paths." },
-      { icon: FolderOpen, title: "File & Directory Mounts", description: "Mount files/directories with fine grained permissions." },
-      { icon: Play, title: "Custom Commands", description: "Override container ENTRYPOINT/CMD as needed." },
-      { icon: RefreshCw, title: "Restart Policy", description: "Configure restart behavior: unless-stopped, always, on-failure, no." },
-      { icon: Settings, title: "Network Mode", description: "Set custom network modes (bridge, host, etc.)." },
-    ],
-  },
-  {
-    title: "Deployment",
-    features: [
-      { icon: Play, title: "Rolling Deployments", description: "Zero-downtime deployments with old container cleanup." },
-      { icon: Pause, title: "Stop-First Mode", description: "For stateful services like SQLite - stop old before starting new." },
-      { icon: Activity, title: "Fail-Safe Health Checks", description: "A failed candidate is discarded; the previous version is never touched." },
-      { icon: Timer, title: "Image Retention", description: "Control how many images to keep per service." },
-      { icon: Shield, title: "Deployment Locks", description: "Prevent concurrent deploys. Team safe operations." },
-      { icon: Filter, title: "Service Filtering", description: "Deploy specific services by name patterns." },
-    ],
-  },
-  {
-    title: "SSH & Connections",
-    features: [
-      { icon: Link2, title: "SSH Jump Host", description: "Connect through bastion/intermediate hosts via SSH proxy." },
-      { icon: Key, title: "Multiple SSH Keys", description: "Support multiple SSH keys for authentication." },
-      { icon: KeyRound, title: "Key Passphrase", description: "Support encrypted SSH keys with passphrases." },
-      { icon: FileText, title: "SSH Config Support", description: "Use system SSH config (~/.ssh/config)." },
-      { icon: Users, title: "Bounded Concurrency", description: "Run SSH operations across many hosts without overwhelming any one connection limit." },
-      { icon: Terminal, title: "Interactive SSH", description: "Shell access to servers via jiji server exec." },
-    ],
-  },
-  {
-    title: "Environment & Secrets",
-    features: [
-      { icon: KeyRound, title: "Secrets Management", description: "Reference secrets from .env files securely." },
-      { icon: Share2, title: "Shared Environment", description: "Project level env vars inherited by all services." },
-      { icon: FileText, title: "Multi-environment", description: "Load different configurations per environment." },
-      { icon: Settings, title: "Custom Secrets Path", description: "Specify custom location for .env files." },
-    ],
-  },
-  {
-    title: "Network",
-    features: [
-      { icon: Settings, title: "Custom Network CIDR", description: "Configure management and container IP ranges per project." },
-      { icon: Eye, title: "Network Plan Preview", description: "See interfaces, ports, and VIPs before touching a server." },
-      { icon: Globe, title: "Per-Replica DNS Records", description: "Resolve every replica together, or reach one server directly." },
-      { icon: Trash2, title: "Clean Teardown", description: "Remove a project's network, containers, and routes in one command." },
-      { icon: Server, title: "Multi-Project Isolation", description: "Independent projects share a host with zero shared network state." },
-    ],
-  },
-  {
-    title: "Registry",
-    features: [
-      { icon: HardDrive, title: "Registry Support", description: "Local registry, GHCR, Docker Hub, ECR, GCP Artifact Registry, or any custom registry." },
-      { icon: Key, title: "Registry Login", description: "Authenticate to remote container registries." },
-      { icon: Settings, title: "Local Registry Tunneling", description: "Automatic SSH reverse tunnels let remote servers pull from your local build." },
-    ],
-  },
-  {
-    title: "Logging & Monitoring",
-    features: [
-      { icon: Eye, title: "Centralized Logs", description: "Fetch logs from services with filtering." },
-      { icon: Filter, title: "Log Grep", description: "Filter logs by pattern with grep options." },
-      { icon: Clock, title: "Time-based Filtering", description: "Show logs since timestamp or relative time." },
-      { icon: Play, title: "Log Follow Mode", description: "Stream logs in real-time like tail -f." },
-      { icon: ScrollText, title: "Audit Trail", description: "Complete deployment history with filtering." },
-      { icon: Activity, title: "Deployment Timing", description: "Every audit entry records how long the operation took." },
-    ],
-  },
-  {
-    title: "Operations",
-    features: [
-      { icon: Terminal, title: "Remote Execution", description: "Run commands across servers in parallel or sequential, or drop into an interactive shell." },
-      { icon: RefreshCw, title: "Service Restart", description: "Restart services without full redeployment." },
-      { icon: Trash2, title: "Service Removal", description: "Clean removal with network unregistration." },
-      { icon: Sparkles, title: "Image Pruning", description: "Automatic cleanup of old service images." },
-      { icon: Server, title: "Server Teardown", description: "Clean server removal from cluster." },
-      { icon: Hammer, title: "Auto-install Engine", description: "Install Docker/Podman automatically on servers." },
-      { icon: Box, title: "Architecture Support", description: "Explicitly set server architecture (amd64/arm64)." },
-    ],
-  },
+// A curated subset of the ~60 features documented in full at
+// /docs/reference/features -- what actually matters when deciding whether
+// to use Jiji, not everything it does.
+const HIGHLIGHT_FEATURES = [
+  { icon: ShieldCheck, title: "Auto SSL/TLS", description: "Automatic HTTPS certificates via kamal-proxy. Zero config." },
+  { icon: Activity, title: "Fail-Safe Health Checks", description: "A failed candidate is discarded; the previous version is never touched." },
+  { icon: KeyRound, title: "Secrets Management", description: "Reference secrets from .env files securely. Never logged, never in a command string." },
+  { icon: HardDrive, title: "Any Registry", description: "GHCR, Docker Hub, ECR, GCP Artifact Registry, or a zero-config local registry over SSH tunnel." },
+  { icon: ScrollText, title: "Audit Trail", description: "Complete deployment history, timed and filterable, plus real-time log streaming." },
+  { icon: Terminal, title: "Remote Execution", description: "Run commands across servers in parallel, or drop into an interactive shell." },
 ];
 
 function Github({ className }) {
@@ -487,16 +345,28 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Full feature manifest, progressively disclosed */}
+        {/* Highlights -- a handful of what matters, not all ~60 features at once */}
         <section className="py-16 md:py-20 border-y border-border bg-card/40">
-          <div className="max-w-5xl mx-auto px-4 md:px-6">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
             <SectionHeading
-              kicker="05 / FEATURES"
-              title="Everything included"
-              description="Built-in features that would take weeks to set up manually. Each row opens to the full entry."
+              kicker="05 / HIGHLIGHTS"
+              title="Built-in, not bolted on"
+              description="The features that would otherwise take weeks to wire up yourself."
             />
 
-            <ManifestBoard manifest={FEATURE_MANIFEST} />
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+              {HIGHLIGHT_FEATURES.map((feature) => (
+                <BenefitModule key={feature.title} {...feature} />
+              ))}
+            </div>
+
+            <Link
+              href="/docs/reference/features"
+              className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-primary hover:text-primary/80 transition-colors"
+            >
+              Browse all ~60 features
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
         </section>
 
@@ -940,76 +810,6 @@ function ComparisonModule({ rank, title, items }) {
             </div>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function ManifestBoard({ manifest }) {
-  const [expanded, setExpanded] = useState({});
-  const toggle = (title) => setExpanded((prev) => ({ ...prev, [title]: !prev[title] }));
-
-  return (
-    <div className="space-y-2">
-      {manifest.map((category) => {
-        const isOpen = !!expanded[category.title];
-        const visible = isOpen ? category.features : category.features.slice(0, 3);
-        const hiddenCount = category.features.length - 3;
-
-        return (
-          <div key={category.title} className="module-card px-4 py-3.5">
-            <div className="flex items-center justify-between gap-4 mb-3">
-              <h3 className="font-mono text-xs font-bold tracking-wide">{category.title.toUpperCase()}</h3>
-              <span className="tag-chip bg-muted text-muted-foreground text-[10px] px-1.5 py-0.5">
-                {category.features.length}
-              </span>
-            </div>
-
-            <div className={isOpen ? "grid sm:grid-cols-2 lg:grid-cols-3 gap-2" : "flex flex-wrap gap-1.5"}>
-              {visible.map((feature) =>
-                isOpen ? (
-                  <ManifestEntry key={feature.title} {...feature} />
-                ) : (
-                  <ManifestChip key={feature.title} {...feature} />
-                )
-              )}
-            </div>
-
-            {hiddenCount > 0 && (
-              <button
-                onClick={() => toggle(category.title)}
-                className="mt-2.5 inline-flex items-center gap-1.5 font-mono text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
-                aria-expanded={isOpen}
-              >
-                {isOpen ? "SHOW LESS" : `+${hiddenCount} MORE`}
-                <ChevronRight className={`w-3 h-3 transition-transform ${isOpen ? "rotate-90" : ""}`} />
-              </button>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ManifestChip({ icon: Icon, title }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[11px] bg-muted/50 border border-border rounded-sm px-2 py-1.5">
-      <Icon className="w-3 h-3 text-primary" />
-      {title}
-    </span>
-  );
-}
-
-function ManifestEntry({ icon: Icon, title, description }) {
-  return (
-    <div className="border border-border bg-muted/20 rounded-sm p-3">
-      <div className="flex items-start gap-2.5">
-        <Icon className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-        <div>
-          <h4 className="font-semibold text-sm mb-0.5">{title}</h4>
-          <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
-        </div>
       </div>
     </div>
   );

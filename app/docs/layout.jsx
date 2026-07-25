@@ -40,6 +40,7 @@ export default async function DocsLayout({ children }) {
       pageMap={await getPageMap()}
       docsRepositoryBase="https://github.com/acidtib/jiji-website"
       darkMode={false}
+      nextThemes={{ forcedTheme: 'dark' }}
       footer={
         <Footer>
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
