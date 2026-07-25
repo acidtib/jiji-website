@@ -6,6 +6,13 @@ on:
 
   workflow_dispatch:
 
+  # Fired by acidtib/jiji's release workflow after a new version is published, so the version
+  # badge on the landing page stays current without the two repos needing to be updated in
+  # lockstep by hand. client_payload.version is optional -- if absent (or this run wasn't
+  # triggered by dispatch), the build step below falls back to querying the latest release.
+  repository_dispatch:
+    types: [jiji-release]
+
 permissions:
   contents: read
   pages: write
@@ -38,7 +45,21 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lockb') }}-
       - name: Install dependencies
         run: bun install
+      - name: Resolve jiji version
+        id: jiji_version
+        env:
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "$DISPATCH_VERSION" ]; then
+            version="$DISPATCH_VERSION"
+          else
+            version=$(gh api repos/acidtib/jiji/releases/latest --jq .tag_name)
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build with Next.js
+        env:
+          NEXT_PUBLIC_JIJI_VERSION: ${{ steps.jiji_version.outputs.version }}
         run: bun run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

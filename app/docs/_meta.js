@@ -10,8 +10,5 @@ export default {
   },
   reference: {
     title: 'Reference'
-  },
-  'jiji-dns': {
-    title: 'jiji-dns'
   }
 }

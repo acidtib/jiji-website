@@ -33,4 +33,3 @@ Automatically deployed to GitHub Pages on push to `main` via GitHub Actions.
 ## Related
 
 - [Jiji](https://github.com/acidtib/jiji) - Container orchestration CLI
-- [Jiji-dns](https://github.com/acidtib/jiji-dns) - DNS server for service discovery

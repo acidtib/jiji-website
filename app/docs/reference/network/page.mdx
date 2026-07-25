@@ -1,369 +1,233 @@
 # Network Reference
 
-Jiji provides private networking between servers using WireGuard mesh VPN, with automatic service discovery through Corrosion and jiji-dns.
+Jiji builds a private network between your servers and works it all out up
+front from `deploy.yml`, nothing runs to coordinate it at runtime. WireGuard
+carries encrypted host-to-host traffic, each host owns a routed container
+subnet, `dnsmasq` serves compiled `.jiji` records, and nftables maps stable
+per-service VIPs to whichever backend container is currently active.
 
 ## Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Private Network (10.210.0.0/16)              │
+│                 Private Network (WireGuard mesh)                │
 │                                                                 │
 │  ┌──────────────────┐        ┌──────────────────┐              │
-│  │    Server 0      │        │    Server 1      │              │
-│  │  10.210.0.1      │◀──────▶│  10.210.1.1      │              │
-│  │                  │WireGuard│                  │              │
-│  │  ┌────────────┐  │        │  ┌────────────┐  │              │
-│  │  │ Container  │  │        │  │ Container  │  │              │
-│  │  │ 10.210.0.5 │  │        │  │ 10.210.1.5 │  │              │
-│  │  └────────────┘  │        │  └────────────┘  │              │
-│  │                  │        │                  │              │
-│  │  ┌────────────┐  │        │  ┌────────────┐  │              │
-│  │  │ Corrosion  │◀─┼────────┼─▶│ Corrosion  │  │              │
-│  │  └────────────┘  │ Gossip │  └────────────┘  │              │
-│  │                  │        │                  │              │
-│  │  ┌────────────┐  │        │  ┌────────────┐  │              │
-│  │  │  jiji-dns  │  │        │  │  jiji-dns  │  │              │
-│  │  └────────────┘  │        │  └────────────┘  │              │
+│  │    Server 0       │        │    Server 1       │              │
+│  │  <mgmt-ip-0>       │◀──────▶│  <mgmt-ip-1>       │              │
+│  │                    │WireGuard│                    │              │
+│  │  ┌────────────┐    │        │  ┌────────────┐    │              │
+│  │  │ Container  │    │        │  │ Container  │    │              │
+│  │  │ (VIP+slot) │    │        │  │ (VIP+slot) │    │              │
+│  │  └────────────┘    │        │  └────────────┘    │              │
+│  │                    │        │                    │              │
+│  │  ┌────────────┐    │        │  ┌────────────┐    │              │
+│  │  │ dnsmasq    │    │        │  │ dnsmasq    │    │              │
+│  │  │ (.jiji)    │    │        │  │ (.jiji)    │    │              │
+│  │  └────────────┘    │        │  └────────────┘    │              │
 │  └──────────────────┘        └──────────────────┘              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Network Stack
+## Multiple projects on one server
 
-The network consists of three layers:
+Every piece of this network layer is **per-project isolated**, computed
+purely from `project:` in `deploy.yml` — there is no shared registry and no
+coordination between projects. Two independent projects (different
+`project:` names, different `deploy.yml` files) can run `jiji server setup`
+against the same physical server, and each gets its own:
 
-| Component | Port | Purpose |
-|-----------|------|---------|
-| WireGuard | 51820/UDP | Encrypted mesh VPN between servers |
-| Corrosion | 9280/TCP (gossip), 9220/TCP (API) | Distributed service registry |
-| jiji-dns | 53/UDP | DNS-based service discovery |
+- WireGuard interface, port, and keypair
+- container-engine bridge network and subnet
+- `dnsmasq` resolver process
+- compiled state tree under `/etc/jiji/network/{slug}/`
+- systemd units
 
-## IP Allocation
+`{slug}` is a short, deterministic, hash-suffixed identifier derived from
+`project:` — run `jiji network plan` to see the exact value for your
+project. The one intentionally shared, multi-tenant component is
+kamal-proxy: one container per host, attached to every project's bridge that
+has active routes on that host, with routes namespaced per project.
 
-Default network: `10.210.0.0/16` (configurable via `cluster_cidr`)
+Because identity is purely name-derived with no registry, **`project:`
+names must be unique per host**, not just per config repository — two
+projects that happen to share a literal project name are indistinguishable
+to jiji. There is also a small, real chance of a hash collision between two
+*different* project names that both rely on the default
+`network.container_cidr`/`management_cidr` ranges, since both draw their
+subnets from the same shared address space. If you expect several projects
+on one host, set distinct `network.container_cidr`/`management_cidr` values
+per project — distinct ranges make a collision impossible, not just less
+likely. `jiji server setup`/`jiji network setup` prints an advisory when a
+project is relying on the shared defaults, and rejects with an actionable
+error if a real collision is ever detected on a host.
 
-| Server Index | WireGuard IP | Container Subnet | Usable Container IPs |
-|--------------|--------------|------------------|---------------------|
-| 0 | 10.210.0.1 | 10.210.0.0/24 | 10.210.0.2 - 10.210.0.254 |
-| 1 | 10.210.1.1 | 10.210.1.0/24 | 10.210.1.2 - 10.210.1.254 |
-| 2 | 10.210.2.1 | 10.210.2.0/24 | 10.210.2.2 - 10.210.2.254 |
-| N | 10.210.N.1 | 10.210.N.0/24 | 10.210.N.2 - 10.210.N.254 |
-
-Maximum: 256 servers, 253 containers per server.
-
-## WireGuard Configuration
-
-WireGuard creates an encrypted mesh VPN between all servers.
-
-**Configuration location:** `/etc/wireguard/jiji0.conf`
-
-**Interface:**
-- Name: `jiji0`
-- Port: 51820/UDP
-- Encryption: Curve25519
-
-**Peer configuration is automatic.** Each server gets peer entries for all other servers.
-
-### Verify WireGuard
+## Commands
 
 ```bash
-# Check interface status
-jiji server exec "wg show jiji0"
+# Print the deterministic plan without changing hosts
+jiji network plan
 
-# Check connectivity to another server
-jiji server exec "ping -c 3 10.210.1.1" -H web1
+# Install, update, or repair the complete network
+jiji network setup
 
-# View WireGuard config
-jiji server exec "cat /etc/wireguard/jiji0.conf"
+# The full server setup includes the same network workflow
+jiji server setup
 ```
 
-## Corrosion Database
+`-H`/`--hosts` limits which hosts are changed, but planning always uses the
+complete configured topology.
 
-Corrosion is a CRDT-based (Conflict-free Replicated Data Type) distributed database that stores container registrations. It uses a gossip protocol with no central coordinator.
+## Default address ranges
 
-### Database Location
-
-```
-/opt/jiji/corrosion/state.db
-/opt/jiji/corrosion/config.toml
-```
-
-### Database Schema
-
-**containers table:**
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | TEXT | Unique container ID |
-| `service` | TEXT | Service name |
-| `server_id` | TEXT | Server identifier |
-| `ip` | TEXT | Container IP address |
-| `health_status` | TEXT | healthy, degraded, unhealthy, unknown |
-| `started_at` | TEXT | Container start timestamp |
-| `instance_id` | TEXT | Instance identifier (e.g., "primary", server IP) |
-
-**services table:**
-| Column | Type | Description |
-|--------|------|-------------|
-| `name` | TEXT | Service name |
-| `project` | TEXT | Project name |
-
-**servers table:**
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | TEXT | Server identifier |
-| `hostname` | TEXT | Server hostname |
-| `wireguard_ip` | TEXT | WireGuard interface IP |
-
-**cluster_metadata table:**
-| Column | Type | Description |
-|--------|------|-------------|
-| `key` | TEXT | Metadata key |
-| `value` | TEXT | Metadata value |
-
-### Corrosion Ports
-
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 9280 | TCP | Gossip protocol (peer-to-peer sync) |
-| 9220 | TCP | HTTP API |
-
-### Sync Timeout
-
-Corrosion uses a 300-second (5 minute) sync timeout for data replication across the cluster.
-
-## Service Discovery
-
-### jiji-dns
-
-jiji-dns subscribes to Corrosion and serves DNS queries for the `.jiji` domain.
-
-**Listening:** 10.210.X.1:53 (WireGuard IP)
-
-**DNS format:**
-```
-{project}-{service}.jiji
+```yaml
+network:
+  enabled: true
+  management_cidr: 198.18.0.0/16
+  container_cidr: 100.64.0.0/10
+  host_prefix: 21
 ```
 
-**Instance-specific format:**
-```
-{project}-{service}-{instance}.jiji
-```
+These ranges are shared *by default* across every project that doesn't
+override them — see "Multiple projects on one server" above for why
+setting distinct ranges matters once more than a handful of projects share
+a host.
 
-**Example queries:**
-```bash
-# Resolve service (returns all healthy container IPs)
-dig @10.210.0.1 myapp-api.jiji
+Management addresses and per-host container subnets are deterministic. Each
+service endpoint receives a stable VIP plus two fixed backend addresses (A
+and B). A deploy always brings the candidate container up on the *inactive*
+slot; once it passes its health check, jiji atomically moves the VIP over to
+that backend.
 
-# Returns:
-# 10.210.0.5
-# 10.210.1.5
+## DNS
 
-# Resolve specific instance
-dig @10.210.0.1 myapp-api-primary.jiji
-```
-
-### Container DNS Configuration
-
-Containers are automatically configured to use jiji-dns:
-
-**Docker:** `/etc/docker/daemon.json`
-```json
-{
-  "dns": ["10.210.0.1"]
-}
-```
-
-**Podman:** `/etc/containers/containers.conf`
-```ini
-[containers]
-dns_servers = ["10.210.0.1"]
-```
-
-## Service Communication
-
-### Service-to-Service
-
-From within a container:
-```bash
-# Connect to another service
-curl http://myapp-api.jiji:3000/endpoint
-
-# DNS returns healthy containers
-# Client-side load balancing via multiple A records
-```
-
-### Health-Based Routing
-
-jiji-dns only returns healthy containers:
-
-1. Container starts, registers with Corrosion
-2. Health checks run on the container
-3. Container marked as `healthy` in Corrosion
-4. jiji-dns includes container IP in DNS responses
-5. If container becomes unhealthy, removed from DNS
-
-### Load Balancing
-
-jiji-dns implements "newest-container-wins" logic per service/server combination:
-- Returns all healthy containers across different servers
-- During rolling deployments, only the newest container per server is returned
-- DNS responses include multiple A records for client-side load balancing
-- Short TTL (default: 60s) ensures quick failover
-
-## Network Commands
-
-### Check Network Status
+The aggregate name `{project}-{service}.jiji` resolves to the stable VIPs
+for all configured replicas of a service. The name
+`{project}-{service}-{server}.jiji` resolves only to that one server's
+replica VIP. Both forms are compiled directly from `deploy.yml`, so they
+show what's configured rather than what's currently healthy.
 
 ```bash
-jiji network status
+# All replicas of the api service
+docker exec <container> getent hosts myapp-api.jiji
+
+# Just the replica on server "web1"
+docker exec <container> getent hosts myapp-api-web1.jiji
 ```
 
-Shows:
-- WireGuard peer connections
-- Corrosion cluster state
-- DNS service status
-- Container health summary
+Containers are started with their own project's `dnsmasq` resolver, the
+`jiji` search domain, and `ndots:1`. Queries outside `.jiji` are forwarded
+through the host resolver. kamal-proxy is the one exception: it's given no
+`--dns` at all, since its routing targets are raw backend IP addresses
+(never a `.jiji` hostname), and a single resolver can't reliably answer for
+every project's `.jiji` records it might be attached to at once.
 
-### View DNS Records
+## Installed files
+
+Every path below is rooted under `/etc/jiji/network/{slug}/` — one
+independent tree per project, where `{slug}` is that project's derived
+identifier (`jiji network plan` prints it). Interface/bridge/unit names
+below are similarly derived per project, never fixed literals like `jiji0`.
+
+| Component | Location |
+| --- | --- |
+| Selected network generation | `/etc/jiji/network/{slug}/current` |
+| Retained network generations | `/etc/jiji/network/{slug}/generations/` |
+| WireGuard config | `/etc/wireguard/{wireguard_interface}.conf` |
+| Selected DNS generation | `/etc/jiji/network/{slug}/dns-current` |
+| Retained DNS generations | `/etc/jiji/network/{slug}/dns-generations/` |
+| Selected service VIP mapping | `/etc/jiji/network/{slug}/service-nat-current` |
+| WireGuard service | `wg-quick@{wireguard_interface}.service` |
+| Bridge restoration service | `jiji-network-restore-{slug}.service` |
+| VIP restoration service | `jiji-service-nat-{slug}.service` |
+| Static DNS service | `jiji-dns-{slug}.service` |
+
+`{wireguard_interface}` is a separate short (`jiji` + 8 hex chars)
+identifier from `{slug}`, kept under Linux's 15-character interface name
+limit — see `jiji network plan` for the concrete value.
+
+## Required firewall access
+
+Allow UDP traffic between the configured server public IP addresses on each
+project's WireGuard port (`jiji network plan` prints the exact port — it's
+derived per project, somewhere in the range `51820`-`55819`, not always
+`51820`). Container subnets are routed only through WireGuard. There is no
+separate gossip or database port to open — that layer doesn't exist in this
+design.
+
+## Verification
 
 ```bash
-jiji network dns
-jiji network dns --service api
+# Substitute this project's derived interface name and slug (see `jiji network plan`)
+sudo wg show <wireguard_interface>
+ip route show dev <wireguard_interface>
+systemctl status jiji-network-restore-<slug> jiji-service-nat-<slug> jiji-dns-<slug>
+readlink -f /etc/jiji/network/<slug>/current
+readlink -f /etc/jiji/network/<slug>/dns-current
+docker exec <container> getent hosts <project>-<service>.jiji
 ```
 
-### Inspect Container Networking
+Use `podman exec` instead of `docker exec` when Podman is selected.
 
-```bash
-jiji network inspect
-jiji network inspect -S api
-jiji network inspect --container abc123
-```
+## Reboot behavior
 
-Shows container network details including IP addresses.
+WireGuard and the jiji systemd units restore the selected local generations
+on their own. Containers restart with their assigned backend addresses
+according to their engine restart policy. No coordination service, SSH
+connection, jiji command, or redeployment is required when topology hasn't
+changed.
 
-### Garbage Collection
+Podman keeps its bridge only while a container is attached, so jiji installs
+a minimal local `jiji-network-anchor-{slug}` container (one per project) at
+a reserved address and orders `podman-restart.service` after bridge
+restoration. `podman-restart.service` itself is host-global, gated on every
+project's restore unit via one drop-in file per project.
 
-```bash
-jiji network gc          # Dry run - shows what would be deleted
-jiji network gc --force  # Actually delete stale records
-```
+## Repair
 
-Removes DNS records for containers that no longer exist.
+Run `jiji network setup`. It stages and validates a complete generation on
+every selected host before activation. If activation or verification fails,
+all attempted hosts roll back to their previous retained generations.
+Repairing one project's network never touches another project's tree,
+units, or bridge on a shared host.
 
-### Database Operations
-
-```bash
-# View database statistics
-jiji network db stats
-
-# Execute raw SQL query
-jiji network db query "SELECT * FROM containers"
-jiji network db query "SELECT * FROM containers WHERE health_status = 'healthy'"
-jiji network db query "SELECT c.*, s.project FROM containers c JOIN services s ON c.service = s.name"
-```
-
-### Teardown Network
-
-```bash
-jiji network teardown
-jiji network teardown -H web1  # Specific server
-```
-
-Removes WireGuard, Corrosion, and jiji-dns from servers.
-
-## Firewall Requirements
-
-Ensure these ports are open between servers:
-
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 51820 | UDP | WireGuard VPN |
-| 9280 | TCP | Corrosion gossip |
-| 9220 | TCP | Corrosion HTTP API |
-
-## Component Locations
-
-| Component | Binary/Config | Service |
-|-----------|--------------|---------|
-| WireGuard | `/etc/wireguard/jiji0.conf` | `wg-quick@jiji0` |
-| Corrosion | `/opt/jiji/corrosion/` | `jiji-corrosion.service` |
-| jiji-dns | `/opt/jiji/dns/jiji-dns` | `jiji-dns.service` |
+`jiji deploy` checks every configured host before making deployment changes.
+When it detects a stale generation, it automatically applies the complete
+network plan to the full cluster using the same transactional setup path.
+The explicit command remains available for network-only maintenance.
 
 ## Troubleshooting
 
 ### WireGuard not connecting
 
 ```bash
-# Check WireGuard status
-jiji server exec "wg show jiji0"
-
-# Check firewall
-jiji server exec "iptables -L -n | grep 51820"
-
-# Check systemd service
-jiji server exec "systemctl status wg-quick@jiji0"
-
-# View WireGuard logs
-jiji server exec "journalctl -u wg-quick@jiji0 --since '1 hour ago'"
-```
-
-### Corrosion not syncing
-
-```bash
-# Check Corrosion service
-jiji server exec "systemctl status jiji-corrosion"
-
-# Check Corrosion logs
-jiji server exec "journalctl -u jiji-corrosion -f"
-
-# Test Corrosion API
-jiji server exec "curl http://127.0.0.1:9220/v1/queries"
-
-# Check database statistics
-jiji network db stats
+jiji server exec "sudo wg show <wireguard_interface>"
+jiji server exec "sudo systemctl status wg-quick@<wireguard_interface>"
+jiji server exec "sudo journalctl -u wg-quick@<wireguard_interface> --since '1 hour ago'"
 ```
 
 ### DNS not resolving
 
 ```bash
-# Check jiji-dns service
-jiji server exec "systemctl status jiji-dns"
-
-# View jiji-dns logs
-jiji server exec "journalctl -u jiji-dns -f"
-
-# Test DNS directly
-jiji server exec "dig @10.210.0.1 myapp-api.jiji"
-
-# Check if DNS is listening
-jiji server exec "ss -ulnp | grep 53"
+jiji server exec "sudo systemctl status jiji-dns-<slug>"
+jiji server exec "sudo journalctl -u jiji-dns-<slug> -f"
+docker exec <container> getent hosts <project>-<service>.jiji
 ```
 
 ### Containers can't reach each other
 
 ```bash
-# Verify container DNS setting
-jiji server exec "docker inspect <container> | grep -A5 Dns"
-
-# Test from container
-jiji server exec "docker exec <container> ping 10.210.1.1"
-
-# Check container can resolve DNS
-jiji server exec "docker exec <container> nslookup myapp-api.jiji"
-
-# Verify routes
-jiji server exec "docker exec <container> ip route"
+jiji server exec "ip route show dev <wireguard_interface>"
+docker exec <container> ip route
+docker exec <container> getent hosts <project>-<service>.jiji
 ```
 
-### Stale DNS records
+## Upgrading from a pre-isolation jiji version
 
-```bash
-# View current DNS records
-jiji network dns
-
-# Check for stale records
-jiji network gc
-
-# Clean up stale records
-jiji network gc --force
-```
+Per-project isolation changed the on-disk layout, WireGuard interface name,
+and bridge name — every already-provisioned host's installed generation
+becomes incompatible with the new version, even for a host that only ever
+ran one project. There is no in-place migration: run `jiji server teardown`
+against the old layout (or manually remove `/etc/jiji/network`, the old
+`jiji0` WireGuard interface, and the old `jiji` bridge network), then run
+`jiji server setup` again on the new version.

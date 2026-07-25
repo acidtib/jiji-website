@@ -2,12 +2,19 @@
 
 ## System Overview
 
+Jiji is a single Rust binary you run from your laptop or CI. It reads
+`deploy.yml`, works out the network topology and container placement, and
+pushes changes to your servers over SSH. Nothing runs as a background
+service on your end, and the servers don't run any jiji-specific daemon
+either — WireGuard, dnsmasq, and nftables are just doing their normal jobs
+with config jiji wrote for them.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Jiji CLI                                │
+│                         jiji (binary)                            │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
-│  │ Commands │ │  Config  │ │   SSH    │ │ Services │            │
-│  │  Parser  │ │  Loader  │ │ Manager  │ │  Layer   │            │
+│  │ Commands │ │  Config  │ │   SSH    │ │ Network  │            │
+│  │  (clap)  │ │  Loader  │ │ (russh)  │ │  Planner │            │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -23,131 +30,172 @@
 │  │ │ Runtime  │ │  │ │ Runtime  │ │  │ │ Runtime  │ │           │
 │  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
 │  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
-│  │ │  Proxy   │ │  │ │  Proxy   │ │  │ │  Proxy   │ │           │
+│  │ │kamal-proxy│ │  │ │kamal-proxy│ │  │ │kamal-proxy│ │           │
+│  │ │ (shared) │ │  │ │ (shared) │ │  │ │ (shared) │ │           │
 │  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
 │  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
 │  │ │WireGuard │<┼──┼─┤WireGuard │<┼──┼─┤WireGuard │ │           │
+│  │ │(per proj)│ │  │ │(per proj)│ │  │ │(per proj)│ │           │
 │  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
 │  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
-│  │ │Corrosion │<┼──┼─┤Corrosion │<┼──┼─┤Corrosion │ │           │
-│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
-│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
-│  │ │ jiji-dns │ │  │ │ jiji-dns │ │  │ │ jiji-dns │ │           │
+│  │ │ dnsmasq  │ │  │ │ dnsmasq  │ │  │ │ dnsmasq  │ │           │
+│  │ │(per proj)│ │  │ │(per proj)│ │  │ │(per proj)│ │           │
 │  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
 │  └──────────────┘  └──────────────┘  └──────────────┘           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+Every resource on a server except kamal-proxy is scoped to one `project:` —
+two independent projects can run `jiji server setup` against the same
+physical host and get two fully isolated sets of the above, each with its
+own WireGuard interface, bridge network, and DNS resolver. See
+[Network Reference](/docs/reference/network) for the exact naming rules.
+
+### Core Capabilities
+
+- **Zero-downtime deployments** with health checks and automatic rollback
+- **Private networking** — per-project WireGuard mesh with automatic `.jiji`
+  DNS service discovery
+- **Registry management** — local loopback registry or remote (GHCR, Docker
+  Hub, custom)
+- **Parallel SSH orchestration** across many servers at once
+- **Deployment locks and an append-only audit trail** for every
+  state-changing command
+
+### Technology Stack
+
+- **Language/runtime** — Rust, compiled to a single static binary (`jiji`)
+- **CLI framework** — clap
+- **SSH** — russh (pure-Rust async SSH client; no subprocess, no libssh FFI)
+- **Container runtime** — Docker or Podman
+- **Networking** — WireGuard, routed container bridges, dnsmasq, nftables
+
+### Architecture Principles
+
+1. **Zero downtime** — old containers keep serving until new ones are healthy
+2. **Idempotent operations** — commands can be re-run safely
+3. **Fail safe** — a failed operation doesn't leave the system half-changed
+4. **Distributed first** — built for multi-server deployments, not bolted on
+5. **Configuration as code** — infrastructure is fully described in YAML
+
 ## Component Details
 
-### Jiji CLI
+### jiji CLI
 
-The orchestration engine that runs on your local machine or CI server.
-
-| Component | Purpose |
-|-----------|---------|
-| Commands | CLI interface (init, build, deploy, etc.) |
-| Config | YAML parsing and validation |
-| SSH Manager | Connection pooling, parallel execution |
-| Services Layer | Build, push, deploy, logs operations |
+Runs on your machine or CI. Every command follows the same sequence: load
+config, validate it, build the network plan, pick target hosts, connect over
+SSH, run the work, close the connections. Each invocation opens its own SSH
+sessions and closes them when it's done — there's no persistent process or
+connection cache sitting between runs.
 
 ### Container Runtime
 
-Docker or Podman on each target server. Jiji is runtime-agnostic.
+Docker or Podman on each target server. Jiji is runtime-agnostic and
+detects/uses whichever is installed.
 
 ### kamal-proxy
 
-HTTP/HTTPS reverse proxy that handles:
-- Zero-downtime deployments
-- SSL/TLS termination
-- Health check routing
-- Path-based routing
+The one component that's deliberately shared across projects on a host: a
+single HTTP/HTTPS reverse proxy container, multi-homed onto every project's
+bridge network that has active routes on that host. Handles SSL/TLS
+termination and health-check-gated routing to whichever backend slot is
+currently active.
 
 ### WireGuard
 
-Mesh VPN providing encrypted communication between servers:
-- Each server gets a `/24` subnet
-- Automatic peer configuration
-- IPv4 for container traffic, IPv6 for management
+A per-project encrypted mesh VPN between servers:
 
-### Corrosion
+- Each project gets its own WireGuard interface and UDP port (derived
+  deterministically from the project name, not a single fixed port)
+- Peer configuration is fully automatic
+- Two independent projects on the same host get two independent meshes
 
-Distributed CRDT database for service registration:
-- Gossip protocol for data sync
-- Real-time container registration
-- Health status tracking
+### dnsmasq
 
-### jiji-dns
+Per-project DNS resolver serving compiled `.jiji` records:
 
-DNS server for service discovery:
-- Resolves `{project}-{service}.jiji` for service discovery (returns all healthy IPs)
-- Resolves `{project}-{service}-{server}.jiji` for specific instance
-- Only returns healthy containers
-- Subscribes to Corrosion for real-time updates
+- `{project}-{service}.jiji` resolves to the stable VIPs of all replicas
+- `{project}-{service}-{server}.jiji` resolves to one specific replica
+- Records are compiled from `deploy.yml` when the network is set up, so they
+  describe what's configured, not what's currently healthy. Health checks
+  are handled separately, by gating the VIP switch during deploys.
 
 ## Deployment Flow
+
+Each service endpoint gets two fixed backend addresses (slots A and B) and
+one stable VIP, worked out up front from config. The candidate container
+always starts on whichever slot isn't currently active, and the VIP only
+moves over once that candidate passes its health check — no renaming
+containers mid-deploy, no downtime window while traffic is redirected.
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │    Build    │────>│    Push     │────>│   Deploy    │
-│   Image     │     │  to Registry│     │  Container  │
+│   Image     │     │  to Registry│     │  Candidate  │
 └─────────────┘     └─────────────┘     └─────────────┘
                                                │
                     ┌──────────────────────────┘
                     V
 ┌─────────────────────────────────────────────────────┐
-│                 Zero-Downtime Deploy                │
-│  1. Keep old container running                      │
-│  2. Start new container                             │
-│  3. Run health checks                               │
-│  4. Route traffic to new container                  │
-│  5. Stop old container                              │
-│  6. Cleanup old images                              │
+│                 Zero-Downtime Deploy                 │
+│  1. Old container (slot A) keeps serving via the VIP │
+│  2. New container starts on the inactive slot (B)    │
+│  3. Health check runs directly against B, not the VIP│
+│  4. VIP (nftables DNAT) flips atomically to B         │
+│  5. kamal-proxy routes verified                      │
+│  6. Old container (slot A) is stopped and removed    │
 └─────────────────────────────────────────────────────┘
 ```
 
+If the health check fails, the previous container is never touched and
+keeps serving traffic — the candidate and any partial proxy routes are
+rolled back instead.
+
 ## Network Architecture
 
-### IP Allocation
-
-Jiji uses a `10.210.0.0/16` network (configurable):
-
-| Server | WireGuard IP | Container Subnet |
-|--------|--------------|------------------|
-| Server 0 | 10.210.0.1 | 10.210.0.0/24 |
-| Server 1 | 10.210.1.1 | 10.210.1.0/24 |
-| Server N | 10.210.N.1 | 10.210.N.0/24 |
+Full naming rules and the per-project isolation model are documented in
+[Network Reference](/docs/reference/network); this is a summary.
 
 ### Service Discovery Flow
 
 ```
-Container A                    jiji-dns                    Corrosion
-     │                            │                            │
-     │  DNS query:                │                            │
-     │  myapp-api.jiji            │                            │
-     │───────────────────────────>│                            │
-     │                            │  Lookup in cache           │
-     │                            │  (synced from Corrosion)   │
-     │                            │<───────────────────────────│
-     │  Response:                 │                            │
-     │  10.210.1.5, 10.210.2.5    │                            │
-     │<───────────────────────────│                            │
-     │                            │                            │
-     │  Connect to 10.210.1.5     │                            │
-     │────────────────────────────┼────────────────────────────>
+Container A                    dnsmasq                   nftables
+     │                            │                          │
+     │  DNS query:                │                          │
+     │  myapp-api.jiji            │                          │
+     │───────────────────────────>│                          │
+     │                            │  Compiled static zone    │
+     │                            │  (from deploy.yml)       │
+     │  Response:                 │                          │
+     │  <stable VIP>              │                          │
+     │<───────────────────────────│                          │
+     │                            │                          │
+     │  Connect to VIP            │                          │
+     │────────────────────────────┼─────────────────────────>│
+     │                            │   DNAT to active backend │
+     │                            │   (slot A or B)          │
 ```
+
+DNS just answers with whatever's configured; it doesn't need to know which
+container is currently healthy. That job belongs to the VIP switch during
+deploys, which only happens after a direct health check passes.
 
 ## Security Model
 
 ### Network Security
-- WireGuard encryption with Curve25519
-- Perfect forward secrecy
-- Containers isolated in private network
+
+- WireGuard encryption with Curve25519, perfect forward secrecy
+- Containers isolated inside their project's private network, not directly
+  reachable from the internet
+- Exposed only through kamal-proxy or explicit port mappings
 
 ### Authentication
-- SSH keys for server access
-- Registry authentication with tokens
-- Secrets loaded from `.env` files (with optional host env fallback via `--host-env`)
+
+- SSH keys, ssh-agent, or inline key data for server access
+- Registry authentication with tokens or username/password
+- Secrets loaded from `.env` files, uploaded to remote hosts via a staged
+  `--env-file` (never inlined into a logged `-e KEY=VALUE` command), with
+  optional host-env fallback via `--host-env`
 
 ### Firewall Requirements
 
@@ -155,5 +203,7 @@ Container A                    jiji-dns                    Corrosion
 |------|----------|---------|
 | 22 | TCP | SSH |
 | 80/443 | TCP | HTTP/HTTPS |
-| 51820 | UDP | WireGuard |
-| 9280 | TCP | Corrosion gossip |
+| 51820-55819 | UDP | WireGuard (one port per project, not a single fixed port) |
+
+Service discovery and VIP routing both happen locally on each host, so
+there's no extra gossip or database port to open.

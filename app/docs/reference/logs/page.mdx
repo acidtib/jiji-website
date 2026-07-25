@@ -1,361 +1,192 @@
 # Logs Reference
 
-Jiji provides unified log viewing across all services and servers, plus comprehensive audit trails for deployment tracking.
-
-## Log Levels
-
-Jiji supports multiple log levels that can be configured globally or per-command:
-
-| Level | Description |
-|-------|-------------|
-| `debug` | Detailed debugging information |
-| `info` | General information |
-| `warn` | Warnings |
-| `error` | Errors only |
-| `fatal` | Critical failures only |
-| `success` | Success messages |
-| `trace` | Detailed trace (most verbose) |
-
-### Global Options
-
-```bash
-jiji -v deploy         # Verbose mode (debug level)
-jiji -q deploy         # Quiet mode (warn level only)
-```
-
-### SSH Logging
-
-SSH logging can be configured in your deploy.yml:
-
-```yaml
-ssh:
-  log_level: error     # debug | info | warn | error | fatal
-```
+Jiji has two logging commands — `jiji service logs` for your deployed
+services, and `jiji proxy logs` for kamal-proxy — plus `jiji audit` for the
+deployment audit trail. All three support filtering and following logs
+across multiple servers.
 
 ## Service Logs
 
-View logs from your deployed services:
+`jiji service logs` tails the currently active slot's container for each
+selected endpoint.
 
 ```bash
-jiji services logs
+jiji service logs -S web
+jiji service logs -S "web,api,worker"
+jiji service logs -S "web*"
 ```
 
-### Filtering Options
+You need either `-S`/`--services` or `--container-id`.
 
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--services` | `-S` | Filter by service name (supports wildcards) |
-| `--hosts` | `-H` | Filter by host (supports wildcards) |
-| `--lines` | `-n` | Number of lines to show |
-| `--since` | | Show logs since time |
-| `--grep` | | Filter by pattern |
-| `--follow` | `-f` | Stream logs in real-time |
-| `--quiet` | `-q` | Minimal output |
-| `--container-id` | | Show container IDs in output |
+### Options
 
-### Examples
+| Option | Description |
+|---|---|
+| `-n, --lines <N>` | Lines to show from each server |
+| `-s, --since <time>` | Show logs since a timestamp or relative duration (`30m`, `2h`, `1d`, or ISO 8601) |
+| `-g, --grep <pattern>` | Filter lines by pattern |
+| `--grep-options <opts>` | Extra flags passed to grep (`-i`, `-v`, `-E`, `-C 5`, ...) |
+| `-f, --follow` | Follow in real time (requires exactly one target) |
+| `--container-id <id>` | Fetch logs from an arbitrary container name, bypassing service config |
+| `-H, --hosts <pattern>` | Target specific hosts |
+| `-q, --quiet` | Suppress host headers, lower log verbosity |
 
-**View recent logs:**
 ```bash
-jiji services logs -n 100
+jiji service logs -S web --since 30m
+jiji service logs -S api --grep "ERROR"
+jiji service logs -S web --grep "warning" --grep-options "-i"
+jiji service logs -S api --follow -H server1.example.com
+jiji service logs --container-id abc123def456
 ```
 
-**Filter by service:**
-```bash
-jiji services logs -S api
-jiji services logs -S "api,worker"
-jiji services logs -S "web*"
-```
+Quiet mode drops the `[server1.example.com]`-style host headers and reduces
+noise, useful when piping into another command:
 
-**Filter by host:**
 ```bash
-jiji services logs -H web1
-jiji services logs -H "prod*"
-```
-
-**Time-based filtering:**
-```bash
-jiji services logs --since 30m    # Last 30 minutes
-jiji services logs --since 2h     # Last 2 hours
-jiji services logs --since 1d     # Last day
-```
-
-**Search logs:**
-```bash
-jiji services logs --grep "error"
-jiji services logs --grep "ERROR|WARN"
-jiji services logs -S api --grep "timeout"
-```
-
-**Stream logs:**
-```bash
-jiji services logs -f
-jiji services logs -S api -f --grep "request"
-```
-
-**Combined filters:**
-```bash
-jiji services logs -S api -H "prod*" --since 1h --grep "ERROR" -n 50
+jiji service logs -S web -q | grep -i warning | wc -l
 ```
 
 ## Proxy Logs
 
-View kamal-proxy logs for HTTP routing information:
+`jiji proxy logs` reads from the kamal-proxy container that handles
+HTTP/HTTPS routing.
 
 ```bash
 jiji proxy logs
+jiji proxy logs -n 50
+jiji proxy logs --follow
 ```
 
-Supports the same filtering options as service logs.
+Same option set as service logs: `-n/--lines`, `-s/--since`, `-g/--grep`,
+`-f/--follow`, `-H/--hosts`.
 
-### Examples
-
-**View proxy logs:**
 ```bash
-jiji proxy logs -n 100
+# Debugging routing
+jiji proxy logs --grep "404"
+jiji proxy logs --grep "HTTP/[0-9]\.[0-9]\" [45][0-9][0-9]" --grep-options "-E"
+
+# Traffic to one service
+jiji proxy logs --grep "web-app"
 ```
 
-**Filter by host:**
+If a service isn't receiving traffic, check proxy logs before service logs
+— it tells you whether kamal-proxy is routing to it at all.
+
+## Common Use Cases
+
 ```bash
-jiji proxy logs -H web1
+# Errors in the last hour, with context
+jiji service logs -S api --since 1h --grep "ERROR" --grep-options "-C 5"
+
+# Track one request across a service
+jiji service logs -S api --grep "request_id=abc123"
+
+# Compare the same service across two servers
+jiji service logs -S web -H server1.example.com
+jiji service logs -S web -H server2.example.com
+
+# Count errors in the last hour (scripting, needs -q for clean output)
+jiji service logs -S web --since 1h --grep "ERROR" -q | wc -l
+
+# SSL/TLS issues at the proxy
+jiji proxy logs --grep "ssl\|tls\|certificate" --grep-options "-E"
 ```
 
-**Search for errors:**
-```bash
-jiji proxy logs --grep "error"
-jiji proxy logs --grep "502|503|504"
-```
+## Best Practices
 
-**Stream proxy logs:**
-```bash
-jiji proxy logs -f
-```
+- **Prefer relative `--since` values** (`30m`, `2h`) over exact timestamps —
+  easier to write and they stay correct as time passes.
+- **Combine `--since` and `--grep`** rather than scanning full output:
+  `jiji service logs -S api --since 1h --grep "ERROR"`.
+- **Check proxy logs before service logs** when a service isn't receiving
+  traffic — it tells you whether kamal-proxy is routing to it at all.
+- **Use `-q`/`--quiet`** whenever output is being piped into `grep`, `wc`,
+  or a script, so host headers don't pollute the stream.
 
 ## Log Output Format
 
-Default output includes:
-- Timestamp
-- Host name
-- Service name
-- Log message
+Timestamps come from Docker/Podman in ISO 8601:
 
-With `--container-id`:
-- Container ID is prepended to each line
-
-With `--quiet`:
-- Only log messages, no metadata
+```
+2023-12-22T15:30:45.123456789Z [INFO] Application started
+2023-12-22T15:30:46.234567890Z [ERROR] Connection failed
+```
 
 ## Audit Trail
 
-The audit trail provides a comprehensive history of all operations performed by Jiji.
-
-### Viewing Audit Logs
+`jiji audit` reads the append-only JSONL trail at
+`.jiji/{project}/audit.log` on each selected server. Every state-changing
+command writes to it: `deploy`, `service restart/rollback/remove/prune`,
+`lock acquire/release`, and `server setup/teardown`.
 
 ```bash
 jiji audit
 jiji audit --lines 50
-```
-
-### Audit Log Location
-
-Audit logs are stored on remote hosts at:
-```
-/var/log/jiji/{project}/
-```
-
-### Filtering Options
-
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--lines` | `-n` | Number of recent entries (default: 20) |
-| `--filter` | | Filter by action type |
-| `--status` | | Filter by status |
-| `--since` | | Show entries since date |
-| `--until` | | Show entries until date |
-| `--raw` | | Show raw format |
-| `--json` | | Output as JSON |
-| `--follow` | `-f` | Follow like tail -f |
-| `--aggregate` | | Combine logs chronologically from all hosts |
-
-### Action Types
-
-Filter by specific action types:
-- `deploy` - Deployment operations
-- `build` - Build operations
-- `lock` - Lock acquire/release
-- `restart` - Service restarts
-- `remove` - Service removals
-- `prune` - Image cleanup
-
-### Status Values
-
-Filter by operation status:
-- `started` - Operation started
-- `success` - Operation completed successfully
-- `failed` - Operation failed
-- `warning` - Operation completed with warnings
-
-### Examples
-
-**View recent audit entries:**
-```bash
-jiji audit
-jiji audit --lines 50
-```
-
-**Filter by action:**
-```bash
-jiji audit --filter deploy
-jiji audit --filter build
-```
-
-**Filter by status:**
-```bash
+jiji audit --grep deploy
 jiji audit --status success
-jiji audit --status failed
-```
-
-**Date range filtering:**
-```bash
-jiji audit --since 2024-01-01
-jiji audit --since 2024-01-01 --until 2024-01-31
-```
-
-**Real-time monitoring:**
-```bash
-jiji audit --follow
-jiji audit -f --filter deploy
-```
-
-**JSON output for scripting:**
-```bash
 jiji audit --json
-jiji audit --json --filter deploy --status failed
+jiji audit --follow
 ```
 
-**Aggregate logs from all hosts:**
-```bash
-jiji audit --aggregate
-```
+| Option | Description |
+|---|---|
+| `-n, --lines <N>` | Entries to show per server (default: 20) |
+| `-g, --grep <pattern>` | Filter entries by action or message (substring match) |
+| `--status <success\|failed>` | Filter by status |
+| `--json` | Newline-delimited JSON output |
+| `-f, --follow` | Follow the trail as new entries land (requires exactly one host) |
 
-### Audit Entry Contents
+`-S`/`--services` is rejected — the trail is host-scoped, not
+service-scoped, matching `jiji lock`. Malformed lines are skipped rather
+than treated as a hard error, so one bad write never makes the whole trail
+unreadable.
 
-Each audit entry includes:
-- Timestamp
-- Action type
-- Status (started/success/failed/warning)
-- User or CI that triggered the operation
-- Services affected
-- Version information
-- Duration (for completed operations)
-- Error messages (for failed operations)
+Each entry is one JSON object: `timestamp`, `action`, `status`, `actor`,
+`message`, `duration_ms` — how long the operation took, captured from
+command start to the audit write (omitted on entries written before this
+field existed, or if there's no start time to measure from). Shown next to
+the action name in the default output, and included in `--json` output.
+Audit writes are best-effort — a failed write is warned about, never
+propagated, so audit logging can't mask or block the actual outcome of the
+command it's recording.
 
-## Direct Container Logs
-
-For more control, access container logs directly:
-
-```bash
-jiji server exec "docker logs <container-id>"
-jiji server exec "docker logs --tail 100 -f <container-id>"
-```
-
-## Component Logs
-
-### jiji-dns Logs
+There's no cross-host success-rate or average-duration rollup yet — each
+run of `jiji audit` lists raw per-host entries, one line per entry.
 
 ```bash
-jiji server exec "journalctl -u jiji-dns -f"
-jiji server exec "journalctl -u jiji-dns --since '1 hour ago'"
+# Recent failed operations
+jiji audit --status failed
+
+# Everything related to a rollback
+jiji audit --grep rollback --lines 50
 ```
-
-### Corrosion Logs
-
-```bash
-jiji server exec "journalctl -u jiji-corrosion -f"
-jiji server exec "journalctl -u jiji-corrosion --since '1 hour ago'"
-```
-
-### WireGuard Logs
-
-```bash
-jiji server exec "journalctl -u wg-quick@jiji0 -f"
-```
-
-### kamal-proxy Logs
-
-```bash
-jiji proxy logs
-jiji proxy logs -H web1 -f
-```
-
-## Log Aggregation
-
-For production environments, consider forwarding logs to a centralized system.
-
-### Docker Log Driver
-
-Configure in your service:
-
-```yaml
-services:
-  api:
-    # ... other config
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-```
-
-### Syslog Forwarding
-
-```bash
-jiji server exec "docker logs <container> | logger -t myapp-api"
-```
-
-### Third-Party Integrations
-
-Common log aggregation solutions:
-- Datadog
-- Papertrail
-- Logtail
-- Grafana Loki
-- ELK Stack
-
-Configure your containers to send logs to these services using their respective log drivers or agents.
 
 ## Troubleshooting
 
-### No logs appearing
+**Container not found:** confirm the service is actually deployed
+(`jiji deploy -S web`), running on the target host, and that you're
+targeting the right host with `-H`.
+
+**No logs displayed:** check whether the container is producing output at
+all, widen `--since`, and confirm `--grep` isn't filtering everything out.
+
+**Follow mode not working:** verify the SSH connection to the target host,
+that the container is running, and that your SSH user has container-engine
+access (the `docker` group, or Podman socket access).
+
+## Examples
 
 ```bash
-# Check if container is running
-jiji server exec "docker ps" -H web1
+# Debugging workflow
+jiji service logs -S web --since 5m
+jiji service logs -S web --grep "ERROR"
+jiji proxy logs --grep web
+jiji service logs -S web --follow
 
-# Check container directly
-jiji server exec "docker logs <container-id>"
-```
+# Across services and servers
+jiji service logs -S "api*" --grep "ERROR"
+jiji service logs -S web -H server1.example.com
 
-### Logs truncated
-
-Increase the line limit:
-```bash
-jiji services logs -n 1000
-```
-
-### Old logs not available
-
-Docker rotates logs. Check log driver settings:
-```bash
-jiji server exec "docker inspect <container> | grep -A10 LogConfig"
-```
-
-### Finding container IDs
-
-```bash
-# List running containers
-jiji server exec "docker ps"
-
-# Show container IDs in logs
-jiji services logs --container-id
+# Production monitoring
+jiji service logs -S "web,api,worker" --grep "CRITICAL|FATAL" --grep-options "-E" --follow
 ```

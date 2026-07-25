@@ -58,6 +58,10 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+// Set by CI at build time (see .github/workflows/deploy.yml) to the latest jiji release tag.
+// Falls back to "dev" for local builds where the env var isn't set.
+const JIJI_VERSION = process.env.NEXT_PUBLIC_JIJI_VERSION || "dev";
+
 function Github({ className }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -125,7 +129,7 @@ export default function LandingPage() {
               <div className="flex items-center gap-3 mb-8 opacity-0 animate-fade-in-up">
                 <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 font-mono text-xs">
                   <span className="w-2 h-2 bg-primary rounded-full mr-2 animate-pulse" />
-                  v0.3.2 Latest
+                  {JIJI_VERSION} Latest
                 </Badge>
               </div>
 
@@ -226,7 +230,7 @@ export default function LandingPage() {
               <BenefitCard
                 icon={Lock}
                 title="Secure by Default"
-                description="WireGuard mesh VPN encrypts all traffic automatically. No exposed ports required."
+                description="WireGuard mesh VPN encrypts all traffic automatically. Your app never binds a host port directly, only kamal-proxy and WireGuard are exposed."
                 delay="delay-300"
               />
             </div>
@@ -278,7 +282,7 @@ export default function LandingPage() {
                     <Line>  <YamlKey>api</YamlKey>:</Line>
                     <Line>    <YamlKey>build</YamlKey>:</Line>
                     <Line>      <YamlKey>context</YamlKey>: <Val>.</Val></Line>
-                    <Line>    <YamlKey>hosts</YamlKey>: <Val>[web1, web2]</Val></Line>
+                    <Line>    <YamlKey>servers</YamlKey>: <Val>[web1, web2]</Val></Line>
                     <Line>    <YamlKey>proxy</YamlKey>:</Line>
                     <Line>      <YamlKey>app_port</YamlKey>: <Val>3000</Val></Line>
                     <Line>      <YamlKey>host</YamlKey>: <Val>api.example.com</Val></Line>
@@ -300,7 +304,7 @@ export default function LandingPage() {
                   </span>
                 </div>
                 <pre className="p-5 text-sm overflow-x-auto font-mono text-zinc-300 leading-relaxed">
-                  <TerminalLine prompt>jiji server init</TerminalLine>
+                  <TerminalLine prompt>jiji server setup</TerminalLine>
                   <TerminalLine>Initializing web1... <Success>done</Success></TerminalLine>
                   <TerminalLine>Initializing web2... <Success>done</Success></TerminalLine>
                   <TerminalLine />
@@ -407,12 +411,12 @@ export default function LandingPage() {
               <FeatureCard
                 icon={Globe}
                 title="Automatic DNS"
-                description="Service discovery via jiji-dns. Access services by name."
+                description="Built-in .jiji DNS resolution. Access services by name."
               />
               <FeatureCard
                 icon={RefreshCw}
                 title="Zero-Downtime"
-                description="Rolling deploys with health checks. Automatic rollback."
+                description="Old version keeps serving until the new one passes its health check."
               />
               <FeatureCard
                 icon={Container}
@@ -422,7 +426,7 @@ export default function LandingPage() {
               <FeatureCard
                 icon={GitBranch}
                 title="Multi Server"
-                description="Deploy across servers in parallel. Scale horizontally or vertically."
+                description="Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety."
               />
               <FeatureCard
                 icon={Layers}
@@ -539,7 +543,7 @@ export default function LandingPage() {
               <FeatureCard
                 icon={RefreshCw}
                 title="Restart Policy"
-                description="Configure restart behavior (unless-stopped, always, on-failure)."
+                description="Configure restart behavior: unless-stopped, always, on-failure, no."
               />
               <FeatureCard
                 icon={Settings}
@@ -562,8 +566,8 @@ export default function LandingPage() {
               />
               <FeatureCard
                 icon={Activity}
-                title="Health Check Rollback"
-                description="Automatic rollback on failed health checks."
+                title="Fail-Safe Health Checks"
+                description="A failed candidate is discarded; the previous version is never touched."
               />
               <FeatureCard
                 icon={Timer}
@@ -606,8 +610,8 @@ export default function LandingPage() {
               />
               <FeatureCard
                 icon={Users}
-                title="Connection Pooling"
-                description="Concurrent connection optimization for faster deploys."
+                title="Bounded Concurrency"
+                description="Run SSH operations across many hosts without overwhelming any one connection limit."
               />
               <FeatureCard
                 icon={Terminal}
@@ -644,28 +648,28 @@ export default function LandingPage() {
             <FeatureCategory title="Network">
               <FeatureCard
                 icon={Settings}
-                title="Custom Cluster CIDR"
-                description="Configure private network IP range (default 10.210.0.0/16)."
+                title="Custom Network CIDR"
+                description="Configure management and container IP ranges per project."
               />
               <FeatureCard
                 icon={Eye}
-                title="Network Inspection"
-                description="Query Corrosion database for container details."
+                title="Network Plan Preview"
+                description="See interfaces, ports, and VIPs before touching a server."
               />
               <FeatureCard
                 icon={Globe}
-                title="DNS Record Viewing"
-                description="View all DNS records from the network database."
+                title="Per-Replica DNS Records"
+                description="Resolve every replica together, or reach one server directly."
               />
               <FeatureCard
                 icon={Trash2}
-                title="Network GC"
-                description="Clean up unused network resources automatically."
+                title="Clean Teardown"
+                description="Remove a project's network, containers, and routes in one command."
               />
               <FeatureCard
                 icon={Server}
-                title="Network Teardown"
-                description="Safely remove private networking from servers."
+                title="Multi-Project Isolation"
+                description="Independent projects share a host with zero shared network state."
               />
             </FeatureCategory>
 
@@ -674,7 +678,7 @@ export default function LandingPage() {
               <FeatureCard
                 icon={HardDrive}
                 title="Registry Support"
-                description="Built-in local registry or GHCR, Docker Hub, ECR."
+                description="Local registry, GHCR, Docker Hub, ECR, GCP Artifact Registry, or any custom registry."
               />
               <FeatureCard
                 icon={Key}
@@ -683,8 +687,8 @@ export default function LandingPage() {
               />
               <FeatureCard
                 icon={Settings}
-                title="Registry Setup"
-                description="Configure local or remote registries easily."
+                title="Local Registry Tunneling"
+                description="Automatic SSH reverse tunnels let remote servers pull from your local build."
               />
             </FeatureCategory>
 
@@ -717,8 +721,8 @@ export default function LandingPage() {
               />
               <FeatureCard
                 icon={Activity}
-                title="Deployment Metrics"
-                description="Track deployment timing and success rates."
+                title="Deployment Timing"
+                description="Every audit entry records how long the operation took."
               />
             </FeatureCategory>
 
@@ -727,7 +731,7 @@ export default function LandingPage() {
               <FeatureCard
                 icon={Terminal}
                 title="Remote Execution"
-                description="Run commands across servers in parallel or sequential."
+                description="Run commands across servers in parallel or sequential, or drop into an interactive shell."
               />
               <FeatureCard
                 icon={RefreshCw}
@@ -785,13 +789,13 @@ export default function LandingPage() {
               <ArchCard
                 number="02"
                 title="Network Stack"
-                description="WireGuard mesh VPN. Corrosion state sync. Kamal Proxy for HTTP routing."
+                description="Per-project WireGuard mesh. Compiled .jiji DNS. Stable service VIPs."
                 icon={Network}
               />
               <ArchCard
                 number="03"
-                title="Jiji-dns"
-                description="Lightweight DNS for service discovery. Health-aware routing. Real-time updates."
+                title="kamal-proxy"
+                description="Shared HTTP/HTTPS routing across every project on a server, with SSL termination."
                 icon={Globe}
               />
             </div>
@@ -1105,12 +1109,12 @@ function NetworkVisualization() {
           <LegendItem
             icon={Globe}
             color="text-blue-400"
-            label="Jiji-dns Discovery"
+            label=".jiji DNS Discovery"
           />
           <LegendItem
             icon={Network}
             color="text-purple-400"
-            label="10.210.0.0/16 Mesh"
+            label="Encrypted Private Mesh"
           />
         </div>
       </div>
