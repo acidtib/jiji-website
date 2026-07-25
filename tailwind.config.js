@@ -41,6 +41,8 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        cleared: "hsl(var(--cleared))",
+        held: "hsl(var(--held))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -50,6 +52,7 @@ module.exports = {
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
+        display: ["var(--font-display)", "system-ui", "sans-serif"],
       },
     },
   },

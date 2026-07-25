@@ -1,5 +1,5 @@
 /* Jiji Docs Theme - Nextra v4 Overrides */
-/* Dark mode only, green primary, Outfit + JetBrains Mono */
+/* Dark mode only, green primary, Archivo + Courier Prime + Big Shoulders Display */
 
 /* ===== Force Dark Mode ===== */
 html,
@@ -7,7 +7,7 @@ html.dark,
 html.light,
 [data-theme="dark"],
 [data-theme="light"] {
-  --nextra-bg: 10 12 16 !important;
+  --nextra-bg: 18 18 18 !important;
   --nextra-content-width: none !important;
   color-scheme: dark !important;
 
@@ -28,8 +28,8 @@ html.light,
   --x-color-primary-800: hsl(142 71% 32%) !important;
 
   /* Custom fonts */
-  --x-font-sans: 'Outfit', system-ui, sans-serif;
-  --x-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --x-font-sans: 'Archivo', system-ui, sans-serif;
+  --x-font-mono: 'Courier Prime', ui-monospace, monospace;
 }
 
 /* Hide theme toggle button */
@@ -42,59 +42,38 @@ button[aria-label="Change theme"],
 
 /* ===== Typography ===== */
 body {
-  font-family: 'Outfit', system-ui, sans-serif !important;
+  font-family: 'Archivo', system-ui, sans-serif !important;
 }
 
 code, pre, kbd, [class*="font-mono"] {
-  font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+  font-family: 'Courier Prime', ui-monospace, monospace !important;
 }
 
-/* ===== Sidebar ===== */
-aside {
-  background: rgb(10 12 16) !important;
-  border-color: hsl(220 15% 12%) !important;
-}
-
-aside a {
-  color: hsl(220 10% 55%) !important;
-  transition: all 0.2s ease !important;
-}
-
-aside a:hover {
-  color: hsl(0 0% 95%) !important;
-  background: hsl(220 15% 10%) !important;
-}
-
-aside a[aria-current="page"],
-aside a[data-active="true"] {
-  color: hsl(142 71% 50%) !important;
-  background: hsl(142 71% 45% / 0.1) !important;
-}
-
-/* ===== Main Content ===== */
-main, article {
-  background: transparent !important;
-}
-
+/* Page title carries the brand display face; body copy stays a workhorse
+   grotesk so long-form reading isn't fighting a condensed display type. */
 article h1 {
-  color: hsl(0 0% 98%) !important;
+  font-family: 'Big Shoulders Display', system-ui, sans-serif !important;
   font-weight: 700 !important;
-  letter-spacing: -0.02em !important;
+  text-transform: uppercase !important;
+  letter-spacing: -0.01em !important;
+  color: hsl(0 0% 95%) !important;
 }
 
 article h2 {
   color: hsl(0 0% 95%) !important;
-  border-bottom-color: hsl(220 15% 15%) !important;
+  font-weight: 700 !important;
+  border-bottom-color: hsl(0 0% 19%) !important;
 }
 
 article h3,
 article h4 {
   color: hsl(0 0% 92%) !important;
+  font-weight: 700 !important;
 }
 
 article p,
 article li {
-  color: hsl(220 10% 68%) !important;
+  color: hsl(0 0% 68%) !important;
 }
 
 article a {
@@ -105,11 +84,38 @@ article a:hover {
   color: hsl(142 71% 60%) !important;
 }
 
+/* ===== Sidebar ===== */
+aside {
+  background: hsl(0 0% 7%) !important;
+  border-color: hsl(0 0% 19%) !important;
+}
+
+aside a {
+  color: hsl(0 0% 55%) !important;
+  transition: color 0.15s ease, background 0.15s ease !important;
+}
+
+aside a:hover {
+  color: hsl(0 0% 95%) !important;
+  background: hsl(0 0% 11%) !important;
+}
+
+aside a[aria-current="page"],
+aside a[data-active="true"] {
+  color: hsl(142 71% 50%) !important;
+  background: hsl(142 71% 45% / 0.12) !important;
+}
+
+/* ===== Main Content ===== */
+main, article {
+  background: transparent !important;
+}
+
 /* ===== Code ===== */
 pre {
-  background: hsl(220 20% 6%) !important;
-  border: 1px solid hsl(220 15% 15%) !important;
-  border-radius: 0.75rem !important;
+  background: hsl(0 0% 10%) !important;
+  border: 1px solid hsl(0 0% 19%) !important;
+  border-radius: 0.25rem !important;
 }
 
 pre code {
@@ -117,45 +123,51 @@ pre code {
 }
 
 :not(pre) > code {
-  background: hsl(220 15% 12%) !important;
+  background: hsl(0 0% 13%) !important;
   color: hsl(142 71% 55%) !important;
   padding: 0.2em 0.4em !important;
-  border-radius: 0.375rem !important;
-  border: 1px solid hsl(220 15% 18%) !important;
+  border-radius: 0.125rem !important;
+  border: 1px solid hsl(0 0% 19%) !important;
 }
 
 /* ===== Tables ===== */
 th {
-  background: hsl(220 15% 10%) !important;
+  background: hsl(0 0% 11%) !important;
   color: hsl(0 0% 90%) !important;
-  border-bottom: 2px solid hsl(142 71% 45% / 0.3) !important;
+  font-family: 'Courier Prime', ui-monospace, monospace !important;
+  font-size: 0.75rem !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  border-bottom: 1px solid hsl(0 0% 19%) !important;
 }
 
 td {
-  border-color: hsl(220 15% 15%) !important;
-  color: hsl(220 10% 68%) !important;
+  border-color: hsl(0 0% 19%) !important;
+  color: hsl(0 0% 68%) !important;
 }
 
 tr:hover td {
-  background: hsl(220 15% 8%) !important;
+  background: hsl(0 0% 9%) !important;
 }
 
 /* ===== Blockquotes & Callouts ===== */
 blockquote {
   border-left-color: hsl(142 71% 45% / 0.5) !important;
-  background: hsl(220 15% 8%) !important;
-  color: hsl(220 10% 70%) !important;
+  background: hsl(0 0% 9%) !important;
+  color: hsl(0 0% 70%) !important;
+  border-radius: 0.125rem !important;
 }
 
 [class*="callout"],
 [class*="Callout"] {
-  background: hsl(220 15% 8%) !important;
-  border-color: hsl(220 15% 15%) !important;
+  background: hsl(0 0% 9%) !important;
+  border-color: hsl(0 0% 19%) !important;
+  border-radius: 0.25rem !important;
 }
 
 /* ===== TOC ===== */
 nav[aria-label="Table of contents"] a {
-  color: hsl(220 10% 50%) !important;
+  color: hsl(0 0% 50%) !important;
 }
 
 nav[aria-label="Table of contents"] a:hover {
@@ -169,15 +181,17 @@ nav[aria-label="Table of contents"] a[aria-current="true"] {
 /* ===== Search ===== */
 [data-search],
 input[type="search"] {
-  background: hsl(220 20% 8%) !important;
-  border-color: hsl(220 15% 15%) !important;
+  background: hsl(0 0% 8%) !important;
+  border-color: hsl(0 0% 19%) !important;
+  border-radius: 0.25rem !important;
   color: hsl(0 0% 95%) !important;
 }
 
 /* ===== Cards ===== */
 [class*="card"] {
-  background: hsl(220 15% 8%) !important;
-  border-color: hsl(220 15% 15%) !important;
+  background: hsl(0 0% 9%) !important;
+  border-color: hsl(0 0% 19%) !important;
+  border-radius: 0.25rem !important;
 }
 
 [class*="card"]:hover {
@@ -190,7 +204,7 @@ li::marker {
 }
 
 hr {
-  border-color: hsl(220 15% 15%) !important;
+  border-color: hsl(0 0% 19%) !important;
 }
 
 ::selection {
@@ -206,16 +220,16 @@ button:focus-visible {
 
 /* ===== Navbar ===== */
 nav[class*="sticky"] {
-  background: rgba(10, 12, 16, 0.8) !important;
+  background: hsl(0 0% 7% / 0.9) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
-  border-bottom-color: hsl(220 15% 12% / 0.5) !important;
+  border-bottom-color: hsl(0 0% 19% / 0.6) !important;
 }
 
 /* ===== Footer ===== */
 footer {
-  background: rgb(10 12 16) !important;
-  border-top-color: hsl(220 15% 12% / 0.5) !important;
+  background: hsl(0 0% 7%) !important;
+  border-top-color: hsl(0 0% 19% / 0.6) !important;
 }
 
 /* ===== Scrollbars ===== */
@@ -229,12 +243,12 @@ footer {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(220 15% 20%);
+  background: hsl(0 0% 20%);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(220 15% 30%);
+  background: hsl(0 0% 30%);
 }
 
 /* ===== Noise Texture ===== */

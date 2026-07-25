@@ -15,11 +15,14 @@
   --color-ring: hsl(var(--ring));
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
+  --color-cleared: hsl(var(--cleared));
+  --color-held: hsl(var(--held));
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  --font-sans: 'Outfit', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Archivo', system-ui, sans-serif;
+  --font-mono: 'Courier Prime', ui-monospace, monospace;
+  --font-display: 'Big Shoulders Display', system-ui, sans-serif;
 }
 
 @layer base {
@@ -43,31 +46,36 @@
     --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 142 71% 45%;
-    --radius: 0.5rem;
+    --radius: 0.25rem;
     --glow: 142 71% 45%;
+    --cleared: 142 71% 45%;
+    --held: 8 70% 45%;
   }
 
+  /* Dense ops dashboard: near-black ground, hairline-ruled modules, one utility accent. */
   .dark {
-    --background: 220 20% 4%;
+    --background: 0 0% 7%;
     --foreground: 0 0% 95%;
-    --card: 220 20% 7%;
+    --card: 0 0% 10%;
     --card-foreground: 0 0% 95%;
-    --popover: 220 20% 7%;
+    --popover: 0 0% 10%;
     --popover-foreground: 0 0% 95%;
     --primary: 142 71% 45%;
-    --primary-foreground: 220 20% 4%;
-    --secondary: 220 15% 12%;
+    --primary-foreground: 0 0% 7%;
+    --secondary: 0 0% 13%;
     --secondary-foreground: 0 0% 95%;
-    --muted: 220 15% 12%;
-    --muted-foreground: 220 10% 55%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 60%;
     --accent: 142 71% 45%;
-    --accent-foreground: 220 20% 4%;
-    --destructive: 0 62% 30%;
+    --accent-foreground: 0 0% 7%;
+    --destructive: 8 70% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 15% 15%;
-    --input: 220 15% 15%;
+    --border: 0 0% 19%;
+    --input: 0 0% 19%;
     --ring: 142 71% 45%;
     --glow: 142 71% 45%;
+    --cleared: 142 71% 45%;
+    --held: 8 70% 52%;
   }
 }
 
@@ -82,11 +90,16 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Outfit', system-ui, sans-serif;
+    font-family: 'Archivo', system-ui, sans-serif;
   }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: 'Courier Prime', ui-monospace, monospace;
+  }
+
+  .font-display {
+    font-family: 'Big Shoulders Display', system-ui, sans-serif;
+    font-stretch: condensed;
   }
 }
 
@@ -209,6 +222,15 @@
   }
 }
 
+@keyframes flow-dash {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
 @keyframes gradient-shift {
   0%, 100% {
     background-position: 0% 50%;
@@ -254,6 +276,14 @@
   animation: node-pulse 2s ease-in-out infinite;
 }
 
+.animate-line-draw {
+  animation: line-draw 0.8s ease-out forwards;
+}
+
+.animate-flow-dash {
+  animation: flow-dash 1.4s linear infinite;
+}
+
 .animate-gradient-shift {
   background-size: 200% 200%;
   animation: gradient-shift 8s ease infinite;
@@ -269,46 +299,30 @@
 .delay-700 { animation-delay: 700ms; }
 .delay-800 { animation-delay: 800ms; }
 
-/* Mesh background pattern */
-.mesh-bg {
-  background-image:
-    linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
-  background-size: 60px 60px;
+/* Dense module: hairline-ruled card, the base unit of the packed grid */
+.module-card {
+  position: relative;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
 }
 
-.mesh-bg-dense {
-  background-image:
-    linear-gradient(hsl(var(--border) / 0.2) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--border) / 0.2) 1px, transparent 1px);
-  background-size: 30px 30px;
+/* Small corner label chip: NEW / status / count, one accent, no gradients */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  border-radius: 1px;
 }
 
-/* Glow effects */
-.glow-sm {
-  box-shadow: 0 0 10px hsl(var(--primary) / 0.3);
-}
-
-.glow-md {
-  box-shadow: 0 0 20px hsl(var(--primary) / 0.4);
-}
-
-.glow-lg {
-  box-shadow: 0 0 40px hsl(var(--primary) / 0.3);
-}
-
-.text-glow {
-  text-shadow: 0 0 20px hsl(var(--primary) / 0.5);
-}
-
-/* Terminal styling */
-.terminal-window {
-  background: linear-gradient(180deg, hsl(220 20% 8%) 0%, hsl(220 20% 5%) 100%);
-  border: 1px solid hsl(220 15% 18%);
-}
-
-.terminal-header {
-  background: linear-gradient(180deg, hsl(220 15% 15%) 0%, hsl(220 15% 12%) 100%);
+/* Live status dot for a server row */
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
 
 /* Noise texture overlay */
@@ -319,14 +333,6 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   opacity: 0.03;
   pointer-events: none;
-}
-
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(160 70% 50%) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 /* Feature card hover */
