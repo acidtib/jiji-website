@@ -8,6 +8,7 @@ html.light,
 [data-theme="dark"],
 [data-theme="light"] {
   --nextra-bg: 10 12 16 !important;
+  --nextra-content-width: none !important;
   color-scheme: dark !important;
 
   /* Primary color: Jiji green */

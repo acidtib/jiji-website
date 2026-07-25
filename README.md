@@ -5,8 +5,8 @@ Documentation and landing page for [Jiji](https://github.com/acidtib/jiji), the 
 ## Development
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the site.
@@ -14,7 +14,7 @@ Open [http://localhost:3000](http://localhost:3000) to view the site.
 ## Build
 
 ```bash
-npm run build
+bun run build
 ```
 
 Outputs static site to `./out` directory.

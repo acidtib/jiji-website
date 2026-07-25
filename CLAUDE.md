@@ -5,9 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # Start development server with Turbopack
-npm run build    # Production build (static export to ./out)
-npm run start    # Start production server
+bun run dev      # Start development server with Turbopack
+bun run build    # Production build (static export to ./out)
+bun run start    # Start production server
 ```
 
 ## Architecture
