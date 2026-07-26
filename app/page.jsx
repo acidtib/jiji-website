@@ -64,6 +64,13 @@ const MESH_TRAFFIC_EDGES = [
   [[2, 1], [3, 1]], // app1:worker -> data1:redis
 ];
 
+const MESH_EVENTS = [
+  { source: "web1/web", action: "GET /health", target: "app1/api", result: "200 · 12ms" },
+  { source: "web2/web", action: "GET /v1/jobs", target: "app1/api", result: "200 · 18ms" },
+  { source: "app1/api", action: "SELECT", target: "data1/postgres", result: "ok · 4ms" },
+  { source: "app1/worker", action: "BRPOP queue", target: "data1/redis", result: "ok · 2ms" },
+];
+
 // A curated subset of the ~60 features documented in full at
 // /docs/reference/features -- what actually matters when deciding whether
 // to use Jiji, not everything it does.
@@ -121,9 +128,10 @@ export default function LandingPage() {
             />
           </Link>
           <div className="flex items-center gap-1">
-            <NavLink href="/docs">Docs</NavLink>
-            <NavLink href="/docs/getting-started/quick-start" className="hidden sm:inline-flex">
-              Getting Started
+            <NavLink href="#why-jiji" className="hidden md:inline-flex">Why Jiji</NavLink>
+            <NavLink href="#how-it-works" className="hidden md:inline-flex">How it works</NavLink>
+            <NavLink href="/docs">
+              Docs
             </NavLink>
             <div className="w-px h-4 bg-border mx-2 hidden sm:block" />
             <Link
@@ -144,6 +152,12 @@ export default function LandingPage() {
               <Github className="w-4 h-4" />
               <span className="hidden sm:inline">GitHub</span>
             </Link>
+            <Button asChild size="sm" className="ml-1 hidden sm:inline-flex rounded-sm">
+              <Link href="/docs/getting-started/quick-start">
+                Quick start
+                <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+              </Link>
+            </Button>
           </div>
         </div>
       </nav>
@@ -152,7 +166,7 @@ export default function LandingPage() {
         {/* Hero: the headline stands alone, the mesh visual carries the proof */}
         <section className="pt-14 pb-10 md:pt-20 md:pb-14">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <div className="max-w-2xl mx-auto text-center flex flex-col items-center">
+            <div className="max-w-3xl mx-auto text-center flex flex-col items-center">
               <div className="flex items-center justify-center gap-2 mb-5 flex-wrap">
                 <span className="tag-chip bg-primary/15 text-primary text-[11px] px-2 py-1">
                   {JIJI_VERSION}
@@ -161,39 +175,43 @@ export default function LandingPage() {
                   MIT
                 </span>
                 <span className="tag-chip bg-muted text-muted-foreground text-[11px] px-2 py-1">
-                  LINUX / MACOS
+                  OPEN SOURCE
                 </span>
               </div>
 
-              <h1 className="font-display font-bold uppercase text-5xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight mb-5">
+              <h1 className="font-display font-bold uppercase text-5xl md:text-7xl lg:text-8xl leading-[0.88] tracking-tight mb-6 text-balance">
                 Deploy containers anywhere.
               </h1>
 
-              <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-7 max-w-xl">
-                Without the orchestration headache. From weekend projects to production
-                traffic.{" "}
-                <span className="text-foreground font-medium">
-                  No platform middleman taking a cut or locking you in.
-                </span>
+              <p className="text-base md:text-xl text-muted-foreground leading-relaxed mb-7 max-w-2xl text-balance">
+                Jiji deploys containerized apps across any Linux servers over SSH—with
+                zero-downtime rollouts, automatic HTTPS, and a private WireGuard network
+                built in. <span className="text-foreground">No agents. No hosted platform. No cluster to babysit.</span>
               </p>
 
-              <InstallCommand />
-
-              <div className="flex flex-wrap justify-center gap-3 mt-7">
-                <Button asChild className="h-10 px-5 rounded-sm">
+              <div className="flex flex-wrap justify-center gap-3 mb-7">
+                <Button asChild className="h-11 px-6 rounded-sm">
                   <Link href="/docs/getting-started/quick-start">
                     <Terminal className="mr-2 w-4 h-4" />
-                    Quick Start
+                    Deploy your first app
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </Link>
                 </Button>
-                <Button variant="outline" asChild className="h-10 px-5 rounded-sm">
+                <Button variant="outline" asChild className="h-11 px-6 rounded-sm">
                   <Link href="https://github.com/acidtib/jiji" target="_blank">
                     <Github className="mr-2 w-4 h-4" />
-                    View Source
+                    Explore on GitHub
                     <ExternalLink className="ml-2 w-3 h-3 opacity-50" />
                   </Link>
                 </Button>
+              </div>
+
+              <InstallCommand />
+
+              <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mt-6 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-primary" /> SSH access is enough</span>
+                <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-primary" /> Docker or Podman</span>
+                <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-primary" /> Runs from laptop or CI</span>
               </div>
             </div>
           </div>
@@ -215,24 +233,28 @@ export default function LandingPage() {
         </section>
 
         {/* What you get */}
-        <section className="py-16 md:py-20">
+        <section id="why-jiji" className="py-16 md:py-20 scroll-mt-20">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <SectionHeading kicker="02 / MANIFEST" title="Production ready from day one" />
+            <SectionHeading
+              kicker="01 / WHY JIJI"
+              title="The production essentials, included"
+              description="Keep the operational model you already understand—SSH, containers, and Linux—without assembling the deployment layer yourself."
+            />
 
             <div className="grid md:grid-cols-3 gap-3">
               <BenefitModule
                 icon={Server}
-                title="Your Infrastructure"
-                description="Run on any server you control. AWS, Hetzner, DigitalOcean, bare metal. Mix providers freely."
+                title="Bring any server"
+                description="Deploy to cloud VMs, bare metal, or a mix of providers. If you can reach it over SSH, Jiji can deploy to it."
               />
               <BenefitModule
                 icon={Zap}
-                title="Predictable Costs"
-                description="No per request fees. A $5/month VPS can run production workloads. Scale when you need to."
+                title="Keep costs predictable"
+                description="Pay your infrastructure provider directly. No per-request platform fee and no proprietary runtime between you and your app."
               />
               <BenefitModule
                 icon={Lock}
-                title="Secure by Default"
+                title="Private by default"
                 description="WireGuard mesh VPN encrypts all traffic automatically. Your app never binds a host port directly, only kamal-proxy and WireGuard are exposed."
               />
             </div>
@@ -243,12 +265,12 @@ export default function LandingPage() {
         <section className="py-16 md:py-20 border-y border-border bg-card/40">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <SectionHeading
-              kicker="03 / CONFIG"
-              title="One config. One command."
+              kicker="02 / WORKFLOW"
+              title="From config to healthy containers"
               description={
                 <>
-                  Define your entire infrastructure in a single YAML file. Deploy
-                  with <code className="font-mono text-primary">jiji deploy</code>.
+                  Describe the desired deployment once. Jiji builds, pushes, starts,
+                  health-checks, and switches traffic with <code className="font-mono text-primary">jiji deploy</code>.
                 </>
               }
             />
@@ -308,38 +330,30 @@ export default function LandingPage() {
         {/* Comparison */}
         <section className="py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <SectionHeading kicker="04 / COMPARISON" title="Why Jiji?" />
+            <SectionHeading
+              kicker="03 / FIT"
+              title="Choose the operating model you want"
+              description="Jiji is deliberately a small deployment tool—not a hosted platform and not a self-managing cluster."
+            />
 
             <div className="grid md:grid-cols-3 gap-3">
-              <ComparisonModule
+              <FitModule
                 rank="01"
-                title="vs. Kubernetes"
-                items={[
-                  { label: "Learning curve", jiji: "Minutes", other: "Months" },
-                  { label: "Config complexity", jiji: "1 file", other: "100+ files" },
-                  { label: "Minimum servers", jiji: "1", other: "3+" },
-                  { label: "Resource overhead", jiji: "Minimal", other: "High" },
-                ]}
+                title="Choose Jiji"
+                description="You want repeatable production deploys on servers you control, without operating a control plane."
+                points={["Imperative, SSH-driven deploys", "Multi-server networking", "Minimal moving parts"]}
               />
-              <ComparisonModule
+              <FitModule
                 rank="02"
-                title="vs. Docker Compose"
-                items={[
-                  { label: "Multi server", jiji: "Built-in", other: "N/A" },
-                  { label: "Zero-downtime", jiji: "Automatic", other: "Manual" },
-                  { label: "Service discovery", jiji: "DNS", other: "Single host" },
-                  { label: "Health checks", jiji: "Deploy aware", other: "Basic" },
-                ]}
+                title="Choose Compose"
+                description="Your application lives on one host and you are comfortable handling deployments, routing, and recovery yourself."
+                points={["Familiar Compose specification", "Excellent local workflow", "Single-host simplicity"]}
               />
-              <ComparisonModule
+              <FitModule
                 rank="03"
-                title="vs. PaaS"
-                items={[
-                  { label: "Infrastructure", jiji: "Yours", other: "Theirs" },
-                  { label: "Pricing", jiji: "Fixed", other: "Usage based" },
-                  { label: "Vendor lock-in", jiji: "None", other: "High" },
-                  { label: "Control", jiji: "Full", other: "Limited" },
-                ]}
+                title="Choose a platform"
+                description="You would rather outsource infrastructure operations and accept the platform’s pricing, runtime, and constraints."
+                points={["Managed infrastructure", "Integrated web dashboard", "Less direct server ownership"]}
               />
             </div>
           </div>
@@ -349,7 +363,7 @@ export default function LandingPage() {
         <section className="py-16 md:py-20 border-y border-border bg-card/40">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <SectionHeading
-              kicker="05 / HIGHLIGHTS"
+              kicker="04 / CAPABILITIES"
               title="Built-in, not bolted on"
               description="The features that would otherwise take weeks to wire up yourself."
             />
@@ -371,9 +385,13 @@ export default function LandingPage() {
         </section>
 
         {/* How it works */}
-        <section className="py-16 md:py-20">
+        <section id="how-it-works" className="py-16 md:py-20 scroll-mt-20">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <SectionHeading kicker="06 / ARCHITECTURE" title="Three components, zero complexity" />
+            <SectionHeading
+              kicker="05 / ARCHITECTURE"
+              title="A small, inspectable stack"
+              description="No central scheduler or always-on Jiji service. The CLI computes the deployment and configures proven infrastructure components over SSH."
+            />
 
             <div className="grid md:grid-cols-3 gap-3">
               <ArchModule
@@ -398,11 +416,40 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* FAQ */}
+        <section className="py-16 md:py-20 border-y border-border bg-card/40">
+          <div className="max-w-7xl mx-auto px-4 md:px-6 grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-20">
+            <SectionHeading
+              kicker="06 / QUESTIONS"
+              title="Know what you’re operating"
+              description="Jiji keeps the system understandable, including where its responsibility ends."
+            />
+            <div className="divide-y divide-border border-y border-border">
+              <FaqItem
+                question="Does Jiji run a control plane on my servers?"
+                answer="No. Jiji is a CLI that runs from your laptop or CI, computes the deployment, and pushes configuration to your servers over SSH. There is no Jiji daemon to keep alive."
+              />
+              <FaqItem
+                question="What happens when a deployment fails?"
+                answer="Candidates must pass their configured health checks before traffic switches. If a candidate fails, Jiji removes it and leaves the currently running version in place."
+              />
+              <FaqItem
+                question="Can I use more than one cloud provider?"
+                answer="Yes. Servers can live at different providers or on your own hardware. Jiji connects them with a per-project WireGuard network."
+              />
+              <FaqItem
+                question="Is Jiji a managed platform?"
+                answer="No. You own and pay for the servers, registry, and related services. Jiji automates deployment and networking while leaving the infrastructure under your control."
+              />
+            </div>
+          </div>
+        </section>
+
         {/* CTA */}
-        <section className="py-20 md:py-24 border-t border-border">
+        <section className="py-20 md:py-24">
           <div className="max-w-2xl mx-auto px-4 md:px-6 text-center">
             <span className="tag-chip bg-primary/15 text-primary text-[11px] px-2.5 py-1 mb-8 inline-block">
-              07 / DEPLOY
+              07 / START
             </span>
 
             <div className="module-card overflow-hidden text-left max-w-md mx-auto mb-9">
@@ -421,10 +468,10 @@ export default function LandingPage() {
             </div>
 
             <h2 className="font-display font-bold uppercase text-3xl md:text-4xl tracking-tight mb-4">
-              Deploy your first app in 5 minutes
+              Your next deploy can be boring
             </h2>
             <p className="text-lg text-muted-foreground mb-9">
-              Read the quick start guide or dive into the full documentation.
+              Bring a Linux server and an SSH key. The quick start takes you from install to a healthy HTTPS deployment.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Button size="lg" asChild className="h-11 px-7 rounded-sm">
@@ -559,10 +606,10 @@ function InstallCommand() {
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-3 bg-background border border-border pl-4 pr-2 py-2.5 rounded-sm font-mono text-sm w-full sm:w-auto sm:inline-flex hover:border-primary/40 transition-colors">
+    <div className="w-full max-w-xl">
+      <div className="flex min-w-0 items-center gap-3 bg-background border border-border pl-4 pr-2 py-2.5 rounded-sm font-mono text-sm w-full hover:border-primary/40 transition-colors">
         <span className="text-primary">$</span>
-        <code className="flex-1 truncate">{command}</code>
+        <code className="min-w-0 flex-1 truncate text-left text-xs sm:text-sm">{command}</code>
         <button
           onClick={handleCopy}
           className="p-2 rounded-sm text-muted-foreground hover:text-primary hover:bg-white/5 transition-all flex-shrink-0"
@@ -578,9 +625,9 @@ function InstallCommand() {
       </div>
       <p className="mt-2.5 font-mono text-xs text-muted-foreground">
         <a href="https://get.jiji.run/install.sh" target="_blank" rel="noopener noreferrer" className="underline decoration-dotted hover:text-primary">
-          view script &rarr;
+          view script -{'>'}
         </a>
-        {" · "}MIT licensed, source on{" "}
+        {" · "}source on{" "}
         <a href="https://github.com/acidtib/jiji" target="_blank" rel="noopener noreferrer" className="underline decoration-dotted hover:text-primary">
           GitHub
         </a>
@@ -610,6 +657,7 @@ function NetworkMesh() {
   const containerRef = useRef(null);
   const bladeRefs = useRef(new Map());
   const [traffic, setTraffic] = useState([]);
+  const [activeEvent, setActiveEvent] = useState(0);
 
   useEffect(() => {
     const measure = () => {
@@ -633,32 +681,39 @@ function NetworkMesh() {
     };
 
     measure();
-    // Racks fade/slide in on mount (animate-fade-in-up moves them via transform), so a rect
-    // measured on the very first frame can catch them mid-animation, well short of their
-    // resting position -- re-measure once each rack's entrance animation actually finishes,
-    // plus a fixed fallback in case animationend doesn't fire (e.g. reduced-motion).
-    const container = containerRef.current;
-    container?.addEventListener("animationend", measure);
-    const settleTimer = setTimeout(measure, 900);
-
     const observer = new ResizeObserver(measure);
     if (containerRef.current) observer.observe(containerRef.current);
     window.addEventListener("resize", measure);
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", measure);
-      container?.removeEventListener("animationend", measure);
-      clearTimeout(settleTimer);
     };
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveEvent((current) => (current + 1) % MESH_EVENTS.length);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <div className="module-card overflow-hidden">
+    <div className="module-card overflow-hidden mesh-console">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/40">
-        <span className="tag-chip bg-primary/15 text-primary text-[10px] px-2 py-0.5">MESH</span>
-        <span className="font-mono text-xs text-muted-foreground">
-          6 services &middot; 4 servers &middot; private network
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="tag-chip bg-primary/15 text-primary text-[10px] px-2 py-0.5">LIVE DEMO</span>
+          <span className="flex items-center gap-1.5 font-mono text-[10px] text-primary">
+            <span className="status-dot bg-primary animate-node-pulse" />
+            MESH HEALTHY
+          </span>
+        </div>
+        <div className="hidden sm:flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
+          <span>4 hosts</span>
+          <span className="text-border">/</span>
+          <span>6 services</span>
+          <span className="text-border">/</span>
+          <span>4 active routes</span>
+        </div>
       </div>
 
       <div ref={containerRef} className="relative px-4 md:px-10 py-10 md:py-14 overflow-hidden">
@@ -682,8 +737,8 @@ function NetworkMesh() {
                 y1={edge.y}
                 x2={edge.to.x}
                 y2={edge.to.y}
-                stroke="hsl(var(--primary) / 0.4)"
-                strokeWidth="1"
+                stroke="hsl(var(--primary) / 0.55)"
+                strokeWidth="1.25"
                 strokeDasharray="1000"
                 strokeDashoffset="1000"
                 className={`animate-line-draw delay-${(i + 1) * 100}`}
@@ -700,6 +755,29 @@ function NetworkMesh() {
                 className="animate-flow-dash"
                 style={{ animationDelay: `${1 + i * 0.3}s` }}
               />
+              <circle r="2.5" fill="hsl(var(--primary))" className="mesh-packet">
+                <animate
+                  attributeName="cx"
+                  values={`${edge.x};${edge.to.x}`}
+                  dur={`${1.7 + i * 0.15}s`}
+                  begin={`${i * 0.32}s`}
+                  repeatCount="indefinite"
+                />
+                <animate
+                  attributeName="cy"
+                  values={`${edge.y};${edge.to.y}`}
+                  dur={`${1.7 + i * 0.15}s`}
+                  begin={`${i * 0.32}s`}
+                  repeatCount="indefinite"
+                />
+                <animate
+                  attributeName="opacity"
+                  values="0;1;1;0"
+                  dur={`${1.7 + i * 0.15}s`}
+                  begin={`${i * 0.32}s`}
+                  repeatCount="indefinite"
+                />
+              </circle>
             </g>
           ))}
         </svg>
@@ -709,17 +787,33 @@ function NetworkMesh() {
             <Rack
               key={rack.name}
               rack={rack}
-              delay={rackIndex * 100}
               bladeRef={(bladeIndex, el) => bladeRefs.current.set(`${rackIndex}-${bladeIndex}`, el)}
             />
           ))}
         </div>
 
-        <div className="relative flex items-center justify-center gap-2 mt-8 md:mt-10 pt-5 border-t border-border/60">
-          <span className="inline-block w-4 h-[2px] bg-primary animate-pulse" />
-          <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-            Service traffic over .jiji DNS
-          </span>
+        <div className="relative mt-8 md:mt-10 border border-border bg-background/90">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
+            <span className="font-mono text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+              Recent mesh activity
+            </span>
+            <span className="font-mono text-[9px] text-primary">streaming</span>
+          </div>
+          <div className="divide-y divide-border/60">
+            {MESH_EVENTS.map((event, index) => (
+              <div
+                key={`${event.source}-${event.target}`}
+                className={`grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 px-3 py-2 font-mono text-[9px] md:text-[10px] transition-colors duration-300 ${
+                  activeEvent === index ? "bg-primary/10 text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                <span className="truncate">{event.source}</span>
+                <span className="hidden sm:block text-primary/80">{event.action}</span>
+                <span className="hidden sm:block truncate">&rarr; {event.target}</span>
+                <span className={activeEvent === index ? "text-primary" : ""}>{event.result}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -729,16 +823,16 @@ function NetworkMesh() {
 // A server as a rack: a bordered card with a header (name/provider/ip) and its services
 // stacked inside as blades, the way a physical server holds blade units. Each blade shows
 // its own private address and the .jiji name other services actually reach it by.
-function Rack({ rack, delay, bladeRef }) {
+function Rack({ rack, bladeRef }) {
   return (
-    <div
-      className="relative border border-border bg-background/70 opacity-0 animate-fade-in-up transition-colors duration-300 hover:border-primary/40"
-      style={{ animationDelay: `${delay}ms`, animationFillMode: "forwards" }}
-    >
+    <div className="relative border border-border bg-background/70 transition-colors duration-300 hover:border-primary/40">
       <div className="px-2.5 md:px-3 py-2 border-b border-border bg-muted/40">
-        <div className="font-mono text-[11px] md:text-xs font-bold text-foreground">{rack.name}</div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="font-mono text-[11px] md:text-xs font-bold text-foreground">{rack.name}</div>
+          <span className="font-mono text-[8px] uppercase tracking-wide text-primary">connected</span>
+        </div>
         <div className="font-mono text-[9px] text-muted-foreground whitespace-nowrap">
-          {rack.provider} &middot; {rack.ip}
+          {rack.provider} &middot; wg0 {rack.ip}
         </div>
       </div>
       <div>
@@ -751,7 +845,7 @@ function Rack({ rack, delay, bladeRef }) {
             <span className="status-dot bg-cleared animate-node-pulse flex-shrink-0 mt-1.5" />
             <div className="min-w-0">
               <div className="font-mono text-[10px] md:text-[11px] font-bold text-foreground">
-                {blade.name}
+                {blade.name} <span className="text-[8px] font-normal text-primary">healthy</span>
               </div>
               <div className="font-mono text-[9px] text-primary whitespace-nowrap truncate">
                 {blade.dns}
@@ -792,26 +886,35 @@ function BenefitModule({ icon: Icon, title, description }) {
   );
 }
 
-function ComparisonModule({ rank, title, items }) {
+function FitModule({ rank, title, description, points }) {
   return (
     <div className="module-card p-6">
       <div className="flex items-center gap-2 mb-5">
         <span className="tag-chip bg-muted text-muted-foreground text-[10px] px-1.5 py-0.5">{rank}</span>
         <h3 className="font-mono text-xs font-bold tracking-wide">{title.toUpperCase()}</h3>
       </div>
-      <div className="space-y-3.5">
-        {items.map((item, index) => (
-          <div key={index} className="flex items-center justify-between text-sm gap-3">
-            <span className="text-muted-foreground">{item.label}</span>
-            <div className="flex items-center gap-2.5 font-mono text-xs">
-              <span className="font-bold text-cleared">{item.jiji}</span>
-              <span className="text-muted-foreground/40">vs</span>
-              <span className="text-muted-foreground">{item.other}</span>
-            </div>
+      <p className="text-sm leading-relaxed text-muted-foreground mb-5">{description}</p>
+      <div className="space-y-2.5">
+        {points.map((point) => (
+          <div key={point} className="flex items-start gap-2 text-sm">
+            <Check className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+            <span>{point}</span>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function FaqItem({ question, answer }) {
+  return (
+    <details className="group py-5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display text-lg font-bold uppercase tracking-tight marker:content-none">
+        {question}
+        <span className="font-mono text-xl font-normal text-primary transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+      </summary>
+      <p className="pt-3 pr-10 text-sm leading-relaxed text-muted-foreground">{answer}</p>
+    </details>
   );
 }
 

@@ -2,11 +2,11 @@ import { Head } from 'nextra/components'
 import './globals.css'
 
 export const metadata = {
-  title: 'Jiji - Deploy containers anywhere',
-  description: 'Deploy containers across servers with zero-downtime, automatic service discovery, and encrypted networking. No Kubernetes required.',
+  title: 'Jiji — Deploy containers anywhere',
+  description: 'Deploy containerized apps across any Linux servers with zero-downtime rollouts, automatic HTTPS, and private WireGuard networking. No control plane required.',
   openGraph: {
-    title: 'Jiji - Deploy containers anywhere',
-    description: 'Deploy containers across servers with zero-downtime, automatic service discovery, and encrypted networking.',
+    title: 'Jiji — Deploy containers anywhere',
+    description: 'Production container deploys across servers you control. No agents, hosted platform, or cluster to babysit.',
     type: 'website',
   },
 }
