@@ -11,6 +11,9 @@ export default {
   network: {
     title: 'Network'
   },
+  proxy: {
+    title: 'Kamal Proxy'
+  },
   registry: {
     title: 'Registry'
   },

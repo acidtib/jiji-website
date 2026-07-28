@@ -8,6 +8,9 @@ export default {
   'ci-cd': {
     title: 'CI/CD Integration'
   },
+  llms: {
+    title: 'Hello, LLMs'
+  },
   troubleshooting: {
     title: 'Troubleshooting'
   }
