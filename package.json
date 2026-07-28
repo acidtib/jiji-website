@@ -4,7 +4,8 @@
     "dev": "next --turbopack",
     "build": "bun scripts/generate-llms-txt.mjs && next build",
     "start": "next start",
-    "llms": "bun scripts/generate-llms-txt.mjs"
+    "llms": "bun scripts/generate-llms-txt.mjs",
+    "test": "bun test"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
