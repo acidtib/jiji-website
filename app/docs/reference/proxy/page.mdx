@@ -1,3 +1,9 @@
+export const metadata = {
+  description: 'Configure kamal-proxy routing, domains, TLS certificates, health checks, and zero-downtime traffic switching with Jiji.',
+  alternates: { canonical: '/docs/reference/proxy' },
+  openGraph: { url: '/docs/reference/proxy', images: ['/docs/opengraph-image.png'] }
+}
+
 # Kamal Proxy Reference
 
 Jiji uses Kamal Proxy as the public HTTP and HTTPS entry point for proxied
@@ -5,20 +11,21 @@ services. Jiji installs and manages the proxy container, translates each
 service's `proxy:` configuration into routes, and updates those routes during
 zero-downtime deployments.
 
-```
-Internet
-   │
-   ├── TCP 80
-   └── TCP 443
-          │
-          ▼
-   kamal-proxy
-          │
-          ▼
-   fixed backend address:service port
-          │
-          ▼
-   active service container
+```mermaid
+flowchart TB
+  accTitle: Kamal Proxy request path
+  accDescr: Internet traffic reaches Kamal Proxy on ports 80 and 443, then routes through a fixed backend address to the active service container.
+  internet([Internet])
+  proxy["Kamal Proxy"]
+  backend["Fixed backend<br/>address + service port"]
+  active["Active service container<br/>slot A or B"]
+
+  internet -->|"TCP 80 / 443"| proxy
+  proxy -->|"HTTP routing"| backend
+  backend --> active
+
+  classDef edge fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
+  class proxy edge
 ```
 
 ## Container

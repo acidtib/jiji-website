@@ -226,10 +226,220 @@ nav[class*="sticky"] {
   border-bottom-color: hsl(0 0% 19% / 0.6) !important;
 }
 
+.docs-navbar {
+  min-height: 4rem !important;
+}
+
+.docs-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  white-space: nowrap;
+}
+
+.docs-brand-section,
+.docs-brand-version {
+  border-left: 1px solid hsl(0 0% 24%);
+  padding-left: 0.75rem;
+  font-family: 'Courier Prime', ui-monospace, monospace;
+  text-transform: uppercase;
+}
+
+.docs-brand-section {
+  color: hsl(0 0% 92%);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.docs-brand-version {
+  color: hsl(0 0% 56%);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+}
+
+.docs-quick-start {
+  border: 1px solid hsl(142 71% 38%);
+  border-radius: 2px;
+  background: hsl(142 71% 45%);
+  padding: 0.55rem 0.8rem;
+  color: hsl(0 0% 5%) !important;
+  font-family: 'Courier Prime', ui-monospace, monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  transition: background-color 150ms ease;
+}
+
+.docs-quick-start:hover {
+  background: hsl(142 71% 52%);
+}
+
 /* ===== Footer ===== */
-footer {
+.docs-footer {
   background: hsl(0 0% 7%) !important;
   border-top-color: hsl(0 0% 19% / 0.6) !important;
+  padding: 0 !important;
+}
+
+.docs-footer-content {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+}
+
+.docs-footer-main {
+  display: grid;
+  gap: 3rem;
+  padding: 3rem 0;
+}
+
+.docs-footer-intro {
+  max-width: 25rem;
+}
+
+.docs-footer-intro p {
+  margin-top: 1.25rem;
+  color: hsl(0 0% 62%);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+.docs-footer-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  color: hsl(0 0% 52%);
+  font-family: 'Courier Prime', ui-monospace, monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.docs-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: hsl(142 71% 45%);
+  box-shadow: 0 0 8px hsl(142 71% 45% / 0.5);
+}
+
+.docs-footer-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem 1.5rem;
+}
+
+.docs-footer-links > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.docs-footer-links > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.docs-footer-links h2 {
+  margin-bottom: 0.35rem;
+  color: hsl(0 0% 90%);
+  font-family: 'Courier Prime', ui-monospace, monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.docs-footer-links a,
+.docs-footer-bottom {
+  color: hsl(0 0% 58%);
+  font-size: 0.78rem;
+}
+
+.docs-footer-links a:hover,
+.docs-footer-bottom a:hover {
+  color: hsl(142 71% 50%);
+}
+
+.docs-footer-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  border-top: 1px solid hsl(0 0% 19%);
+  padding: 1.25rem 0;
+  font-family: 'Courier Prime', ui-monospace, monospace;
+  font-size: 0.66rem;
+}
+
+.docs-footer-bottom > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+}
+
+.docs-footer-social {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.docs-footer-social a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid hsl(0 0% 22%);
+  color: hsl(0 0% 62%);
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.docs-footer-social a:hover {
+  border-color: hsl(142 71% 40%);
+}
+
+@media (min-width: 768px) {
+  .docs-footer-main {
+    grid-template-columns: minmax(0, 1.1fr) minmax(25rem, 1fr);
+    align-items: start;
+    padding: 4rem 0;
+  }
+
+  .docs-footer-links {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .docs-footer-links > div:last-child {
+    grid-column: auto;
+  }
+
+  .docs-footer-bottom {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 639px) {
+  .docs-brand {
+    gap: 0.5rem;
+  }
+
+  .docs-brand-section,
+  .docs-brand-version {
+    padding-left: 0.5rem;
+  }
+
+  .docs-brand-section {
+    display: none;
+  }
+
+  .docs-quick-start {
+    display: none;
+  }
 }
 
 /* ===== Scrollbars ===== */

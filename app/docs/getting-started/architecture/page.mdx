@@ -1,3 +1,9 @@
+export const metadata = {
+  description: 'Understand how Jiji plans deployments, connects over SSH, and configures containers, networking, and service discovery.',
+  alternates: { canonical: '/docs/getting-started/architecture' },
+  openGraph: { url: '/docs/getting-started/architecture', images: ['/docs/opengraph-image.png'] }
+}
+
 # Architecture
 
 ## System Overview
@@ -9,40 +15,60 @@ service on your end, and the servers don't run any jiji-specific daemon
 either - WireGuard, dnsmasq, and nftables are just doing their normal jobs
 with config jiji wrote for them.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         jiji (binary)                            │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
-│  │ Commands │ │  Config  │ │   SSH    │ │ Network  │            │
-│  │  (clap)  │ │  Loader  │ │ (russh)  │ │  Planner │            │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ SSH
-                              V
-┌─────────────────────────────────────────────────────────────────┐
-│                      Target Servers                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │   Server 1   │  │   Server 2   │  │   Server N   │           │
-│  │              │  │              │  │              │           │
-│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
-│  │ │Container │ │  │ │Container │ │  │ │Container │ │           │
-│  │ │ Runtime  │ │  │ │ Runtime  │ │  │ │ Runtime  │ │           │
-│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
-│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
-│  │ │kamal-proxy│ │  │ │kamal-proxy│ │  │ │kamal-proxy│ │           │
-│  │ │ (shared) │ │  │ │ (shared) │ │  │ │ (shared) │ │           │
-│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
-│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
-│  │ │WireGuard │<┼──┼─┤WireGuard │<┼──┼─┤WireGuard │ │           │
-│  │ │(per proj)│ │  │ │(per proj)│ │  │ │(per proj)│ │           │
-│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
-│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │           │
-│  │ │ dnsmasq  │ │  │ │ dnsmasq  │ │  │ │ dnsmasq  │ │           │
-│  │ │(per proj)│ │  │ │(per proj)│ │  │ │(per proj)│ │           │
-│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │           │
-│  └──────────────┘  └──────────────┘  └──────────────┘           │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  accTitle: Jiji system architecture
+  accDescr: The Jiji CLI loads configuration, plans the network, and connects over SSH to target servers that run containers, Kamal Proxy, WireGuard, and dnsmasq.
+  subgraph jiji["Jiji CLI"]
+    direction LR
+    commands["Commands<br/>clap"]
+    config["Config loader"]
+    ssh["SSH<br/>russh"]
+    planner["Network planner"]
+    commands --> config --> ssh
+    config --> planner
+  end
+
+  subgraph targets["Target Servers"]
+    direction LR
+    subgraph server1["Server 1"]
+      direction TB
+      runtime1["Container Runtime"]
+      proxy1["Kamal Proxy"]
+      wg1["WireGuard"]
+      dns1["dnsmasq"]
+      runtime1 ~~~ proxy1
+      proxy1 ~~~ wg1
+      wg1 ~~~ dns1
+    end
+    subgraph server2["Server 2"]
+      direction TB
+      runtime2["Container Runtime"]
+      proxy2["Kamal Proxy"]
+      wg2["WireGuard"]
+      dns2["dnsmasq"]
+      runtime2 ~~~ proxy2
+      proxy2 ~~~ wg2
+      wg2 ~~~ dns2
+    end
+    subgraph serverN["Server N"]
+      direction TB
+      runtimeN["Container Runtime"]
+      proxyN["Kamal Proxy"]
+      wgN["WireGuard"]
+      dnsN["dnsmasq"]
+      runtimeN ~~~ proxyN
+      proxyN ~~~ wgN
+      wgN ~~~ dnsN
+    end
+    wg1 <-->|"WireGuard mesh"| wg2
+    wg2 <-->|"WireGuard mesh"| wgN
+  end
+
+  ssh -->|"Remote Execution"| targets
+
+  classDef control fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
+  class commands,config,ssh,planner control
 ```
 
 Every resource on a server except kamal-proxy is scoped to one `project:` -
@@ -67,7 +93,7 @@ own WireGuard interface, bridge network, and DNS resolver. See
 - **Language/runtime** - Rust, compiled to a single static binary (`jiji`)
 - **CLI framework** - clap
 - **SSH** - russh (pure-Rust async SSH client; no subprocess, no libssh FFI)
-- **Container runtime** - Docker or Podman
+- **Container Runtime** - Docker or Podman
 - **Networking** - WireGuard, routed container bridges, dnsmasq, nftables
 
 ### Architecture Principles
@@ -80,7 +106,7 @@ own WireGuard interface, bridge network, and DNS resolver. See
 
 ## Component Details
 
-### jiji CLI
+### Jiji CLI
 
 Runs on your machine or CI. Every command follows the same sequence: load
 config, validate it, build the network plan, pick target hosts, connect over
@@ -128,23 +154,27 @@ always starts on whichever slot isn't currently active, and the VIP only
 moves over once that candidate passes its health check - no renaming
 containers mid-deploy, no downtime window while traffic is redirected.
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│    Build    │────>│    Push     │────>│   Deploy    │
-│   Image     │     │  to Registry│     │  Candidate  │
-└─────────────┘     └─────────────┘     └─────────────┘
-                                               │
-                    ┌──────────────────────────┘
-                    V
-┌─────────────────────────────────────────────────────┐
-│                 Zero-Downtime Deploy                 │
-│  1. Old container (slot A) keeps serving via the VIP │
-│  2. New container starts on the inactive slot (B)    │
-│  3. Health check runs directly against B, not the VIP│
-│  4. VIP (nftables DNAT) flips atomically to B         │
-│  5. kamal-proxy routes verified                      │
-│  6. Old container (slot A) is stopped and removed    │
-└─────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  accTitle: Jiji deployment flow
+  accDescr: Jiji builds and pushes an image, starts a candidate, and checks its health. Healthy candidates receive the stable address before cleanup, while failed candidates are removed.
+  build["Build image"]
+  push["Push to registry"]
+  candidate["Start candidate<br/>on inactive slot"]
+  health{"Direct health<br/>check passes?"}
+  vip["Flip stable VIP<br/>to candidate"]
+  proxy["Verify<br/>Kamal Proxy routes"]
+  cleanup["Remove<br/>old container"]
+  rollback["Remove candidate<br/>restore partial routes"]
+
+  build --> push --> candidate --> health
+  health -->|"Yes"| vip --> proxy --> cleanup
+  health -->|"No"| rollback
+
+  classDef success fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
+  classDef failure fill:#b45309,color:#fff,stroke:#92400e,stroke-width:2px
+  class vip success
+  class rollback failure
 ```
 
 If the health check fails, the previous container is never touched and
@@ -158,22 +188,20 @@ Full naming rules and the per-project isolation model are documented in
 
 ### Service Discovery Flow
 
-```
-Container A                    dnsmasq                   nftables
-     │                            │                          │
-     │  DNS query:                │                          │
-     │  myapp-api.jiji            │                          │
-     │───────────────────────────>│                          │
-     │                            │  Compiled static zone    │
-     │                            │  (from deploy.yml)       │
-     │  Response:                 │                          │
-     │  <stable VIP>              │                          │
-     │<───────────────────────────│                          │
-     │                            │                          │
-     │  Connect to VIP            │                          │
-     │────────────────────────────┼─────────────────────────>│
-     │                            │   DNAT to active backend │
-     │                            │   (slot A or B)          │
+```mermaid
+sequenceDiagram
+  accTitle: Service discovery request flow
+  accDescr: A container queries dnsmasq for a jiji name, receives a stable virtual address, and connects through nftables to the active backend slot.
+  participant app as Container A
+  participant dns as dnsmasq
+  participant nat as nftables
+  participant backend as Active backend
+
+  Note over dns: Compiled static zone<br/>from deploy.yml
+  app->>dns: Query myapp-api.jiji
+  dns-->>app: Return stable VIP
+  app->>nat: Connect to stable VIP
+  nat->>backend: DNAT to active slot A or B
 ```
 
 DNS just answers with whatever's configured; it doesn't need to know which

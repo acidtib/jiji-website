@@ -24,6 +24,19 @@ describe("documentation metadata", () => {
     expect(bodyWithoutTitle(markdown)).toBe("Install Jiji.");
     expect(pageTitle("No heading", "Fallback")).toBe("Fallback");
   });
+
+  test("removes Next.js metadata from generated documentation", () => {
+    const markdown = `export const metadata = {
+  description: 'Install Jiji.',
+  alternates: { canonical: '/docs/install' }
+}
+
+# Installation
+
+Install the binary.`;
+
+    expect(bodyWithoutTitle(markdown)).toBe("Install the binary.");
+  });
 });
 
 describe("LLM text formatting", () => {

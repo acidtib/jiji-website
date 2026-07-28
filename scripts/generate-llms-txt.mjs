@@ -28,7 +28,10 @@ export function pageTitle(markdown, fallback) {
 }
 
 export function bodyWithoutTitle(markdown) {
-  return markdown.replace(/^#[^\n]*\n/, "").trim();
+  return markdown
+    .replace(/^export const metadata = \{[\s\S]*?^\}\n+/m, "")
+    .replace(/^#[^\n]*\n/, "")
+    .trim();
 }
 
 export function escapeXml(value) {

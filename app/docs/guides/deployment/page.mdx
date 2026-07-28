@@ -1,3 +1,9 @@
+export const metadata = {
+  description: 'Deploy, update, inspect, and roll back containerized applications safely with Jiji.',
+  alternates: { canonical: '/docs/guides/deployment' },
+  openGraph: { url: '/docs/guides/deployment', images: ['/docs/opengraph-image.png'] }
+}
+
 # Deployment Guide
 
 ## Zero-Downtime Deployment
@@ -7,20 +13,26 @@ Every deploy targets two fixed backend addresses per service endpoint
 whichever slot is currently inactive, so the running container never has to
 be renamed or interrupted:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Zero-Downtime Flow                            │
-│                                                                    │
-│  1. Old container (slot A)     ──▶  Still serving via the VIP    │
-│  2. New container starts       ──▶  On the inactive slot (B)      │
-│  3. Health check runs directly ──▶  Against B, not the VIP        │
-│  4. VIP flips (nftables DNAT)  ──▶  Traffic moves to B             │
-│  5. kamal-proxy routes verified                                   │
-│  6. Old container (slot A) stops and is removed                   │
-│                                                                     │
-│  If the health check fails: the old container is never touched,   │
-│  and the candidate plus any partial proxy routes are rolled back. │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  accTitle: Zero-downtime deployment decision flow
+  accDescr: Jiji starts a candidate beside the active container. A healthy candidate receives traffic before the old container is removed, while a failed candidate is rolled back without affecting the active container.
+  active["Active slot<br/>keeps serving"]
+  candidate["Candidate<br/>starts on inactive slot"]
+  health{"Healthy?"}
+  switch["Switch VIP<br/>nftables DNAT"]
+  routes["Verify<br/>proxy routes"]
+  cleanup["Remove<br/>old container"]
+  rollback["Roll back candidate<br/>active slot is untouched"]
+
+  active --> candidate --> health
+  health -->|"yes"| switch --> routes --> cleanup
+  health -->|"no"| rollback
+
+  classDef success fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
+  classDef failure fill:#b45309,color:#fff,stroke:#92400e,stroke-width:2px
+  class switch success
+  class rollback failure
 ```
 
 ## Health Checks

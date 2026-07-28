@@ -1,3 +1,9 @@
+export const metadata = {
+  description: 'Configure container registries, authentication, image publishing, and the optional Jiji local registry.',
+  alternates: { canonical: '/docs/reference/registry' },
+  openGraph: { url: '/docs/reference/registry', images: ['/docs/opengraph-image.png'] }
+}
+
 # Registry Reference
 
 Jiji auto-detects namespace requirements for the registries below, so
@@ -150,16 +156,19 @@ doesn't match.
 
 ### How it works
 
-```
-Remote Builder (127.0.0.1:<registry.port>)
-        |
-        | SSH reverse tunnel used for build and push
-        v
-Local Machine (127.0.0.1:<registry.port>)
-        |
-        | separate SSH reverse tunnel used for pull
-        v
-Deployment Server (127.0.0.1:<registry.port>)
+```mermaid
+flowchart TB
+  accTitle: Local registry SSH tunnel flow
+  accDescr: A remote builder pushes through an SSH reverse tunnel to the local registry, and deployment servers pull through separate SSH reverse tunnels.
+  builder["Remote builder<br/>127.0.0.1:&lt;registry.port&gt;"]
+  local["Local machine<br/>loopback registry"]
+  server["Deployment server<br/>127.0.0.1:&lt;registry.port&gt;"]
+
+  builder -->|"SSH reverse tunnel<br/>build and push"| local
+  local -->|"Separate SSH reverse tunnel<br/>pull"| server
+
+  classDef registry fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
+  class local registry
 ```
 
 For a local build and deploy:

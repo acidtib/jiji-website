@@ -1,3 +1,9 @@
+export const metadata = {
+  description: 'Reference for Jiji WireGuard networking, private DNS, service addressing, and firewall behavior.',
+  alternates: { canonical: '/docs/reference/network' },
+  openGraph: { url: '/docs/reference/network', images: ['/docs/opengraph-image.png'] }
+}
+
 # Network Reference
 
 Jiji builds a private network between your servers and works it all out up
@@ -8,25 +14,29 @@ per-service VIPs to whichever backend container is currently active.
 
 ## Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                 Private Network (WireGuard mesh)                │
-│                                                                 │
-│  ┌──────────────────┐        ┌──────────────────┐              │
-│  │    Server 0       │        │    Server 1       │              │
-│  │  <mgmt-ip-0>       │◀──────▶│  <mgmt-ip-1>       │              │
-│  │                    │WireGuard│                    │              │
-│  │  ┌────────────┐    │        │  ┌────────────┐    │              │
-│  │  │ Container  │    │        │  │ Container  │    │              │
-│  │  │ (VIP+slot) │    │        │  │ (VIP+slot) │    │              │
-│  │  └────────────┘    │        │  └────────────┘    │              │
-│  │                    │        │                    │              │
-│  │  ┌────────────┐    │        │  ┌────────────┐    │              │
-│  │  │ dnsmasq    │    │        │  │ dnsmasq    │    │              │
-│  │  │ (.jiji)    │    │        │  │ (.jiji)    │    │              │
-│  │  └────────────┘    │        │  └────────────┘    │              │
-│  └──────────────────┘        └──────────────────┘              │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  accTitle: Private WireGuard network
+  accDescr: Two servers connect through an encrypted WireGuard tunnel. Each server runs a service container with a stable address and dnsmasq for private jiji records.
+  subgraph mesh["Private network · WireGuard mesh"]
+    direction LR
+    subgraph server0["Server 0 · management IP 0"]
+      direction TB
+      app0["Service container<br/>stable VIP + active slot"]
+      dns0["dnsmasq<br/>.jiji records"]
+    end
+
+    subgraph server1["Server 1 · management IP 1"]
+      direction TB
+      app1["Service container<br/>stable VIP + active slot"]
+      dns1["dnsmasq<br/>.jiji records"]
+    end
+
+    server0 <-->|"Encrypted WireGuard tunnel"| server1
+  end
+
+  classDef service fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
+  class app0,app1 service
 ```
 
 ## Multiple projects on one server
@@ -116,6 +126,13 @@ through the host resolver. kamal-proxy is the one exception: it's given no
 (never a `.jiji` hostname), and a single resolver can't reliably answer for
 every project's `.jiji` records it might be attached to at once.
 
+With Podman, the container queries Aardvark at the bridge gateway. Aardvark
+then forwards that container's requests to the project's dnsmasq address.
+Netavark can remove dnsmasq's secondary bridge address while activating a
+container, so jiji restores the address after every jiji-managed Podman
+container start or network attachment. The same repair runs after containers
+restart during boot.
+
 ## Installed resources
 
 Every path below is rooted under `/etc/jiji/network/{slug}/` - one
@@ -200,8 +217,10 @@ changed.
 Jiji's restore service materializes each Podman bridge directly before
 containers restart. `podman-restart.service` itself is host-global, gated on
 every project's restore unit via one drop-in file per project. This keeps an
-empty project network available with no auxiliary container. The drop-in
-also starts containers using the `unless-stopped` policy, which Podman 4.9's
+empty project network available with no auxiliary container. After Podman
+starts the containers, the drop-in restores the project's secondary dnsmasq
+address in case Netavark removed it during bridge activation. The drop-in also
+starts containers using the `unless-stopped` policy, which Podman 4.9's
 packaged restart unit does not start by itself.
 
 ## Repair
@@ -233,6 +252,15 @@ jiji server exec "sudo journalctl -u wg-quick@<wireguard_interface> --since '1 h
 jiji server exec "sudo systemctl status jiji-dns-<slug>"
 jiji server exec "sudo journalctl -u jiji-dns-<slug> -f"
 docker exec <container> getent hosts <project>-<service>.jiji
+```
+
+With Podman, verify both the project dnsmasq address and resolution through
+the container's Aardvark resolver:
+
+```bash
+jiji server exec "ip -4 address show dev <bridge-interface>"
+jiji server exec "podman exec <container> getent hosts <project>-<service>.jiji"
+jiji server exec "podman exec <container> getent hosts example.com"
 ```
 
 ### Containers can't reach each other

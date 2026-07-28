@@ -32,8 +32,8 @@ export function Footer() {
             <Image
               src="/jiji_logo.svg"
               alt="Jiji"
-              width={60}
-              height={24}
+              width={981}
+              height={295}
               className="h-6 w-auto opacity-70"
             />
             <span className="text-sm text-muted-foreground font-mono">

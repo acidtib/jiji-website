@@ -75,7 +75,7 @@
     --ring: 142 71% 45%;
     --glow: 142 71% 45%;
     --cleared: 142 71% 45%;
-    --held: 8 70% 52%;
+    --held: 8 70% 56%;
   }
 }
 
@@ -101,6 +101,111 @@
     font-family: 'Big Shoulders Display', system-ui, sans-serif;
     font-stretch: condensed;
   }
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  border: 2px solid hsl(var(--primary));
+  background: hsl(var(--background));
+  padding: 0.65rem 0.9rem;
+  color: hsl(var(--foreground));
+  font-weight: 700;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+
+/* Mermaid renders labels as a mix of SVG text and nested HTML. */
+svg:has(.node),
+svg:has(.actor) {
+  display: block;
+  margin-inline: auto !important;
+}
+
+:root:not(.dark) svg .nodeLabel,
+:root:not(.dark) svg .nodeLabel p,
+:root:not(.dark) svg .edgeLabel,
+:root:not(.dark) svg .edgeLabel p,
+:root:not(.dark) svg .cluster-label,
+:root:not(.dark) svg .cluster-label span,
+:root:not(.dark) svg .noteText,
+:root:not(.dark) svg .noteText p {
+  color: #000 !important;
+}
+
+:root:not(.dark) svg .nodeLabel text,
+:root:not(.dark) svg .edgeLabel text,
+:root:not(.dark) svg .cluster-label text,
+:root:not(.dark) svg .messageText,
+:root:not(.dark) svg .noteText,
+:root:not(.dark) svg text.actor {
+  fill: #000 !important;
+}
+
+:root:not(.dark) svg rect.actor {
+  fill: #fff !important;
+  stroke: #000 !important;
+}
+
+.dark svg .nodeLabel,
+.dark svg .nodeLabel p,
+.dark svg .edgeLabel,
+.dark svg .edgeLabel p,
+.dark svg .cluster-label,
+.dark svg .cluster-label span,
+.dark svg .noteText,
+.dark svg .noteText p {
+  color: #fff !important;
+}
+
+.dark svg .nodeLabel text,
+.dark svg .edgeLabel text,
+.dark svg .cluster-label text,
+.dark svg .messageText,
+.dark svg .noteText,
+.dark svg text.actor {
+  fill: #fff !important;
+}
+
+.dark svg rect.actor {
+  fill: #1f1f1f !important;
+  stroke: #fff !important;
+}
+
+svg .node.control .nodeLabel,
+svg .node.control .nodeLabel p,
+svg .node.service .nodeLabel,
+svg .node.service .nodeLabel p,
+svg .node.edge .nodeLabel,
+svg .node.edge .nodeLabel p,
+svg .node.registry .nodeLabel,
+svg .node.registry .nodeLabel p,
+svg .node.success .nodeLabel,
+svg .node.success .nodeLabel p,
+svg .node.failure .nodeLabel,
+svg .node.failure .nodeLabel p {
+  color: #fff !important;
+}
+
+svg .node.control text,
+svg .node.service text,
+svg .node.edge text,
+svg .node.registry text,
+svg .node.success text,
+svg .node.failure text {
+  fill: #fff !important;
 }
 
 /* Custom animations */
@@ -333,6 +438,13 @@
   filter: drop-shadow(0 0 4px hsl(var(--primary))) drop-shadow(0 0 10px hsl(var(--primary) / 0.65));
 }
 
+.mesh-console[data-paused="true"] .animate-node-pulse,
+.mesh-console[data-paused="true"] .animate-flow-dash,
+.mesh-console[data-paused="true"] .animate-line-draw,
+.mesh-console[data-paused="true"] .mesh-packet {
+  animation-play-state: paused;
+}
+
 /* Noise texture overlay */
 .noise-overlay::before {
   content: '';
@@ -388,6 +500,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
   .animate-node-pulse,
   .animate-flow-dash,
   .animate-line-draw,

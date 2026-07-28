@@ -1,3 +1,9 @@
+export const metadata = {
+  description: 'Complete deploy.yml configuration reference for Jiji applications, servers, services, networking, and health checks.',
+  alternates: { canonical: '/docs/reference/configuration' },
+  openGraph: { url: '/docs/reference/configuration', images: ['/docs/opengraph-image.png'] }
+}
+
 # Configuration Reference
 
 Complete reference for Jiji configuration files (`.jiji/deploy.yml` or
@@ -615,7 +621,7 @@ proxy:
         cmd: "test -f /ready"
 ```
 
-### Container runtime options
+### Container Runtime options
 
 ```yaml
 services:
