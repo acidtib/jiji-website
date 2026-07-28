@@ -104,6 +104,39 @@ builder:
   cache: true
 ```
 
+If the configured `engine` (Docker or Podman) is not already installed on
+the remote builder host, `jiji build` installs it automatically. It also
+upgrades Podman when the installed version is older than the required
+5.8.4. This is the same distro-aware installer `jiji server setup` uses for
+a deployment host, and jiji prints a status line confirming what it
+installed or upgraded.
+
+On Debian and Ubuntu, the installer uses the pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle and verifies its archive checksum before installation. This
+bundle is an unofficial, single-maintainer Podman distribution. jiji
+doesn't do anything else to a builder host beyond that: no network,
+WireGuard, or proxy setup, only the engine itself. Multi-architecture
+tooling (Buildx for Docker, manifest support for Podman) is **not**
+auto-installed - if your build needs more than one platform, install
+Buildx/manifest support on the builder yourself first; jiji only detects
+and reports whether it's there. The build context is streamed over SSH
+into a staging directory on the builder, which is always cleaned up
+afterward, including when the build fails.
+
+With `builder.registry.type: remote`, credentials are used to log in on
+the builder itself (the machine that actually runs `push`), not on your
+local machine. With `type: local`, jiji opens a reverse SSH tunnel from
+the builder's own `127.0.0.1:<registry.port>` back to your local
+registry - the same fixed-port design `jiji deploy` already uses when
+tunneling a local registry to a deployment host (see
+[Local Registry Details](/docs/reference/registry#local-registry-details)
+below). Two concurrent `jiji build` runs for the same project against the
+same builder will race for that port; the loser fails with an actionable
+message. `jiji build` has no deployment lock, so either serialize
+concurrent builds against one builder, or give each run its own
+`builder.registry.port`.
+
 **CI/CD** (always fresh builds):
 
 ```yaml
@@ -118,7 +151,7 @@ builder:
 Where built images are stored and pulled from, configured under
 `builder.registry`.
 
-**Local registry** — a loopback registry with SSH reverse tunnels to
+**Local registry** - a loopback registry with SSH reverse tunnels to
 deployment hosts, useful for development. `jiji` runs it on
 `localhost:31270`, tunnels it to each remote server for the duration of the
 deploy, and tears the tunnel down afterward.
@@ -149,35 +182,44 @@ builder:
 
 `password` can be a literal value, an ALL_CAPS secret name resolved from
 `.env`/host-env (see Environment Variables below), or `$(a local command)`
-— useful for registries like AWS ECR or GCP Artifact Registry that issue
+- useful for registries like AWS ECR or GCP Artifact Registry that issue
 short-lived tokens, see [Registry Reference](/docs/reference/registry).
 
 ## SSH
 
 ```yaml
 ssh:
-  user: deploy       # required
-  port: 22            # optional, default 22
-  timeout: 30000       # optional, connect timeout in ms, default 30000
+  user: deploy            # required
+  port: 22                 # optional, default 22
+  connect_timeout: 30      # optional, seconds, default 30
+  command_timeout: 300     # optional, seconds, default 300
 ```
 
-**Authentication** — ssh-agent is used by default if no keys are specified:
+**Authentication** - ssh-agent is used by default if no keys are specified.
+Configure one or more identities with `keys`:
 
 ```yaml
 ssh:
   user: deploy
-  private_keys:
+  keys:
     - ~/.ssh/id_ed25519
     - /path/to/deploy_key
 ```
 
+Each `keys` entry accepts a literal path or inline private key, an ALL_CAPS variable
+resolved from `.env` (or the host environment with `--host-env`), or
+`$(a local command)`. Resolved values beginning with a private-key PEM header
+are used as inline key material; other values are treated as paths.
+
 ```yaml
-# Inline key data, for CI/CD (values are environment variable names)
+# Inline key material can use the same keys list
 ssh:
   user: deploy
-  key_data:
-    - SSH_PRIVATE_KEY_1
-    - SSH_PRIVATE_KEY_2
+  keys:
+    - |
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      ...
+      -----END OPENSSH PRIVATE KEY-----
 ```
 
 ```yaml
@@ -185,7 +227,7 @@ ssh:
 ssh:
   user: deploy
   keys_only: true
-  private_keys:
+  keys:
     - ~/.ssh/deploy_key
 ```
 
@@ -231,10 +273,10 @@ take precedence over the SSH config file.
 ```yaml
 ssh:
   user: deploy
-  max_concurrent_connections: 30   # limit concurrent SSH connections
-  pool_idle_timeout: 900            # seconds before idle connections close
-  dns_retries: 3                    # retry DNS lookups with backoff
-  log_level: error                  # debug, info, warn, error, fatal
+  max_concurrent_starts: 30   # limit concurrent SSH connections
+  pool_idle_timeout: 900       # seconds before idle connections close
+  dns_retries: 3                # retry DNS lookups with backoff
+  log_level: error              # debug, info, warn, error, fatal
 ```
 
 ## Network
@@ -248,7 +290,6 @@ network:
   enabled: true
   management_cidr: "198.18.0.0/16"
   container_cidr: "100.64.0.0/10"
-  host_prefix: 21
 ```
 
 | Setting | Default | Description |
@@ -256,14 +297,11 @@ network:
 | `enabled` | `true` | Enable the private network |
 | `management_cidr` | `198.18.0.0/16` | WireGuard host-address pool |
 | `container_cidr` | `100.64.0.0/10` | Routed container-address pool |
-| `host_prefix` | `21` | Per-host container subnet size |
 
-The `.jiji` domain is internal-only and not customizable — service
+The `.jiji` domain is internal-only and not customizable - service
 discovery always resolves names like `myapp-api.jiji`.
 
-If more than a handful of independent projects share a host, set distinct
-`management_cidr`/`container_cidr` per project rather than leaving both at
-their defaults (see [Network Reference](/docs/reference/network) for why).
+`jiji init` writes smaller project-directory-derived ranges into new configurations. The table above describes the fallback values for configurations that omit these fields. Generated ranges are stable for a project directory, but should still be reviewed for overlap and rare slot collisions (see [Network Reference](/docs/reference/network)).
 
 ```yaml
 # Avoid CIDR conflicts with an existing network
@@ -271,7 +309,6 @@ network:
   enabled: true
   management_cidr: "198.19.0.0/16"
   container_cidr: "172.16.0.0/12"
-  host_prefix: 21
 ```
 
 ```yaml
@@ -313,19 +350,48 @@ API_SERVER1_URL: http://myapp-api-server1.jiji:3000
 
 ```yaml
 servers:
-  server1:
-    host: server1.example.com
-  server2:
-    host: server2.example.com
+  app-amd:
+    host: app-amd.example.com
+    arch: amd64
+  app-arm:
+    host: app-arm.example.com
+    arch: arm64
+    user: ubuntu
+    port: 2222
+    keys:
+      - ~/.ssh/app-arm
 ```
 
-Each entry's `host:` is the address jiji connects to over SSH. `-H`/
-`--hosts` filters match against both the config key name (`server1`) and
-this address (`server1.example.com`).
+`host` is required and is the SSH destination unless an enabled OpenSSH
+configuration supplies a matching `HostName`. `-H`/`--hosts` filters match
+both the config key name (`app-arm`) and the configured `host` value
+(`app-arm.example.com`).
+
+`arch` is optional and defaults to `amd64`. The supported values are
+`amd64` and `arm64`. When a service targets servers with both architectures,
+Jiji builds it for both `linux/amd64` and `linux/arm64`. Multi-platform
+images must be pushed, so `jiji build --no-push` is unavailable for that
+service.
+
+Each server can override these top-level `ssh:` defaults:
+
+| Field | Resolution order |
+| --- | --- |
+| `user` | server, top-level `ssh.user`, matching OpenSSH `User` |
+| `port` | server, non-default `ssh.port`, matching OpenSSH `Port`, `22` |
+| `keys` | server `keys`, top-level `ssh.keys`, matching OpenSSH `IdentityFile` |
+| `key_passphrase` | server, top-level `ssh.key_passphrase` |
+
+`keys` is always a list, including when only one identity is configured. The
+former singular `key_path` field has been removed. Other SSH options, including
+timeouts, proxy settings,
+`keys_only`, DNS retries, and pool limits, are global. `key_passphrase` is
+a literal value, it is not resolved from `.env` or
+the host environment.
 
 ## Services
 
-Each service is a deployable unit — a containerized application, either
+Each service is a deployable unit - a containerized application, either
 from a pre-built image or built from source.
 
 ```yaml
@@ -339,6 +405,8 @@ services:
       - "80"
       - "443"
 ```
+
+Image names are normalized before Docker or Podman operations. `nginx:latest` becomes `docker.io/library/nginx:latest`, and `owner/image:tag` becomes `docker.io/owner/image:tag`. Already-qualified registries such as `ghcr.io/owner/image`, `localhost:5000/image`, and private registry hostnames remain unchanged.
 
 ### Build configuration
 
@@ -358,9 +426,17 @@ services:
       - server1
 ```
 
+`dockerfile:` is resolved relative to **`context:`**, matching Docker
+Compose - if `context: ./web`, `dockerfile: Dockerfile` (the default)
+already means `web/Dockerfile`; there's no need to repeat the `web/`
+prefix. A `dockerfile:` value can still climb out of the context with
+`../` for local builds (the local engine reads the filesystem directly),
+but a remote builder can only stage what's inside the configured context,
+so that combination is rejected there.
+
 ### Port mappings
 
-For services behind the proxy, specify only the container port — this lets
+For services behind the proxy, specify only the container port - this lets
 the old and new container coexist during a deploy, since neither binds a
 host port:
 
@@ -458,38 +534,38 @@ Enables kamal-proxy routing for a service.
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: myapp.example.com
+  port: 3000
+  hosts: [myapp.example.com]
   ssl: false
 ```
 
 ```yaml
 # Multiple hostnames
 proxy:
-  app_port: 3000
+  port: 3000
   hosts:
     - myapp.example.com
     - www.myapp.example.com
   ssl: true
 ```
 
-**Wildcard subdomains** — kamal-proxy matches a leading `*` against any
+**Wildcard subdomains** - kamal-proxy matches a leading `*` against any
 single subdomain level, so one service can catch every subdomain of a
 domain (`foo.example.com` and `bar.example.com` both match; the nested
 `deep.foo.example.com` doesn't, since `*` only covers one label):
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: "*.example.com"
+  port: 3000
+  hosts: ["*.example.com"]
 ```
 
 **HTTP health check:**
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: myapp.example.com
+  port: 3000
+  hosts: [myapp.example.com]
   healthcheck:
     path: /health
     interval: 10s
@@ -501,8 +577,8 @@ proxy:
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: myapp.example.com
+  port: 3000
+  hosts: [myapp.example.com]
   healthcheck:
     cmd: "test -f /app/ready"   # exit 0 = healthy
     cmd_runtime: docker           # optional, defaults to builder.engine
@@ -518,8 +594,8 @@ Other command examples: `pgrep -f myapp`, `/app/healthcheck.sh`,
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: myapp.example.com
+  port: 3000
+  hosts: [myapp.example.com]
   path_prefix: /api
 ```
 
@@ -528,12 +604,12 @@ proxy:
 ```yaml
 proxy:
   targets:
-    - app_port: 3900
-      host: s3.example.com
+    - port: 3900
+      hosts: [s3.example.com]
       healthcheck:
         path: /health
-    - app_port: 3903
-      host: admin.example.com
+    - port: 3903
+      hosts: [admin.example.com]
       ssl: true
       healthcheck:
         cmd: "test -f /ready"
@@ -613,7 +689,7 @@ services:
     stop_first: true
 ```
 
-Use `stop_first: true` for services that can't run two instances at once —
+Use `stop_first: true` for services that can't run two instances at once -
 file-based locks (LevelDB, SQLite), or coordinator registration by a unique
 ID. This trades zero downtime for a brief stop-then-start window during
 deploy. Default is `false`.
@@ -647,7 +723,7 @@ builder:
 
 ssh:
   user: deploy
-  private_keys:
+  keys:
     - ~/.ssh/production_key
   proxy: bastion.example.com
 
@@ -655,7 +731,6 @@ network:
   enabled: true
   management_cidr: "198.18.0.0/16"
   container_cidr: "100.64.0.0/10"
-  host_prefix: 21
 
 environment:
   clear:
@@ -680,7 +755,7 @@ services:
     servers: [web1, web2]
     ports: ["3000"]
     proxy:
-      app_port: 3000
+      port: 3000
       hosts:
         - app.example.com
         - www.app.example.com
@@ -698,8 +773,8 @@ services:
       secrets:
         - DB_PASSWORD
     proxy:
-      app_port: 4000
-      host: api.example.com
+      port: 4000
+      hosts: [api.example.com]
       ssl: true
       path_prefix: /api
       healthcheck:

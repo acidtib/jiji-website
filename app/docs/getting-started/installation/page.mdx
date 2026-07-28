@@ -46,15 +46,20 @@ Target servers need:
 - Linux (developed and tested on Ubuntu 24.04; other distributions may
   work)
 - An SSH server
-- Docker or Podman (jiji installs it for you if it's missing and you have
-  root)
+- Docker or Podman (with root access, jiji installs a missing engine and
+  upgrades Podman when the installed version is older than 5.8.4)
 - These ports reachable:
+
+On Debian and Ubuntu, jiji installs a pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle for Podman. This is an unofficial, single-maintainer
+distribution. Jiji verifies the pinned archive checksum before installing it.
 
 | Port | Protocol | Purpose |
 |---|---|---|
 | 22 | TCP | SSH |
 | 80/443 | TCP | HTTP/HTTPS, if a service uses `proxy:` |
-| 51820-55819 | UDP | WireGuard — one port per project, derived deterministically, not always 51820 |
+| 51820-55819 | UDP | WireGuard - one port per project, derived deterministically, not always 51820 |
 
 There's no separate database or gossip port to open; run `jiji network
 plan` to see the exact WireGuard port your project will use.

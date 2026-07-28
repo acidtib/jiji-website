@@ -6,7 +6,7 @@ Jiji is a single Rust binary you run from your laptop or CI. It reads
 `deploy.yml`, works out the network topology and container placement, and
 pushes changes to your servers over SSH. Nothing runs as a background
 service on your end, and the servers don't run any jiji-specific daemon
-either — WireGuard, dnsmasq, and nftables are just doing their normal jobs
+either - WireGuard, dnsmasq, and nftables are just doing their normal jobs
 with config jiji wrote for them.
 
 ```
@@ -45,7 +45,7 @@ with config jiji wrote for them.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-Every resource on a server except kamal-proxy is scoped to one `project:` —
+Every resource on a server except kamal-proxy is scoped to one `project:` -
 two independent projects can run `jiji server setup` against the same
 physical host and get two fully isolated sets of the above, each with its
 own WireGuard interface, bridge network, and DNS resolver. See
@@ -54,9 +54,9 @@ own WireGuard interface, bridge network, and DNS resolver. See
 ### Core Capabilities
 
 - **Zero-downtime deployments** with health checks and automatic rollback
-- **Private networking** — per-project WireGuard mesh with automatic `.jiji`
+- **Private networking** - per-project WireGuard mesh with automatic `.jiji`
   DNS service discovery
-- **Registry management** — local loopback registry or remote (GHCR, Docker
+- **Registry management** - local loopback registry or remote (GHCR, Docker
   Hub, custom)
 - **Parallel SSH orchestration** across many servers at once
 - **Deployment locks and an append-only audit trail** for every
@@ -64,19 +64,19 @@ own WireGuard interface, bridge network, and DNS resolver. See
 
 ### Technology Stack
 
-- **Language/runtime** — Rust, compiled to a single static binary (`jiji`)
-- **CLI framework** — clap
-- **SSH** — russh (pure-Rust async SSH client; no subprocess, no libssh FFI)
-- **Container runtime** — Docker or Podman
-- **Networking** — WireGuard, routed container bridges, dnsmasq, nftables
+- **Language/runtime** - Rust, compiled to a single static binary (`jiji`)
+- **CLI framework** - clap
+- **SSH** - russh (pure-Rust async SSH client; no subprocess, no libssh FFI)
+- **Container runtime** - Docker or Podman
+- **Networking** - WireGuard, routed container bridges, dnsmasq, nftables
 
 ### Architecture Principles
 
-1. **Zero downtime** — old containers keep serving until new ones are healthy
-2. **Idempotent operations** — commands can be re-run safely
-3. **Fail safe** — a failed operation doesn't leave the system half-changed
-4. **Distributed first** — built for multi-server deployments, not bolted on
-5. **Configuration as code** — infrastructure is fully described in YAML
+1. **Zero downtime** - old containers keep serving until new ones are healthy
+2. **Idempotent operations** - commands can be re-run safely
+3. **Fail safe** - a failed operation doesn't leave the system half-changed
+4. **Distributed first** - built for multi-server deployments, not bolted on
+5. **Configuration as code** - infrastructure is fully described in YAML
 
 ## Component Details
 
@@ -85,7 +85,7 @@ own WireGuard interface, bridge network, and DNS resolver. See
 Runs on your machine or CI. Every command follows the same sequence: load
 config, validate it, build the network plan, pick target hosts, connect over
 SSH, run the work, close the connections. Each invocation opens its own SSH
-sessions and closes them when it's done — there's no persistent process or
+sessions and closes them when it's done - there's no persistent process or
 connection cache sitting between runs.
 
 ### Container Runtime
@@ -125,7 +125,7 @@ Per-project DNS resolver serving compiled `.jiji` records:
 Each service endpoint gets two fixed backend addresses (slots A and B) and
 one stable VIP, worked out up front from config. The candidate container
 always starts on whichever slot isn't currently active, and the VIP only
-moves over once that candidate passes its health check — no renaming
+moves over once that candidate passes its health check - no renaming
 containers mid-deploy, no downtime window while traffic is redirected.
 
 ```
@@ -148,7 +148,7 @@ containers mid-deploy, no downtime window while traffic is redirected.
 ```
 
 If the health check fails, the previous container is never touched and
-keeps serving traffic — the candidate and any partial proxy routes are
+keeps serving traffic - the candidate and any partial proxy routes are
 rolled back instead.
 
 ## Network Architecture

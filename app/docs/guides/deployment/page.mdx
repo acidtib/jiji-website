@@ -62,7 +62,7 @@ services:
 ```
 
 The health check always runs directly against the candidate's own backend
-address, never through the VIP or kamal-proxy — so a healthy result really
+address, never through the VIP or kamal-proxy - so a healthy result really
 means the new container is ready, not just that routing happens to work.
 
 ## Deployment Strategies
@@ -93,14 +93,14 @@ jiji deploy --version v1.2.3
 
 `jiji deploy` prints the deployment plan (project, environment, target
 servers/endpoints, build/version/proxy flags) and asks for confirmation
-before touching anything — before build, before network reconciliation,
+before touching anything - before build, before network reconciliation,
 before any SSH connection. Pass `-y`/`--yes` to confirm automatically:
 
 ```bash
 jiji deploy --build -y
 ```
 
-`-y`/`--yes` is required when running non-interactively (CI/CD, scripts) —
+`-y`/`--yes` is required when running non-interactively (CI/CD, scripts) -
 without a terminal attached to answer the prompt, `jiji deploy` refuses to
 hang and exits with an actionable error instead.
 
@@ -116,8 +116,8 @@ jiji service rollback --version v1.2.2 -S api
 jiji service rollback --version v1.2.2 -S api -H server1.example.com
 ```
 
-This runs the same zero-downtime slot cycle as `jiji deploy` — health
-check, VIP cutover, old-slot cleanup — targeting the image tag you pass
+This runs the same zero-downtime slot cycle as `jiji deploy` - health
+check, VIP cutover, old-slot cleanup - targeting the image tag you pass
 instead of building a new one. For a `build:`-configured service it
 resolves that tag from `builder.registry` directly (no rebuild, trusting a
 prior `jiji build`/`jiji deploy --build` already pushed it); for a static
@@ -138,13 +138,17 @@ jiji lock show
 jiji lock release
 ```
 
-`jiji deploy` checks the lock before touching anything and refuses to
-proceed if a selected server is already locked. Typical CI usage:
+`jiji deploy`, `jiji service restart`, and `jiji service rollback`
+automatically acquire the project lock across every configured server
+before network reconciliation. They release their own lock after success or
+failure. If another operation holds any project lock, the command stops
+before making changes.
+
+The explicit commands above are for maintenance windows or intentionally
+blocking deployments. Normal CI usage does not need manual lock management:
 
 ```bash
-jiji lock acquire "CI deploy: $CI_COMMIT_SHA"
 jiji deploy --build -e production -y
-jiji lock release
 ```
 
 ## Resource Management
@@ -212,7 +216,7 @@ deployment happen transparently per host.
 
 ## Stateful Services
 
-Services that can't run two instances at once — most databases — need
+Services that can't run two instances at once - most databases - need
 `stop_first`, which trades zero downtime for a brief stop-then-start
 window:
 
@@ -342,7 +346,7 @@ jiji deploy
 ```
 
 **Review the audit trail regularly**, not just when something's already
-broken — see [Logs Reference](/docs/reference/logs#audit-trail).
+broken - see [Logs Reference](/docs/reference/logs#audit-trail).
 
 ## Pre-Deployment Checklist
 
@@ -351,7 +355,7 @@ broken — see [Logs Reference](/docs/reference/logs#audit-trail).
 3. Confirm server connectivity: `jiji server exec "echo ok" -H server1`
 4. Confirm registry access: `jiji registry login`
 5. Confirm secrets resolve: `jiji secrets print`
-6. Acquire the deployment lock: `jiji lock acquire "Deploying vX.Y.Z"`
+6. Confirm there is no maintenance lock: `jiji lock status`
 
 ## Post-Deployment Verification
 
@@ -378,9 +382,7 @@ jiji service prune -S api
 #!/bin/bash
 set -e
 
-jiji lock acquire "CI Deploy: $CI_COMMIT_SHA"
 jiji deploy --build -e production -y
-jiji lock release
 ```
 
 See the [CI/CD Integration](/docs/guides/ci-cd) guide for full pipeline

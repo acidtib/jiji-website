@@ -6,7 +6,7 @@ Jiji is a single binary, installed the same way in CI as anywhere else:
 curl -fsSL https://get.jiji.run/install.sh | sh
 ```
 
-`jiji deploy` always asks for confirmation before doing anything — pass
+`jiji deploy` always asks for confirmation before doing anything - pass
 `-y`/`--yes` in every non-interactive pipeline below, or it exits with an
 error instead of hanging on a prompt nothing can answer.
 
@@ -152,18 +152,19 @@ echo "ssh-ed25519 AAAA... deploy@ci" >> ~/.ssh/authorized_keys
 
 ## Best Practices
 
-### Use deployment locks
+### Deployment locks
+
+`jiji deploy` automatically acquires the project lock across every
+configured server before network reconciliation and releases it when the
+command finishes. A normal pipeline only needs the deploy step:
 
 ```yaml
-- name: Acquire Lock
-  run: jiji lock acquire "CI deploy ${{ github.sha }}"
-
 - name: Deploy
   run: jiji deploy --build -y
+```
 
-- name: Release Lock
-  if: always()
-  run: jiji lock release
+Use `jiji lock acquire` separately when you need a maintenance window that
+blocks deploy, service restart, and service rollback operations.
 ```
 
 ### Tag every deployment

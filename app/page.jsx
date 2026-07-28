@@ -184,7 +184,7 @@ export default function LandingPage() {
               </h1>
 
               <p className="text-base md:text-xl text-muted-foreground leading-relaxed mb-7 max-w-2xl text-balance">
-                Jiji deploys containerized apps across any Linux servers over SSH—with
+                Jiji deploys containerized apps across any Linux servers over SSH-with
                 zero-downtime rollouts, automatic HTTPS, and a private WireGuard network
                 built in. <span className="text-foreground">No agents. No hosted platform. No cluster to babysit.</span>
               </p>
@@ -238,7 +238,7 @@ export default function LandingPage() {
             <SectionHeading
               kicker="01 / WHY JIJI"
               title="The production essentials, included"
-              description="Keep the operational model you already understand—SSH, containers, and Linux—without assembling the deployment layer yourself."
+              description="Keep the operational model you already understand-SSH, containers, and Linux-without assembling the deployment layer yourself."
             />
 
             <div className="grid md:grid-cols-3 gap-3">
@@ -297,7 +297,7 @@ export default function LandingPage() {
                     <Line>      <YamlKey>context</YamlKey>: <Val>.</Val></Line>
                     <Line>    <YamlKey>servers</YamlKey>: <Val>[web1, web2]</Val></Line>
                     <Line>    <YamlKey>proxy</YamlKey>:</Line>
-                    <Line>      <YamlKey>app_port</YamlKey>: <Val>3000</Val></Line>
+                    <Line>      <YamlKey>port</YamlKey>: <Val>3000</Val></Line>
                     <Line>      <YamlKey>host</YamlKey>: <Val>api.example.com</Val></Line>
                     <Line>      <YamlKey>ssl</YamlKey>: <Val>true</Val></Line>
                   </code>
@@ -333,7 +333,7 @@ export default function LandingPage() {
             <SectionHeading
               kicker="03 / FIT"
               title="Choose the operating model you want"
-              description="Jiji is deliberately a small deployment tool—not a hosted platform and not a self-managing cluster."
+              description="Jiji is deliberately a small deployment tool-not a hosted platform and not a self-managing cluster."
             />
 
             <div className="grid md:grid-cols-3 gap-3">

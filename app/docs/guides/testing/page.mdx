@@ -100,7 +100,7 @@ curl http://localhost:31270/v2/
 ```
 
 `jiji deploy --build` with `builder.registry.type: local` opens an SSH
-reverse tunnel to each deployment server automatically — you don't need to
+reverse tunnel to each deployment server automatically - you don't need to
 forward the port by hand. To sanity-check the mechanism directly:
 
 ```bash
@@ -162,12 +162,12 @@ jiji server exec "df -h" -H server1
 ## Common Issues
 
 **"Permission denied" on port 80:** rootless Podman runs kamal-proxy on high
-ports internally (8080/8443) and maps them to host 80/443 — check that
+ports internally (8080/8443) and maps them to host 80/443 - check that
 mapping is actually in place rather than trying to bind 80/443 directly.
 
 **Proxy health check timeouts:** confirm the service container is on the
 project's bridge network, the `healthcheck` path/command is correct, and the
 app is actually listening and responding.
 
-**"No such object" errors:** the container hasn't been deployed yet — run
+**"No such object" errors:** the container hasn't been deployed yet - run
 `jiji deploy -S <service>` first.

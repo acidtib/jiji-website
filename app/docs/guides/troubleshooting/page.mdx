@@ -72,8 +72,8 @@ ssh-add ~/.ssh/deploy_key   # load only the one jiji should use
 ### About `jiji server exec`
 
 A plain command runs on every host `-H`/`--hosts` matches, concurrently by
-default (`--sequential` for one at a time). An interactive session — no
-command given, or `--interactive` — is bound to one local terminal, so it
+default (`--sequential` for one at a time). An interactive session - no
+command given, or `--interactive` - is bound to one local terminal, so it
 requires `-H` to resolve to exactly one server. `-S`/`--services` isn't
 accepted. Interactive sessions automatically downgrade to non-interactive
 with a warning when stdin/stdout isn't a real terminal.
@@ -205,7 +205,7 @@ services:
 
 ## Network Issues
 
-Interface, systemd unit, and path names are all derived per project — run
+Interface, systemd unit, and path names are all derived per project - run
 `jiji network plan` to get the exact values for your config, and
 substitute them for `<wireguard_interface>`/`<slug>` below. See
 [Network Reference](/docs/reference/network) for the full mapping.
@@ -229,7 +229,7 @@ jiji server exec "sudo journalctl -u jiji-dns-<slug> -n 50" -H server1
 jiji network setup
 ```
 
-DNS is compiled from `deploy.yml` when the network is set up — it answers
+DNS is compiled from `deploy.yml` when the network is set up - it answers
 with what's configured, not with live health data. Health checks gate the
 VIP switch separately, during deploys.
 
@@ -280,7 +280,7 @@ services:
 
 ### 502 Bad Gateway
 
-Usually the container isn't running, `app_port` doesn't match what the
+Usually the container isn't running, `port` doesn't match what the
 container actually listens on, or the container hasn't passed its health
 check yet.
 
@@ -344,16 +344,17 @@ meant to do.
 ### "Configuration validation failed with N error(s)"
 
 The listed errors are specific (missing field, invalid CIDR, duplicate host,
-etc.) — run with `--verbose` for more detail, or lint the YAML directly:
+etc.) - run with `--verbose` for more detail, or lint the YAML directly:
 
 ```bash
 yamllint .jiji/deploy.yml
 ```
 
-### "Deployment lock is held on the following server(s)"
+### "Could not acquire the deployment lock"
 
-Another deployment is in progress, or a previous one didn't release its
-lock.
+Another deploy, service restart, service rollback, or an explicit
+maintenance lock is active. A process interrupted before cleanup may also
+leave a stale lock.
 
 ```bash
 jiji lock status
@@ -390,6 +391,6 @@ jiji --verbose <command>    # re-run with full detail
 jiji audit --status failed  # recent failures, per server
 ```
 
-- [GitHub Issues](https://github.com/acidtib/jiji/issues) — search first,
+- [GitHub Issues](https://github.com/acidtib/jiji/issues) - search first,
   then [open a new one](https://github.com/acidtib/jiji/issues/new)
-- [Discord](https://discord.gg/BMdKJzkknE) — for questions and discussion
+- [Discord](https://discord.gg/BMdKJzkknE) - for questions and discussion

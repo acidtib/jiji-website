@@ -5,25 +5,25 @@ zero-downtime, private networking, and simple YAML configuration.
 
 ## Why Jiji?
 
-- **Zero-downtime deployments** — health checks and automatic rollback keep
+- **Zero-downtime deployments** - health checks and automatic rollback keep
   your services available
-- **Multi server support** — deploy across servers with parallel SSH
+- **Multi server support** - deploy across servers with parallel SSH
   execution
-- **Container engine agnostic** — works with Docker or Podman
-- **Private networking** — a per-project WireGuard mesh with automatic
+- **Container engine agnostic** - works with Docker or Podman
+- **Private networking** - a per-project WireGuard mesh with automatic
   `.jiji` DNS service discovery
-- **Simple configuration** — everything lives in one YAML file
+- **Simple configuration** - everything lives in one YAML file
 
 ## How It's Built
 
 Jiji is a single Rust binary. It reads `deploy.yml`, works out the network
 topology and container placement, and pushes changes to your servers over
-SSH — no daemon, no separate services to run yourself.
+SSH - no daemon, no separate services to run yourself.
 
 Private networking is a WireGuard mesh between your servers, with a
 per-project `dnsmasq` resolver serving `.jiji` DNS records and nftables
 routing traffic to whichever backend container is currently active. It's
-all computed up front from your config and pushed out as a single unit —
+all computed up front from your config and pushed out as a single unit -
 nothing coordinates it at runtime. See
 [Architecture](/docs/getting-started/architecture) for the full picture.
 
@@ -51,8 +51,8 @@ services:
       dockerfile: Dockerfile
     servers: [web1, web2]
     proxy:
-      app_port: 3000
-      host: api.example.com
+      port: 3000
+      hosts: [api.example.com]
       ssl: true
       healthcheck:
         path: /health
@@ -70,7 +70,7 @@ jiji deploy --build
 
 ## Next Steps
 
-- [Installation](/docs/getting-started/installation) — get Jiji installed
-- [Quick Start](/docs/getting-started/quick-start) — deploy your first
+- [Installation](/docs/getting-started/installation) - get Jiji installed
+- [Quick Start](/docs/getting-started/quick-start) - deploy your first
   application
-- [Architecture](/docs/getting-started/architecture) — how Jiji works
+- [Architecture](/docs/getting-started/architecture) - how Jiji works

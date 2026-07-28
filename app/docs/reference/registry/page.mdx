@@ -54,7 +54,7 @@ No auto namespace. Images push to
 
 ### AWS ECR / GCP Artifact Registry
 
-Same shape as any custom registry — `type: remote` with an explicit
+Same shape as any custom registry - `type: remote` with an explicit
 `server:`. Both providers issue short-lived credentials, so `password:`
 uses the `$(...)` command-value syntax to fetch a fresh one on every run
 (runs locally through a shell, uses the trimmed stdout, 30 second timeout)
@@ -88,14 +88,14 @@ builder:
 ```
 
 No namespace, no credentials. Images are stored at
-`localhost:31270/project-service:version` — see "Local Registry Details"
+`localhost:31270/project-service:version` - see "Local Registry Details"
 below for how it reaches remote servers.
 
 ## Registry Password
 
 `password` can be a literal value, an ALL_CAPS secret name resolved the
 same way as everywhere else in config (from `.env`, or host environment
-with `--host-env`), or `$(a local command)` — see "AWS ECR / GCP Artifact
+with `--host-env`), or `$(a local command)` - see "AWS ECR / GCP Artifact
 Registry" above:
 
 ```yaml
@@ -128,7 +128,7 @@ jiji registry logout --skip-remote
 By default both commands act on the local machine, then every `-H`-selected
 server (all configured servers if `-H` is omitted). `jiji registry login`
 requires `server`, `username`, and `password` to be set.
-`jiji registry logout` only needs `server`, and is idempotent — an engine
+`jiji registry logout` only needs `server`, and is idempotent - an engine
 reporting "already logged out" counts as success. `-S`/`--services` is
 rejected for both: registry credentials belong to a host's container
 engine, not an individual service. Both commands try every requested
@@ -151,18 +151,18 @@ doesn't match.
 ### How it works
 
 ```
-Local Machine (localhost:31270)
-     │
-     │ SSH reverse tunnel
-     ▼
-Remote Server (localhost:31270)
-     │
-     │ Pull image
-     ▼
-Container Deployment
+Remote Builder (127.0.0.1:<registry.port>)
+        |
+        | SSH reverse tunnel used for build and push
+        v
+Local Machine (127.0.0.1:<registry.port>)
+        |
+        | separate SSH reverse tunnel used for pull
+        v
+Deployment Server (127.0.0.1:<registry.port>)
 ```
 
-Deploying with a local registry:
+For a local build and deploy:
 
 1. Starts or reuses the loopback-bound `jiji-registry` container
 2. Builds and pushes versioned images to `localhost:31270`
@@ -171,6 +171,26 @@ Deploying with a local registry:
 4. Each server pulls the newly built image
 5. Tunnels are torn down after the deploy; the registry container itself
    keeps running for the next build
+
+With `builder.local: false`, there are two independent tunnel phases:
+
+1. Jiji binds `127.0.0.1:<registry.port>` on the remote builder through
+   SSH. Build and push commands on the builder use that loopback address to
+   reach the registry on the operator machine.
+2. The builder tunnel is cleaned up with the remote build session.
+3. During deployment, Jiji separately binds the configured port on each
+   selected deployment server so its engine can pull the image.
+
+The builder needs no inbound access to the operator machine, and the
+registry is never publicly exposed. The SSH servers must permit remote
+forwarding, but every forwarded listener remains loopback-only, so
+`GatewayPorts` is not required.
+
+The builder-side port is fixed. Concurrent remote builds using the same
+builder and local-registry port compete for that one loopback listener.
+Jiji reports the bind conflict and does not replace the existing listener
+or automatically select another port. Serialize those builds, or configure
+distinct registry ports for independent invocations.
 
 The registry container is labeled as jiji-managed. If `jiji-registry`
 already refers to something else, or its recorded port doesn't match your
@@ -186,24 +206,28 @@ guessing.
 
 ### Troubleshooting
 
-**Remote server can't connect to `localhost:31270`:**
+**A host can't connect to `localhost:<registry.port>`:**
 
 ```bash
-# Confirm the local registry is actually running
-curl http://localhost:31270/v2/
+# Local operator: confirm the registry is running
+curl http://127.0.0.1:<registry.port>/v2/
 
-# On the remote server, confirm the tunnel is up
-netstat -tlnp | grep 31270
+# Remote builder, during a remote build
+ss -tlnp | grep <registry.port>
+
+# Deployment server, during a deployment
+ss -tlnp | grep <registry.port>
 ```
 
-Check the remote `sshd_config` allows forwarding:
+On the builder or deployment server, check that `sshd_config` allows remote
+forwarding:
 
 ```
 AllowTcpForwarding yes
 ```
 
 Jiji binds the forwarded port to the remote host's `127.0.0.1` only.
-`GatewayPorts` is not required, and shouldn't be enabled just for jiji —
+`GatewayPorts` is not required, and shouldn't be enabled just for jiji -
 it would expose the forwarded registry on non-loopback interfaces.
 
 ## Remote Registry Authentication
@@ -240,7 +264,7 @@ builder:
   run: jiji deploy -y
 ```
 
-Never commit `.env` files — add `.env*` to `.gitignore`, and keep separate
+Never commit `.env` files - add `.env*` to `.gitignore`, and keep separate
 tokens per environment.
 
 ## Troubleshooting
@@ -250,5 +274,5 @@ username matches the GitHub user/org, and the token can create packages
 under that namespace.
 
 **"GHCR requires username to be configured":** add `username` to
-`builder.registry` — GHCR and Docker Hub both need it for automatic
+`builder.registry` - GHCR and Docker Hub both need it for automatic
 namespace detection.

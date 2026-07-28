@@ -30,7 +30,7 @@ jiji deploy -S "api,worker"     # Multiple services
 
 ### `jiji init`
 
-Create a config stub at `.jiji/deploy.yml`.
+Create a config stub at `.jiji/deploy.yml`. The generated file persists a project-directory-derived `/24` management range and `/16` container range. Review them for overlap with LAN, VPN, cloud VPC, and other Jiji project ranges before setup.
 
 ```bash
 jiji init
@@ -90,26 +90,35 @@ jiji deploy -y                   # Skip the confirmation prompt
 
 `jiji deploy` prints the deployment plan (project, environment, target
 servers/endpoints, and the flags above) and asks for confirmation before
-doing anything — before build, before network reconciliation, before any
+doing anything - before build, before network reconciliation, before any
 SSH connection. `-y`/`--yes` skips the prompt. Without it and without a
 real terminal attached, `jiji deploy` exits with an error instead of
-hanging on a prompt nothing can answer — always pass `-y` in CI/CD.
+hanging on a prompt nothing can answer - always pass `-y` in CI/CD.
 
-Before touching any host, `jiji deploy` compares every configured server's
+After confirmation, `jiji deploy` atomically acquires the project's
+deployment lock across every configured server. It then compares the
 installed network generation and automatically reconciles the full cluster
-if any host is stale, then acquires the project's deployment lock.
+if any host is stale. The lock is released after the deploy succeeds or
+fails.
 
 ## Server Management
 
 ### `jiji server setup`
 
-Install the container engine and the complete private network on each
-server.
+Install or reconcile the container engine and complete private network on
+each server. Existing Podman installations older than the required 5.8.4
+are upgraded.
 
 ```bash
 jiji server setup
 jiji server setup -H "web*"  # Only web servers
 ```
+
+On Debian and Ubuntu, jiji installs a pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle. This is an unofficial, single-maintainer distribution, so it
+has a different supply-chain trust boundary from distro packages. Jiji
+verifies the pinned archive checksum before installing it.
 
 ### `jiji server exec`
 
@@ -153,7 +162,7 @@ jiji server teardown --volumes   # Also remove jiji-owned named volumes
 | `--volumes` | Also remove jiji-owned named volumes for this project |
 | `--dry-run` | Print the teardown plan without changing any host |
 
-`-S`/`--services` is rejected — teardown always acts on the whole project.
+`-S`/`--services` is rejected - teardown always acts on the whole project.
 
 ## Network Management
 
@@ -177,8 +186,7 @@ jiji network setup
 jiji network setup -H web1
 ```
 
-Idempotent, with rollback on partial failure. `jiji server setup` and `jiji
-deploy` both call this same path when a host's network is missing or stale.
+Idempotent, with rollback on partial failure. If configured CIDRs change, setup migrates the project bridge, reattaches its service containers and the shared proxy at their newly planned addresses, and refreshes proxy ingress and routes. A failed activation restores the previous bridge and addresses. `jiji server setup` and `jiji deploy` both call this same path when a host.s network is missing or stale.
 
 ## Registry Management
 
@@ -276,8 +284,9 @@ jiji service logs -H web1 -S api
 ### `jiji service restart`
 
 Restart running services with a zero-downtime slot cycle (health check, VIP
-cutover, old-slot cleanup) — the same primitive `jiji deploy` uses, reusing
-the currently running image.
+cutover, old-slot cleanup) - the same primitive `jiji deploy` uses, reusing
+the currently running image. The command automatically holds the same
+cluster-wide deployment lock as `jiji deploy`.
 
 ```bash
 jiji service restart
@@ -288,7 +297,8 @@ jiji service restart -H web1
 ### `jiji service rollback`
 
 Roll back services to a previously built image via a zero-downtime slot
-cycle. Requires `--version`.
+cycle. Requires `--version` and automatically holds the cluster-wide
+deployment lock for the operation.
 
 ```bash
 jiji service rollback --version 1.2.2
@@ -344,15 +354,21 @@ jiji secrets print --show-values   # Reveal actual values, use with caution
 ```
 
 Shows `[SET]`/`[MISSING]` for every secret-shaped reference in
-configuration. Only `environment.secrets` and `builder.registry.password`
-are actually resolved from `.env`/host-env; other fields (SSH key
-passphrase, proxy SSL certs, build args) are scanned and reported for
-visibility only.
+configuration. `environment.secrets`, `builder.registry.password`, and
+ALL_CAPS references in SSH `keys` are resolved from `.env`/host-env;
+other fields (SSH key passphrase, proxy SSL certs, build args) are scanned
+and reported for visibility only.
 
 ## Deployment Locks
 
-Locks are per-project, held per selected server, and checked by `jiji
-deploy` before any change is made.
+Locks are per-project and host-scoped. `jiji deploy`, `jiji service
+restart`, and `jiji service rollback` atomically acquire them across every
+configured project server before network reconciliation, then release only
+the locks owned by that invocation on every success or failure path.
+
+Use the explicit lock commands to reserve a maintenance window or block
+automatic deployment operations. You do not need to wrap a normal deploy in
+manual acquire and release commands.
 
 ### `jiji lock acquire`
 
@@ -381,7 +397,7 @@ jiji lock status --json
 jiji lock show
 ```
 
-`-S`/`--services` is rejected for every `lock` subcommand — locks are
+`-S`/`--services` is rejected for every `lock` subcommand - locks are
 host-scoped, not service-scoped.
 
 ## Audit Trail
@@ -396,6 +412,9 @@ jiji audit --lines 50
 jiji audit --grep deploy
 jiji audit --status success
 jiji audit --json
+jiji audit --stats
+jiji audit --stats --since 24h
+jiji audit --stats --since 7d --json
 jiji audit --follow   # Requires exactly one host
 ```
 
@@ -404,10 +423,20 @@ jiji audit --follow   # Requires exactly one host
 | `-n, --lines` | Number of entries to show per server (default: 20) |
 | `-g, --grep` | Filter entries by action or message (substring match) |
 | `--status` | Filter by status: `success` or `failed` |
-| `--json` | Output entries as newline-delimited JSON |
+| `--json` | Output entries as newline-delimited JSON, or one structured object with `--stats` |
+| `--stats` | Show overall, per-action, and per-server success-rate and duration statistics |
+| `-s, --since` | Limit statistics to a relative window such as `30m`, `12h`, or `7d` (requires `--stats`) |
 | `-f, --follow` | Follow the audit trail as new entries are appended (requires exactly one host) |
 
-`-S`/`--services` is rejected — the trail is host-scoped, not
+Statistics read the full live project audit log from every selected server on
+each invocation; no local cache is maintained. Entries without `duration_ms`
+still count toward totals and success rates, but are excluded from the average
+duration. The output reports timed-entry coverage so that distinction remains
+visible. `--stats` cannot be combined with `--lines` or `--follow`. With
+`--stats --json`, Jiji emits one structured object containing `overall`,
+`by_action`, and `by_server` aggregates.
+
+`-S`/`--services` is rejected - the trail is host-scoped, not
 service-scoped. Every state-changing command writes to it: `deploy`,
 `service restart/rollback/remove/prune`, `lock acquire/release`, and
 `server setup/teardown`.

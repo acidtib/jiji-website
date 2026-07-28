@@ -32,7 +32,7 @@ per-service VIPs to whichever backend container is currently active.
 ## Multiple projects on one server
 
 Every piece of this network layer is **per-project isolated**, computed
-purely from `project:` in `deploy.yml` — there is no shared registry and no
+purely from `project:` in `deploy.yml` - there is no shared registry and no
 coordination between projects. Two independent projects (different
 `project:` names, different `deploy.yml` files) can run `jiji server setup`
 against the same physical server, and each gets its own:
@@ -44,20 +44,20 @@ against the same physical server, and each gets its own:
 - systemd units
 
 `{slug}` is a short, deterministic, hash-suffixed identifier derived from
-`project:` — run `jiji network plan` to see the exact value for your
+`project:` - run `jiji network plan` to see the exact value for your
 project. The one intentionally shared, multi-tenant component is
 kamal-proxy: one container per host, attached to every project's bridge that
 has active routes on that host, with routes namespaced per project.
 
 Because identity is purely name-derived with no registry, **`project:`
-names must be unique per host**, not just per config repository — two
+names must be unique per host**, not just per config repository - two
 projects that happen to share a literal project name are indistinguishable
 to jiji. There is also a small, real chance of a hash collision between two
 *different* project names that both rely on the default
 `network.container_cidr`/`management_cidr` ranges, since both draw their
 subnets from the same shared address space. If you expect several projects
 on one host, set distinct `network.container_cidr`/`management_cidr` values
-per project — distinct ranges make a collision impossible, not just less
+per project - distinct ranges make a collision impossible, not just less
 likely. `jiji server setup`/`jiji network setup` prints an advisory when a
 project is relying on the shared defaults, and rejects with an actionable
 error if a real collision is ever detected on a host.
@@ -85,19 +85,13 @@ network:
   enabled: true
   management_cidr: 198.18.0.0/16
   container_cidr: 100.64.0.0/10
-  host_prefix: 21
 ```
 
-These ranges are shared *by default* across every project that doesn't
-override them — see "Multiple projects on one server" above for why
-setting distinct ranges matters once more than a handful of projects share
-a host.
+These ranges are shared by every configuration that omits explicit overrides. `jiji init` now writes a project-directory-derived `/24` management range and `/16` container range instead. Because the generated container range occupies one of 64 slots, review it for VPN/VPC overlap and rare collisions with other projects before setup.
 
-Management addresses and per-host container subnets are deterministic. Each
-service endpoint receives a stable VIP plus two fixed backend addresses (A
-and B). A deploy always brings the candidate container up on the *inactive*
-slot; once it passes its health check, jiji atomically moves the VIP over to
-that backend.
+Management addresses and per-host container subnets are deterministic. Each service endpoint receives a stable VIP plus two fixed backend addresses (A and B). A deploy always brings the candidate container up on the *inactive* slot; once it passes its health check, jiji atomically moves the VIP over to that backend.
+
+Changing either CIDR and running `jiji network setup` performs a project-scoped migration. Jiji detaches the project.s fixed-slot containers and its attachment to the shared proxy, recreates the bridge, reconnects everything at the new planned addresses, and refreshes service mappings, proxy routes, and public ingress. Other projects and named volumes are not touched. If activation fails, Jiji restores the previous bridge and attachment addresses.
 
 ## DNS
 
@@ -122,14 +116,16 @@ through the host resolver. kamal-proxy is the one exception: it's given no
 (never a `.jiji` hostname), and a single resolver can't reliably answer for
 every project's `.jiji` records it might be attached to at once.
 
-## Installed files
+## Installed resources
 
-Every path below is rooted under `/etc/jiji/network/{slug}/` — one
+Every path below is rooted under `/etc/jiji/network/{slug}/` - one
 independent tree per project, where `{slug}` is that project's derived
 identifier (`jiji network plan` prints it). Interface/bridge/unit names
 below are similarly derived per project, never fixed literals like `jiji0`.
 
-| Component | Location |
+### Files and services
+
+| Component | Path or unit |
 | --- | --- |
 | Selected network generation | `/etc/jiji/network/{slug}/current` |
 | Retained network generations | `/etc/jiji/network/{slug}/generations/` |
@@ -144,15 +140,35 @@ below are similarly derived per project, never fixed literals like `jiji0`.
 
 `{wireguard_interface}` is a separate short (`jiji` + 8 hex chars)
 identifier from `{slug}`, kept under Linux's 15-character interface name
-limit — see `jiji network plan` for the concrete value.
+limit - see `jiji network plan` for the concrete value.
+
+### Derived network names
+
+| Resource | Name |
+| --- | --- |
+| Docker/Podman logical bridge network | `jiji-{slug}` |
+| Linux kernel bridge interface | `jijib{7 hex}` |
+| Service VIP nftables table | `jiji_service_nat_{slug_with_underscores}` |
+
+The logical engine network and kernel bridge interface are different
+resources with different names. The kernel name is shortened to stay within
+Linux's 15-character interface limit. The nftables table replaces hyphens
+in `{slug}` with underscores because unquoted nftables identifiers cannot
+contain hyphens.
+
+All three names are deterministic and per-project. `{slug}` is a sanitized,
+hash-suffixed value derived from `project:`, not just the lowercased project
+name. `jiji network plan` prints the WireGuard interface, kernel bridge
+interface, and logical bridge network. Derive the nftables name from the
+printed slug using the rule above.
 
 ## Required firewall access
 
 Allow UDP traffic between the configured server public IP addresses on each
-project's WireGuard port (`jiji network plan` prints the exact port — it's
+project's WireGuard port (`jiji network plan` prints the exact port - it's
 derived per project, somewhere in the range `51820`-`55819`, not always
 `51820`). Container subnets are routed only through WireGuard. There is no
-separate gossip or database port to open — that layer doesn't exist in this
+separate gossip or database port to open - that layer doesn't exist in this
 design.
 
 ## Verification
@@ -161,6 +177,10 @@ design.
 # Substitute this project's derived interface name and slug (see `jiji network plan`)
 sudo wg show <wireguard_interface>
 ip route show dev <wireguard_interface>
+docker network inspect <bridge-network>
+podman network inspect <bridge-network>
+ip link show <bridge-interface>
+sudo nft list table ip <service-nat-table>
 systemctl status jiji-network-restore-<slug> jiji-service-nat-<slug> jiji-dns-<slug>
 readlink -f /etc/jiji/network/<slug>/current
 readlink -f /etc/jiji/network/<slug>/dns-current
@@ -177,11 +197,12 @@ according to their engine restart policy. No coordination service, SSH
 connection, jiji command, or redeployment is required when topology hasn't
 changed.
 
-Podman keeps its bridge only while a container is attached, so jiji installs
-a minimal local `jiji-network-anchor-{slug}` container (one per project) at
-a reserved address and orders `podman-restart.service` after bridge
-restoration. `podman-restart.service` itself is host-global, gated on every
-project's restore unit via one drop-in file per project.
+Jiji's restore service materializes each Podman bridge directly before
+containers restart. `podman-restart.service` itself is host-global, gated on
+every project's restore unit via one drop-in file per project. This keeps an
+empty project network available with no auxiliary container. The drop-in
+also starts containers using the `unless-stopped` policy, which Podman 4.9's
+packaged restart unit does not start by itself.
 
 ## Repair
 
@@ -225,7 +246,7 @@ docker exec <container> getent hosts <project>-<service>.jiji
 ## Upgrading from a pre-isolation jiji version
 
 Per-project isolation changed the on-disk layout, WireGuard interface name,
-and bridge name — every already-provisioned host's installed generation
+and bridge name - every already-provisioned host's installed generation
 becomes incompatible with the new version, even for a host that only ever
 ran one project. There is no in-place migration: run `jiji server teardown`
 against the old layout (or manually remove `/etc/jiji/network`, the old

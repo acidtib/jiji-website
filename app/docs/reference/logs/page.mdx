@@ -1,7 +1,7 @@
 # Logs Reference
 
-Jiji has two logging commands — `jiji service logs` for your deployed
-services, and `jiji proxy logs` for kamal-proxy — plus `jiji audit` for the
+Jiji has two logging commands - `jiji service logs` for your deployed
+services, and `jiji proxy logs` for kamal-proxy - plus `jiji audit` for the
 deployment audit trail. All three support filtering and following logs
 across multiple servers.
 
@@ -16,7 +16,8 @@ jiji service logs -S "web,api,worker"
 jiji service logs -S "web*"
 ```
 
-You need either `-S`/`--services` or `--container-id`.
+Omit `-S`/`--services` to tail every service. `--container-id` can't be
+combined with `-S`.
 
 ### Options
 
@@ -70,7 +71,7 @@ jiji proxy logs --grep "web-app"
 ```
 
 If a service isn't receiving traffic, check proxy logs before service logs
-— it tells you whether kamal-proxy is routing to it at all.
+- it tells you whether kamal-proxy is routing to it at all.
 
 ## Common Use Cases
 
@@ -94,12 +95,12 @@ jiji proxy logs --grep "ssl\|tls\|certificate" --grep-options "-E"
 
 ## Best Practices
 
-- **Prefer relative `--since` values** (`30m`, `2h`) over exact timestamps —
+- **Prefer relative `--since` values** (`30m`, `2h`) over exact timestamps -
   easier to write and they stay correct as time passes.
 - **Combine `--since` and `--grep`** rather than scanning full output:
   `jiji service logs -S api --since 1h --grep "ERROR"`.
 - **Check proxy logs before service logs** when a service isn't receiving
-  traffic — it tells you whether kamal-proxy is routing to it at all.
+  traffic - it tells you whether kamal-proxy is routing to it at all.
 - **Use `-q`/`--quiet`** whenever output is being piped into `grep`, `wc`,
   or a script, so host headers don't pollute the stream.
 
@@ -136,21 +137,21 @@ jiji audit --follow
 | `--json` | Newline-delimited JSON output |
 | `-f, --follow` | Follow the trail as new entries land (requires exactly one host) |
 
-`-S`/`--services` is rejected — the trail is host-scoped, not
+`-S`/`--services` is rejected - the trail is host-scoped, not
 service-scoped, matching `jiji lock`. Malformed lines are skipped rather
 than treated as a hard error, so one bad write never makes the whole trail
 unreadable.
 
 Each entry is one JSON object: `timestamp`, `action`, `status`, `actor`,
-`message`, `duration_ms` — how long the operation took, captured from
+`message`, `duration_ms` - how long the operation took, captured from
 command start to the audit write (omitted on entries written before this
 field existed, or if there's no start time to measure from). Shown next to
 the action name in the default output, and included in `--json` output.
-Audit writes are best-effort — a failed write is warned about, never
+Audit writes are best-effort - a failed write is warned about, never
 propagated, so audit logging can't mask or block the actual outcome of the
 command it's recording.
 
-There's no cross-host success-rate or average-duration rollup yet — each
+There's no cross-host success-rate or average-duration rollup yet - each
 run of `jiji audit` lists raw per-host entries, one line per entry.
 
 ```bash

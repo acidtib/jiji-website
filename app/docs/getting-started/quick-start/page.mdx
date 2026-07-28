@@ -34,8 +34,8 @@ services:
     servers:
       - web1
     proxy:
-      app_port: 3000
-      host: myapp.example.com
+      port: 3000
+      hosts: [myapp.example.com]
       ssl: true
       healthcheck:
         path: /health
@@ -54,7 +54,7 @@ bridge, DNS, VIP routing) for this project on each server.
 
 ## 3. Authenticate the Registry
 
-Only needed for a remote registry (GHCR, Docker Hub, custom) — a local
+Only needed for a remote registry (GHCR, Docker Hub, custom) - a local
 registry needs no credentials:
 
 ```bash
@@ -80,12 +80,12 @@ jiji server exec "docker ps" -H web1
 
 ## What Happens During Deployment
 
-1. **Build** — the image is built locally or on a remote builder
-2. **Push** — pushed to the configured registry
-3. **Deploy** — the new container starts on the inactive backend slot, the
+1. **Build** - the image is built locally or on a remote builder
+2. **Push** - pushed to the configured registry
+3. **Deploy** - the new container starts on the inactive backend slot, the
    old one keeps serving traffic until the new one passes its health check,
    then the VIP flips over and the old container is stopped
-4. **Cleanup** — old images are pruned according to each service's
+4. **Cleanup** - old images are pruned according to each service's
    `retain` setting
 
 ## Environment-Specific Deployments
@@ -105,9 +105,9 @@ jiji deploy -e production
 
 ## Next Steps
 
-- [Configuration Reference](/docs/reference/configuration) — full
+- [Configuration Reference](/docs/reference/configuration) - full
   configuration options
-- [Deployment Guide](/docs/guides/deployment) — health checks, rollbacks,
+- [Deployment Guide](/docs/guides/deployment) - health checks, rollbacks,
   and locking
-- [Network Reference](/docs/reference/network) — how the private network
+- [Network Reference](/docs/reference/network) - how the private network
   works

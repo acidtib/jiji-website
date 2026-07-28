@@ -1,6 +1,4 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# AGENTS.md
 
 ## Commands
 
@@ -8,7 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 bun run dev      # Start development server with Turbopack
 bun run build    # Production build (static export to ./out)
 bun run start    # Start production server
+bun run llms     # Regenerate public/llms.txt, llms-full.txt, and sitemaps from docs content
 ```
+
+`bun run build` runs `bun run llms` first, so editing any `.mdx` under `app/docs/` or
+`app/page.mdx` and rebuilding is enough to keep `public/llms.txt`, `public/llms-full.txt`,
+`public/sitemap.xml`, `public/docs/sitemap.xml`, and `public/robots.txt` current - no manual
+sitemap or llms.txt edits needed.
 
 ## Architecture
 
@@ -18,6 +22,7 @@ Next.js 16 documentation website using Nextra v4 with the docs theme. Documents 
 - `next.config.mjs` - Nextra plugin config, static export enabled
 - `mdx-components.js` - MDX component overrides (extends nextra-theme-docs)
 - `app/_meta.global.js` - Global navigation configuration
+- `scripts/generate-llms-txt.mjs` - Builds `public/llms*.txt` and sitemaps from `app/docs/` content
 
 **Route structure:**
 - `app/page.jsx` - Landing page (React components, not MDX)
@@ -30,12 +35,13 @@ Next.js 16 documentation website using Nextra v4 with the docs theme. Documents 
 
 **UI Components:**
 - `components/ui/` - shadcn/ui components (Button, Badge, Card)
+- `components/shared/` - Site-wide chrome (Navbar, Footer)
 - Uses Tailwind CSS with CSS variables for theming (primary color is green `hsl(142 71% 45%)`)
 
 **Documentation sections:**
 - `app/docs/getting-started/` - Installation, quick start, architecture
-- `app/docs/guides/` - Deployment, CI/CD, troubleshooting
-- `app/docs/reference/` - Configuration, commands, network, registry, logs
+- `app/docs/guides/` - Deployment, CI/CD, testing, troubleshooting
+- `app/docs/reference/` - Configuration, commands, features, network, registry, logs
 
 **Adding documentation pages:** Create `.mdx` files in the appropriate directory. Update the `_meta.js` file in that directory to add navigation entries.
 
@@ -55,3 +61,28 @@ build time (`const JIJI_VERSION = process.env.NEXT_PUBLIC_JIJI_VERSION || "dev"`
 
 The documentation content is based on:
 - `/home/acidtib/Code/jiji` - Main Jiji orchestration tool (source of truth for all docs content)
+
+## Writing style
+
+- Do not use emojis anywhere: code, comments, commit messages, or chat replies.
+- Do not use em-dashes. Use commas, colons, parentheses, or separate sentences.
+- Avoid filler "LLM-tell" phrasing. Write plainly and directly.
+
+# Code comments
+
+- Comment to explain why something is done or to flag a non-obvious constraint.
+- Do not write summary comments that just restate what the next line does.
+- Skip section-header and narration comments. Let the code speak for itself.
+
+## Git
+
+- Never add a co-author trailer to commits (no "Co-Authored-By" line).
+- Keep commit messages short and factual.
+- Never use `git commit --no-verify` - if hooks fail, fix every issue before
+  committing
+- Never use destructive commands (`git reset --hard`, `git checkout --`)
+  unless explicitly approved
+- Never force push to main
+- No revert commits for unpushed work: use `git reset HEAD~1` instead of
+  `git revert`
+- Do not amend a commit unless explicitly requested

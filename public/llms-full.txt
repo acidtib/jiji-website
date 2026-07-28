@@ -9,25 +9,25 @@ zero-downtime, private networking, and simple YAML configuration.
 
 ### Why Jiji?
 
-- **Zero-downtime deployments** — health checks and automatic rollback keep
+- **Zero-downtime deployments** - health checks and automatic rollback keep
   your services available
-- **Multi server support** — deploy across servers with parallel SSH
+- **Multi server support** - deploy across servers with parallel SSH
   execution
-- **Container engine agnostic** — works with Docker or Podman
-- **Private networking** — a per-project WireGuard mesh with automatic
+- **Container engine agnostic** - works with Docker or Podman
+- **Private networking** - a per-project WireGuard mesh with automatic
   `.jiji` DNS service discovery
-- **Simple configuration** — everything lives in one YAML file
+- **Simple configuration** - everything lives in one YAML file
 
 ### How It's Built
 
 Jiji is a single Rust binary. It reads `deploy.yml`, works out the network
 topology and container placement, and pushes changes to your servers over
-SSH — no daemon, no separate services to run yourself.
+SSH - no daemon, no separate services to run yourself.
 
 Private networking is a WireGuard mesh between your servers, with a
 per-project `dnsmasq` resolver serving `.jiji` DNS records and nftables
 routing traffic to whichever backend container is currently active. It's
-all computed up front from your config and pushed out as a single unit —
+all computed up front from your config and pushed out as a single unit -
 nothing coordinates it at runtime. See
 [Architecture](/docs/getting-started/architecture) for the full picture.
 
@@ -55,8 +55,8 @@ services:
       dockerfile: Dockerfile
     servers: [web1, web2]
     proxy:
-      app_port: 3000
-      host: api.example.com
+      port: 3000
+      hosts: [api.example.com]
       ssl: true
       healthcheck:
         path: /health
@@ -74,10 +74,10 @@ jiji deploy --build
 
 ### Next Steps
 
-- [Installation](/docs/getting-started/installation) — get Jiji installed
-- [Quick Start](/docs/getting-started/quick-start) — deploy your first
+- [Installation](/docs/getting-started/installation) - get Jiji installed
+- [Quick Start](/docs/getting-started/quick-start) - deploy your first
   application
-- [Architecture](/docs/getting-started/architecture) — how Jiji works
+- [Architecture](/docs/getting-started/architecture) - how Jiji works
 
 ## Getting Started
 
@@ -131,15 +131,20 @@ Target servers need:
 - Linux (developed and tested on Ubuntu 24.04; other distributions may
   work)
 - An SSH server
-- Docker or Podman (jiji installs it for you if it's missing and you have
-  root)
+- Docker or Podman (with root access, jiji installs a missing engine and
+  upgrades Podman when the installed version is older than 5.8.4)
 - These ports reachable:
+
+On Debian and Ubuntu, jiji installs a pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle for Podman. This is an unofficial, single-maintainer
+distribution. Jiji verifies the pinned archive checksum before installing it.
 
 | Port | Protocol | Purpose |
 |---|---|---|
 | 22 | TCP | SSH |
 | 80/443 | TCP | HTTP/HTTPS, if a service uses `proxy:` |
-| 51820-55819 | UDP | WireGuard — one port per project, derived deterministically, not always 51820 |
+| 51820-55819 | UDP | WireGuard - one port per project, derived deterministically, not always 51820 |
 
 There's no separate database or gossip port to open; run `jiji network
 plan` to see the exact WireGuard port your project will use.
@@ -210,8 +215,8 @@ services:
     servers:
       - web1
     proxy:
-      app_port: 3000
-      host: myapp.example.com
+      port: 3000
+      hosts: [myapp.example.com]
       ssl: true
       healthcheck:
         path: /health
@@ -230,7 +235,7 @@ bridge, DNS, VIP routing) for this project on each server.
 
 #### 3. Authenticate the Registry
 
-Only needed for a remote registry (GHCR, Docker Hub, custom) — a local
+Only needed for a remote registry (GHCR, Docker Hub, custom) - a local
 registry needs no credentials:
 
 ```bash
@@ -256,12 +261,12 @@ jiji server exec "docker ps" -H web1
 
 #### What Happens During Deployment
 
-1. **Build** — the image is built locally or on a remote builder
-2. **Push** — pushed to the configured registry
-3. **Deploy** — the new container starts on the inactive backend slot, the
+1. **Build** - the image is built locally or on a remote builder
+2. **Push** - pushed to the configured registry
+3. **Deploy** - the new container starts on the inactive backend slot, the
    old one keeps serving traffic until the new one passes its health check,
    then the VIP flips over and the old container is stopped
-4. **Cleanup** — old images are pruned according to each service's
+4. **Cleanup** - old images are pruned according to each service's
    `retain` setting
 
 #### Environment-Specific Deployments
@@ -281,11 +286,11 @@ jiji deploy -e production
 
 #### Next Steps
 
-- [Configuration Reference](/docs/reference/configuration) — full
+- [Configuration Reference](/docs/reference/configuration) - full
   configuration options
-- [Deployment Guide](/docs/guides/deployment) — health checks, rollbacks,
+- [Deployment Guide](/docs/guides/deployment) - health checks, rollbacks,
   and locking
-- [Network Reference](/docs/reference/network) — how the private network
+- [Network Reference](/docs/reference/network) - how the private network
   works
 
 ### Architecture
@@ -298,7 +303,7 @@ Jiji is a single Rust binary you run from your laptop or CI. It reads
 `deploy.yml`, works out the network topology and container placement, and
 pushes changes to your servers over SSH. Nothing runs as a background
 service on your end, and the servers don't run any jiji-specific daemon
-either — WireGuard, dnsmasq, and nftables are just doing their normal jobs
+either - WireGuard, dnsmasq, and nftables are just doing their normal jobs
 with config jiji wrote for them.
 
 ```
@@ -337,7 +342,7 @@ with config jiji wrote for them.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-Every resource on a server except kamal-proxy is scoped to one `project:` —
+Every resource on a server except kamal-proxy is scoped to one `project:` -
 two independent projects can run `jiji server setup` against the same
 physical host and get two fully isolated sets of the above, each with its
 own WireGuard interface, bridge network, and DNS resolver. See
@@ -346,9 +351,9 @@ own WireGuard interface, bridge network, and DNS resolver. See
 ##### Core Capabilities
 
 - **Zero-downtime deployments** with health checks and automatic rollback
-- **Private networking** — per-project WireGuard mesh with automatic `.jiji`
+- **Private networking** - per-project WireGuard mesh with automatic `.jiji`
   DNS service discovery
-- **Registry management** — local loopback registry or remote (GHCR, Docker
+- **Registry management** - local loopback registry or remote (GHCR, Docker
   Hub, custom)
 - **Parallel SSH orchestration** across many servers at once
 - **Deployment locks and an append-only audit trail** for every
@@ -356,19 +361,19 @@ own WireGuard interface, bridge network, and DNS resolver. See
 
 ##### Technology Stack
 
-- **Language/runtime** — Rust, compiled to a single static binary (`jiji`)
-- **CLI framework** — clap
-- **SSH** — russh (pure-Rust async SSH client; no subprocess, no libssh FFI)
-- **Container runtime** — Docker or Podman
-- **Networking** — WireGuard, routed container bridges, dnsmasq, nftables
+- **Language/runtime** - Rust, compiled to a single static binary (`jiji`)
+- **CLI framework** - clap
+- **SSH** - russh (pure-Rust async SSH client; no subprocess, no libssh FFI)
+- **Container runtime** - Docker or Podman
+- **Networking** - WireGuard, routed container bridges, dnsmasq, nftables
 
 ##### Architecture Principles
 
-1. **Zero downtime** — old containers keep serving until new ones are healthy
-2. **Idempotent operations** — commands can be re-run safely
-3. **Fail safe** — a failed operation doesn't leave the system half-changed
-4. **Distributed first** — built for multi-server deployments, not bolted on
-5. **Configuration as code** — infrastructure is fully described in YAML
+1. **Zero downtime** - old containers keep serving until new ones are healthy
+2. **Idempotent operations** - commands can be re-run safely
+3. **Fail safe** - a failed operation doesn't leave the system half-changed
+4. **Distributed first** - built for multi-server deployments, not bolted on
+5. **Configuration as code** - infrastructure is fully described in YAML
 
 #### Component Details
 
@@ -377,7 +382,7 @@ own WireGuard interface, bridge network, and DNS resolver. See
 Runs on your machine or CI. Every command follows the same sequence: load
 config, validate it, build the network plan, pick target hosts, connect over
 SSH, run the work, close the connections. Each invocation opens its own SSH
-sessions and closes them when it's done — there's no persistent process or
+sessions and closes them when it's done - there's no persistent process or
 connection cache sitting between runs.
 
 ##### Container Runtime
@@ -417,7 +422,7 @@ Per-project DNS resolver serving compiled `.jiji` records:
 Each service endpoint gets two fixed backend addresses (slots A and B) and
 one stable VIP, worked out up front from config. The candidate container
 always starts on whichever slot isn't currently active, and the VIP only
-moves over once that candidate passes its health check — no renaming
+moves over once that candidate passes its health check - no renaming
 containers mid-deploy, no downtime window while traffic is redirected.
 
 ```
@@ -440,7 +445,7 @@ containers mid-deploy, no downtime window while traffic is redirected.
 ```
 
 If the health check fails, the previous container is never touched and
-keeps serving traffic — the candidate and any partial proxy routes are
+keeps serving traffic - the candidate and any partial proxy routes are
 rolled back instead.
 
 #### Network Architecture
@@ -568,7 +573,7 @@ services:
 ```
 
 The health check always runs directly against the candidate's own backend
-address, never through the VIP or kamal-proxy — so a healthy result really
+address, never through the VIP or kamal-proxy - so a healthy result really
 means the new container is ready, not just that routing happens to work.
 
 #### Deployment Strategies
@@ -599,14 +604,14 @@ jiji deploy --version v1.2.3
 
 `jiji deploy` prints the deployment plan (project, environment, target
 servers/endpoints, build/version/proxy flags) and asks for confirmation
-before touching anything — before build, before network reconciliation,
+before touching anything - before build, before network reconciliation,
 before any SSH connection. Pass `-y`/`--yes` to confirm automatically:
 
 ```bash
 jiji deploy --build -y
 ```
 
-`-y`/`--yes` is required when running non-interactively (CI/CD, scripts) —
+`-y`/`--yes` is required when running non-interactively (CI/CD, scripts) -
 without a terminal attached to answer the prompt, `jiji deploy` refuses to
 hang and exits with an actionable error instead.
 
@@ -622,8 +627,8 @@ jiji service rollback --version v1.2.2 -S api
 jiji service rollback --version v1.2.2 -S api -H server1.example.com
 ```
 
-This runs the same zero-downtime slot cycle as `jiji deploy` — health
-check, VIP cutover, old-slot cleanup — targeting the image tag you pass
+This runs the same zero-downtime slot cycle as `jiji deploy` - health
+check, VIP cutover, old-slot cleanup - targeting the image tag you pass
 instead of building a new one. For a `build:`-configured service it
 resolves that tag from `builder.registry` directly (no rebuild, trusting a
 prior `jiji build`/`jiji deploy --build` already pushed it); for a static
@@ -644,13 +649,17 @@ jiji lock show
 jiji lock release
 ```
 
-`jiji deploy` checks the lock before touching anything and refuses to
-proceed if a selected server is already locked. Typical CI usage:
+`jiji deploy`, `jiji service restart`, and `jiji service rollback`
+automatically acquire the project lock across every configured server
+before network reconciliation. They release their own lock after success or
+failure. If another operation holds any project lock, the command stops
+before making changes.
+
+The explicit commands above are for maintenance windows or intentionally
+blocking deployments. Normal CI usage does not need manual lock management:
 
 ```bash
-jiji lock acquire "CI deploy: $CI_COMMIT_SHA"
 jiji deploy --build -e production -y
-jiji lock release
 ```
 
 #### Resource Management
@@ -718,7 +727,7 @@ deployment happen transparently per host.
 
 #### Stateful Services
 
-Services that can't run two instances at once — most databases — need
+Services that can't run two instances at once - most databases - need
 `stop_first`, which trades zero downtime for a brief stop-then-start
 window:
 
@@ -848,7 +857,7 @@ jiji deploy
 ```
 
 **Review the audit trail regularly**, not just when something's already
-broken — see [Logs Reference](/docs/reference/logs#audit-trail).
+broken - see [Logs Reference](/docs/reference/logs#audit-trail).
 
 #### Pre-Deployment Checklist
 
@@ -857,7 +866,7 @@ broken — see [Logs Reference](/docs/reference/logs#audit-trail).
 3. Confirm server connectivity: `jiji server exec "echo ok" -H server1`
 4. Confirm registry access: `jiji registry login`
 5. Confirm secrets resolve: `jiji secrets print`
-6. Acquire the deployment lock: `jiji lock acquire "Deploying vX.Y.Z"`
+6. Confirm there is no maintenance lock: `jiji lock status`
 
 #### Post-Deployment Verification
 
@@ -884,9 +893,7 @@ jiji service prune -S api
 #!/bin/bash
 set -e
 
-jiji lock acquire "CI Deploy: $CI_COMMIT_SHA"
 jiji deploy --build -e production -y
-jiji lock release
 ```
 
 See the [CI/CD Integration](/docs/guides/ci-cd) guide for full pipeline
@@ -996,7 +1003,7 @@ curl http://localhost:31270/v2/
 ```
 
 `jiji deploy --build` with `builder.registry.type: local` opens an SSH
-reverse tunnel to each deployment server automatically — you don't need to
+reverse tunnel to each deployment server automatically - you don't need to
 forward the port by hand. To sanity-check the mechanism directly:
 
 ```bash
@@ -1058,14 +1065,14 @@ jiji server exec "df -h" -H server1
 #### Common Issues
 
 **"Permission denied" on port 80:** rootless Podman runs kamal-proxy on high
-ports internally (8080/8443) and maps them to host 80/443 — check that
+ports internally (8080/8443) and maps them to host 80/443 - check that
 mapping is actually in place rather than trying to bind 80/443 directly.
 
 **Proxy health check timeouts:** confirm the service container is on the
 project's bridge network, the `healthcheck` path/command is correct, and the
 app is actually listening and responding.
 
-**"No such object" errors:** the container hasn't been deployed yet — run
+**"No such object" errors:** the container hasn't been deployed yet - run
 `jiji deploy -S <service>` first.
 
 ### CI/CD Integration
@@ -1078,7 +1085,7 @@ Jiji is a single binary, installed the same way in CI as anywhere else:
 curl -fsSL https://get.jiji.run/install.sh | sh
 ```
 
-`jiji deploy` always asks for confirmation before doing anything — pass
+`jiji deploy` always asks for confirmation before doing anything - pass
 `-y`/`--yes` in every non-interactive pipeline below, or it exits with an
 error instead of hanging on a prompt nothing can answer.
 
@@ -1224,21 +1231,22 @@ echo "ssh-ed25519 AAAA... deploy@ci" >> ~/.ssh/authorized_keys
 
 #### Best Practices
 
-##### Use deployment locks
+##### Deployment locks
+
+`jiji deploy` automatically acquires the project lock across every
+configured server before network reconciliation and releases it when the
+command finishes. A normal pipeline only needs the deploy step:
 
 ```yaml
-- name: Acquire Lock
-  run: jiji lock acquire "CI deploy ${{ github.sha }}"
-
 - name: Deploy
   run: jiji deploy --build -y
-
-- name: Release Lock
-  if: always()
-  run: jiji lock release
 ```
 
-##### Tag every deployment
+Use `jiji lock acquire` separately when you need a maintenance window that
+blocks deploy, service restart, and service rollback operations.
+```
+
+### Tag every deployment
 
 ```yaml
 - name: Deploy
@@ -1365,8 +1373,8 @@ ssh-add ~/.ssh/deploy_key   # load only the one jiji should use
 ##### About `jiji server exec`
 
 A plain command runs on every host `-H`/`--hosts` matches, concurrently by
-default (`--sequential` for one at a time). An interactive session — no
-command given, or `--interactive` — is bound to one local terminal, so it
+default (`--sequential` for one at a time). An interactive session - no
+command given, or `--interactive` - is bound to one local terminal, so it
 requires `-H` to resolve to exactly one server. `-S`/`--services` isn't
 accepted. Interactive sessions automatically downgrade to non-interactive
 with a warning when stdin/stdout isn't a real terminal.
@@ -1498,7 +1506,7 @@ services:
 
 #### Network Issues
 
-Interface, systemd unit, and path names are all derived per project — run
+Interface, systemd unit, and path names are all derived per project - run
 `jiji network plan` to get the exact values for your config, and
 substitute them for `<wireguard_interface>`/`<slug>` below. See
 [Network Reference](/docs/reference/network) for the full mapping.
@@ -1522,7 +1530,7 @@ jiji server exec "sudo journalctl -u jiji-dns-<slug> -n 50" -H server1
 jiji network setup
 ```
 
-DNS is compiled from `deploy.yml` when the network is set up — it answers
+DNS is compiled from `deploy.yml` when the network is set up - it answers
 with what's configured, not with live health data. Health checks gate the
 VIP switch separately, during deploys.
 
@@ -1573,7 +1581,7 @@ services:
 
 ##### 502 Bad Gateway
 
-Usually the container isn't running, `app_port` doesn't match what the
+Usually the container isn't running, `port` doesn't match what the
 container actually listens on, or the container hasn't passed its health
 check yet.
 
@@ -1637,16 +1645,17 @@ meant to do.
 ##### "Configuration validation failed with N error(s)"
 
 The listed errors are specific (missing field, invalid CIDR, duplicate host,
-etc.) — run with `--verbose` for more detail, or lint the YAML directly:
+etc.) - run with `--verbose` for more detail, or lint the YAML directly:
 
 ```bash
 yamllint .jiji/deploy.yml
 ```
 
-##### "Deployment lock is held on the following server(s)"
+##### "Could not acquire the deployment lock"
 
-Another deployment is in progress, or a previous one didn't release its
-lock.
+Another deploy, service restart, service rollback, or an explicit
+maintenance lock is active. A process interrupted before cleanup may also
+leave a stale lock.
 
 ```bash
 jiji lock status
@@ -1683,9 +1692,9 @@ jiji --verbose <command>    # re-run with full detail
 jiji audit --status failed  # recent failures, per server
 ```
 
-- [GitHub Issues](https://github.com/acidtib/jiji/issues) — search first,
+- [GitHub Issues](https://github.com/acidtib/jiji/issues) - search first,
   then [open a new one](https://github.com/acidtib/jiji/issues/new)
-- [Discord](https://discord.gg/BMdKJzkknE) — for questions and discussion
+- [Discord](https://discord.gg/BMdKJzkknE) - for questions and discussion
 
 ## Reference
 
@@ -1797,6 +1806,39 @@ builder:
   cache: true
 ```
 
+If the configured `engine` (Docker or Podman) is not already installed on
+the remote builder host, `jiji build` installs it automatically. It also
+upgrades Podman when the installed version is older than the required
+5.8.4. This is the same distro-aware installer `jiji server setup` uses for
+a deployment host, and jiji prints a status line confirming what it
+installed or upgraded.
+
+On Debian and Ubuntu, the installer uses the pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle and verifies its archive checksum before installation. This
+bundle is an unofficial, single-maintainer Podman distribution. jiji
+doesn't do anything else to a builder host beyond that: no network,
+WireGuard, or proxy setup, only the engine itself. Multi-architecture
+tooling (Buildx for Docker, manifest support for Podman) is **not**
+auto-installed - if your build needs more than one platform, install
+Buildx/manifest support on the builder yourself first; jiji only detects
+and reports whether it's there. The build context is streamed over SSH
+into a staging directory on the builder, which is always cleaned up
+afterward, including when the build fails.
+
+With `builder.registry.type: remote`, credentials are used to log in on
+the builder itself (the machine that actually runs `push`), not on your
+local machine. With `type: local`, jiji opens a reverse SSH tunnel from
+the builder's own `127.0.0.1:<registry.port>` back to your local
+registry - the same fixed-port design `jiji deploy` already uses when
+tunneling a local registry to a deployment host (see
+[Local Registry Details](/docs/reference/registry#local-registry-details)
+below). Two concurrent `jiji build` runs for the same project against the
+same builder will race for that port; the loser fails with an actionable
+message. `jiji build` has no deployment lock, so either serialize
+concurrent builds against one builder, or give each run its own
+`builder.registry.port`.
+
 **CI/CD** (always fresh builds):
 
 ```yaml
@@ -1811,7 +1853,7 @@ builder:
 Where built images are stored and pulled from, configured under
 `builder.registry`.
 
-**Local registry** — a loopback registry with SSH reverse tunnels to
+**Local registry** - a loopback registry with SSH reverse tunnels to
 deployment hosts, useful for development. `jiji` runs it on
 `localhost:31270`, tunnels it to each remote server for the duration of the
 deploy, and tears the tunnel down afterward.
@@ -1842,35 +1884,44 @@ builder:
 
 `password` can be a literal value, an ALL_CAPS secret name resolved from
 `.env`/host-env (see Environment Variables below), or `$(a local command)`
-— useful for registries like AWS ECR or GCP Artifact Registry that issue
+- useful for registries like AWS ECR or GCP Artifact Registry that issue
 short-lived tokens, see [Registry Reference](/docs/reference/registry).
 
 #### SSH
 
 ```yaml
 ssh:
-  user: deploy       # required
-  port: 22            # optional, default 22
-  timeout: 30000       # optional, connect timeout in ms, default 30000
+  user: deploy            # required
+  port: 22                 # optional, default 22
+  connect_timeout: 30      # optional, seconds, default 30
+  command_timeout: 300     # optional, seconds, default 300
 ```
 
-**Authentication** — ssh-agent is used by default if no keys are specified:
+**Authentication** - ssh-agent is used by default if no keys are specified.
+Configure one or more identities with `keys`:
 
 ```yaml
 ssh:
   user: deploy
-  private_keys:
+  keys:
     - ~/.ssh/id_ed25519
     - /path/to/deploy_key
 ```
 
+Each `keys` entry accepts a literal path or inline private key, an ALL_CAPS variable
+resolved from `.env` (or the host environment with `--host-env`), or
+`$(a local command)`. Resolved values beginning with a private-key PEM header
+are used as inline key material; other values are treated as paths.
+
 ```yaml
-# Inline key data, for CI/CD (values are environment variable names)
+# Inline key material can use the same keys list
 ssh:
   user: deploy
-  key_data:
-    - SSH_PRIVATE_KEY_1
-    - SSH_PRIVATE_KEY_2
+  keys:
+    - |
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      ...
+      -----END OPENSSH PRIVATE KEY-----
 ```
 
 ```yaml
@@ -1878,7 +1929,7 @@ ssh:
 ssh:
   user: deploy
   keys_only: true
-  private_keys:
+  keys:
     - ~/.ssh/deploy_key
 ```
 
@@ -1924,10 +1975,10 @@ take precedence over the SSH config file.
 ```yaml
 ssh:
   user: deploy
-  max_concurrent_connections: 30   # limit concurrent SSH connections
-  pool_idle_timeout: 900            # seconds before idle connections close
-  dns_retries: 3                    # retry DNS lookups with backoff
-  log_level: error                  # debug, info, warn, error, fatal
+  max_concurrent_starts: 30   # limit concurrent SSH connections
+  pool_idle_timeout: 900       # seconds before idle connections close
+  dns_retries: 3                # retry DNS lookups with backoff
+  log_level: error              # debug, info, warn, error, fatal
 ```
 
 #### Network
@@ -1941,7 +1992,6 @@ network:
   enabled: true
   management_cidr: "198.18.0.0/16"
   container_cidr: "100.64.0.0/10"
-  host_prefix: 21
 ```
 
 | Setting | Default | Description |
@@ -1949,14 +1999,11 @@ network:
 | `enabled` | `true` | Enable the private network |
 | `management_cidr` | `198.18.0.0/16` | WireGuard host-address pool |
 | `container_cidr` | `100.64.0.0/10` | Routed container-address pool |
-| `host_prefix` | `21` | Per-host container subnet size |
 
-The `.jiji` domain is internal-only and not customizable — service
+The `.jiji` domain is internal-only and not customizable - service
 discovery always resolves names like `myapp-api.jiji`.
 
-If more than a handful of independent projects share a host, set distinct
-`management_cidr`/`container_cidr` per project rather than leaving both at
-their defaults (see [Network Reference](/docs/reference/network) for why).
+`jiji init` writes smaller project-directory-derived ranges into new configurations. The table above describes the fallback values for configurations that omit these fields. Generated ranges are stable for a project directory, but should still be reviewed for overlap and rare slot collisions (see [Network Reference](/docs/reference/network)).
 
 ```yaml
 # Avoid CIDR conflicts with an existing network
@@ -1964,7 +2011,6 @@ network:
   enabled: true
   management_cidr: "198.19.0.0/16"
   container_cidr: "172.16.0.0/12"
-  host_prefix: 21
 ```
 
 ```yaml
@@ -2006,19 +2052,48 @@ API_SERVER1_URL: http://myapp-api-server1.jiji:3000
 
 ```yaml
 servers:
-  server1:
-    host: server1.example.com
-  server2:
-    host: server2.example.com
+  app-amd:
+    host: app-amd.example.com
+    arch: amd64
+  app-arm:
+    host: app-arm.example.com
+    arch: arm64
+    user: ubuntu
+    port: 2222
+    keys:
+      - ~/.ssh/app-arm
 ```
 
-Each entry's `host:` is the address jiji connects to over SSH. `-H`/
-`--hosts` filters match against both the config key name (`server1`) and
-this address (`server1.example.com`).
+`host` is required and is the SSH destination unless an enabled OpenSSH
+configuration supplies a matching `HostName`. `-H`/`--hosts` filters match
+both the config key name (`app-arm`) and the configured `host` value
+(`app-arm.example.com`).
+
+`arch` is optional and defaults to `amd64`. The supported values are
+`amd64` and `arm64`. When a service targets servers with both architectures,
+Jiji builds it for both `linux/amd64` and `linux/arm64`. Multi-platform
+images must be pushed, so `jiji build --no-push` is unavailable for that
+service.
+
+Each server can override these top-level `ssh:` defaults:
+
+| Field | Resolution order |
+| --- | --- |
+| `user` | server, top-level `ssh.user`, matching OpenSSH `User` |
+| `port` | server, non-default `ssh.port`, matching OpenSSH `Port`, `22` |
+| `keys` | server `keys`, top-level `ssh.keys`, matching OpenSSH `IdentityFile` |
+| `key_passphrase` | server, top-level `ssh.key_passphrase` |
+
+`keys` is always a list, including when only one identity is configured. The
+former singular `key_path` field has been removed. Other SSH options, including
+timeouts, proxy settings,
+`keys_only`, DNS retries, and pool limits, are global. `key_passphrase` is
+a literal value, it is not resolved from `.env` or
+the host environment.
 
 #### Services
 
-Each service is a deployable unit — a containerized application, either
+Each service is a deployable unit - a containerized application, either
 from a pre-built image or built from source.
 
 ```yaml
@@ -2032,6 +2107,8 @@ services:
       - "80"
       - "443"
 ```
+
+Image names are normalized before Docker or Podman operations. `nginx:latest` becomes `docker.io/library/nginx:latest`, and `owner/image:tag` becomes `docker.io/owner/image:tag`. Already-qualified registries such as `ghcr.io/owner/image`, `localhost:5000/image`, and private registry hostnames remain unchanged.
 
 ##### Build configuration
 
@@ -2051,9 +2128,17 @@ services:
       - server1
 ```
 
+`dockerfile:` is resolved relative to **`context:`**, matching Docker
+Compose - if `context: ./web`, `dockerfile: Dockerfile` (the default)
+already means `web/Dockerfile`; there's no need to repeat the `web/`
+prefix. A `dockerfile:` value can still climb out of the context with
+`../` for local builds (the local engine reads the filesystem directly),
+but a remote builder can only stage what's inside the configured context,
+so that combination is rejected there.
+
 ##### Port mappings
 
-For services behind the proxy, specify only the container port — this lets
+For services behind the proxy, specify only the container port - this lets
 the old and new container coexist during a deploy, since neither binds a
 host port:
 
@@ -2151,38 +2236,38 @@ Enables kamal-proxy routing for a service.
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: myapp.example.com
+  port: 3000
+  hosts: [myapp.example.com]
   ssl: false
 ```
 
 ```yaml
 # Multiple hostnames
 proxy:
-  app_port: 3000
+  port: 3000
   hosts:
     - myapp.example.com
     - www.myapp.example.com
   ssl: true
 ```
 
-**Wildcard subdomains** — kamal-proxy matches a leading `*` against any
+**Wildcard subdomains** - kamal-proxy matches a leading `*` against any
 single subdomain level, so one service can catch every subdomain of a
 domain (`foo.example.com` and `bar.example.com` both match; the nested
 `deep.foo.example.com` doesn't, since `*` only covers one label):
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: "*.example.com"
+  port: 3000
+  hosts: ["*.example.com"]
 ```
 
 **HTTP health check:**
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: myapp.example.com
+  port: 3000
+  hosts: [myapp.example.com]
   healthcheck:
     path: /health
     interval: 10s
@@ -2194,8 +2279,8 @@ proxy:
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: myapp.example.com
+  port: 3000
+  hosts: [myapp.example.com]
   healthcheck:
     cmd: "test -f /app/ready"   # exit 0 = healthy
     cmd_runtime: docker           # optional, defaults to builder.engine
@@ -2211,8 +2296,8 @@ Other command examples: `pgrep -f myapp`, `/app/healthcheck.sh`,
 
 ```yaml
 proxy:
-  app_port: 3000
-  host: myapp.example.com
+  port: 3000
+  hosts: [myapp.example.com]
   path_prefix: /api
 ```
 
@@ -2221,12 +2306,12 @@ proxy:
 ```yaml
 proxy:
   targets:
-    - app_port: 3900
-      host: s3.example.com
+    - port: 3900
+      hosts: [s3.example.com]
       healthcheck:
         path: /health
-    - app_port: 3903
-      host: admin.example.com
+    - port: 3903
+      hosts: [admin.example.com]
       ssl: true
       healthcheck:
         cmd: "test -f /ready"
@@ -2306,7 +2391,7 @@ services:
     stop_first: true
 ```
 
-Use `stop_first: true` for services that can't run two instances at once —
+Use `stop_first: true` for services that can't run two instances at once -
 file-based locks (LevelDB, SQLite), or coordinator registration by a unique
 ID. This trades zero downtime for a brief stop-then-start window during
 deploy. Default is `false`.
@@ -2340,7 +2425,7 @@ builder:
 
 ssh:
   user: deploy
-  private_keys:
+  keys:
     - ~/.ssh/production_key
   proxy: bastion.example.com
 
@@ -2348,7 +2433,6 @@ network:
   enabled: true
   management_cidr: "198.18.0.0/16"
   container_cidr: "100.64.0.0/10"
-  host_prefix: 21
 
 environment:
   clear:
@@ -2373,7 +2457,7 @@ services:
     servers: [web1, web2]
     ports: ["3000"]
     proxy:
-      app_port: 3000
+      port: 3000
       hosts:
         - app.example.com
         - www.app.example.com
@@ -2391,8 +2475,8 @@ services:
       secrets:
         - DB_PASSWORD
     proxy:
-      app_port: 4000
-      host: api.example.com
+      port: 4000
+      hosts: [api.example.com]
       ssl: true
       path_prefix: /api
       healthcheck:
@@ -2459,7 +2543,7 @@ jiji deploy -S "api,worker"     # Multiple services
 
 ##### `jiji init`
 
-Create a config stub at `.jiji/deploy.yml`.
+Create a config stub at `.jiji/deploy.yml`. The generated file persists a project-directory-derived `/24` management range and `/16` container range. Review them for overlap with LAN, VPN, cloud VPC, and other Jiji project ranges before setup.
 
 ```bash
 jiji init
@@ -2519,26 +2603,35 @@ jiji deploy -y                   # Skip the confirmation prompt
 
 `jiji deploy` prints the deployment plan (project, environment, target
 servers/endpoints, and the flags above) and asks for confirmation before
-doing anything — before build, before network reconciliation, before any
+doing anything - before build, before network reconciliation, before any
 SSH connection. `-y`/`--yes` skips the prompt. Without it and without a
 real terminal attached, `jiji deploy` exits with an error instead of
-hanging on a prompt nothing can answer — always pass `-y` in CI/CD.
+hanging on a prompt nothing can answer - always pass `-y` in CI/CD.
 
-Before touching any host, `jiji deploy` compares every configured server's
+After confirmation, `jiji deploy` atomically acquires the project's
+deployment lock across every configured server. It then compares the
 installed network generation and automatically reconciles the full cluster
-if any host is stale, then acquires the project's deployment lock.
+if any host is stale. The lock is released after the deploy succeeds or
+fails.
 
 #### Server Management
 
 ##### `jiji server setup`
 
-Install the container engine and the complete private network on each
-server.
+Install or reconcile the container engine and complete private network on
+each server. Existing Podman installations older than the required 5.8.4
+are upgraded.
 
 ```bash
 jiji server setup
 jiji server setup -H "web*"  # Only web servers
 ```
+
+On Debian and Ubuntu, jiji installs a pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle. This is an unofficial, single-maintainer distribution, so it
+has a different supply-chain trust boundary from distro packages. Jiji
+verifies the pinned archive checksum before installing it.
 
 ##### `jiji server exec`
 
@@ -2582,7 +2675,7 @@ jiji server teardown --volumes   # Also remove jiji-owned named volumes
 | `--volumes` | Also remove jiji-owned named volumes for this project |
 | `--dry-run` | Print the teardown plan without changing any host |
 
-`-S`/`--services` is rejected — teardown always acts on the whole project.
+`-S`/`--services` is rejected - teardown always acts on the whole project.
 
 #### Network Management
 
@@ -2606,8 +2699,7 @@ jiji network setup
 jiji network setup -H web1
 ```
 
-Idempotent, with rollback on partial failure. `jiji server setup` and `jiji
-deploy` both call this same path when a host's network is missing or stale.
+Idempotent, with rollback on partial failure. If configured CIDRs change, setup migrates the project bridge, reattaches its service containers and the shared proxy at their newly planned addresses, and refreshes proxy ingress and routes. A failed activation restores the previous bridge and addresses. `jiji server setup` and `jiji deploy` both call this same path when a host.s network is missing or stale.
 
 #### Registry Management
 
@@ -2705,8 +2797,9 @@ jiji service logs -H web1 -S api
 ##### `jiji service restart`
 
 Restart running services with a zero-downtime slot cycle (health check, VIP
-cutover, old-slot cleanup) — the same primitive `jiji deploy` uses, reusing
-the currently running image.
+cutover, old-slot cleanup) - the same primitive `jiji deploy` uses, reusing
+the currently running image. The command automatically holds the same
+cluster-wide deployment lock as `jiji deploy`.
 
 ```bash
 jiji service restart
@@ -2717,7 +2810,8 @@ jiji service restart -H web1
 ##### `jiji service rollback`
 
 Roll back services to a previously built image via a zero-downtime slot
-cycle. Requires `--version`.
+cycle. Requires `--version` and automatically holds the cluster-wide
+deployment lock for the operation.
 
 ```bash
 jiji service rollback --version 1.2.2
@@ -2773,15 +2867,21 @@ jiji secrets print --show-values   # Reveal actual values, use with caution
 ```
 
 Shows `[SET]`/`[MISSING]` for every secret-shaped reference in
-configuration. Only `environment.secrets` and `builder.registry.password`
-are actually resolved from `.env`/host-env; other fields (SSH key
-passphrase, proxy SSL certs, build args) are scanned and reported for
-visibility only.
+configuration. `environment.secrets`, `builder.registry.password`, and
+ALL_CAPS references in SSH `keys` are resolved from `.env`/host-env;
+other fields (SSH key passphrase, proxy SSL certs, build args) are scanned
+and reported for visibility only.
 
 #### Deployment Locks
 
-Locks are per-project, held per selected server, and checked by `jiji
-deploy` before any change is made.
+Locks are per-project and host-scoped. `jiji deploy`, `jiji service
+restart`, and `jiji service rollback` atomically acquire them across every
+configured project server before network reconciliation, then release only
+the locks owned by that invocation on every success or failure path.
+
+Use the explicit lock commands to reserve a maintenance window or block
+automatic deployment operations. You do not need to wrap a normal deploy in
+manual acquire and release commands.
 
 ##### `jiji lock acquire`
 
@@ -2810,7 +2910,7 @@ jiji lock status --json
 jiji lock show
 ```
 
-`-S`/`--services` is rejected for every `lock` subcommand — locks are
+`-S`/`--services` is rejected for every `lock` subcommand - locks are
 host-scoped, not service-scoped.
 
 #### Audit Trail
@@ -2825,6 +2925,9 @@ jiji audit --lines 50
 jiji audit --grep deploy
 jiji audit --status success
 jiji audit --json
+jiji audit --stats
+jiji audit --stats --since 24h
+jiji audit --stats --since 7d --json
 jiji audit --follow   # Requires exactly one host
 ```
 
@@ -2833,10 +2936,20 @@ jiji audit --follow   # Requires exactly one host
 | `-n, --lines` | Number of entries to show per server (default: 20) |
 | `-g, --grep` | Filter entries by action or message (substring match) |
 | `--status` | Filter by status: `success` or `failed` |
-| `--json` | Output entries as newline-delimited JSON |
+| `--json` | Output entries as newline-delimited JSON, or one structured object with `--stats` |
+| `--stats` | Show overall, per-action, and per-server success-rate and duration statistics |
+| `-s, --since` | Limit statistics to a relative window such as `30m`, `12h`, or `7d` (requires `--stats`) |
 | `-f, --follow` | Follow the audit trail as new entries are appended (requires exactly one host) |
 
-`-S`/`--services` is rejected — the trail is host-scoped, not
+Statistics read the full live project audit log from every selected server on
+each invocation; no local cache is maintained. Entries without `duration_ms`
+still count toward totals and success rates, but are excluded from the average
+duration. The output reports timed-entry coverage so that distinction remains
+visible. `--stats` cannot be combined with `--lines` or `--follow`. With
+`--stats --json`, Jiji emits one structured object containing `overall`,
+`by_action`, and `by_server` aggregates.
+
+`-S`/`--services` is rejected - the trail is host-scoped, not
 service-scoped. Every state-changing command writes to it: `deploy`,
 `service restart/rollback/remove/prune`, `lock acquire/release`, and
 `server setup/teardown`.
@@ -2893,100 +3006,100 @@ Every built-in feature, organized by area.
 
 #### Core
 
-- **Private Mesh Network** — WireGuard VPN between all servers. Encrypted by default.
-- **Automatic DNS** — Built-in `.jiji` DNS resolution. Access services by name.
-- **Zero-Downtime** — Old version keeps serving until the new one passes its health check.
-- **Runtime Agnostic** — Docker or Podman. Same config, your choice.
-- **Multi Server** — Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
-- **Multi Project** — Run multiple apps on one server. Perfect for small teams and hobby projects.
+- **Private Mesh Network** - WireGuard VPN between all servers. Encrypted by default.
+- **Automatic DNS** - Built-in `.jiji` DNS resolution. Access services by name.
+- **Zero-Downtime** - Old version keeps serving until the new one passes its health check.
+- **Runtime Agnostic** - Docker or Podman. Same config, your choice.
+- **Multi Server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
+- **Multi Project** - Run multiple apps on one server. Perfect for small teams and hobby projects.
 
 #### Proxy & SSL
 
-- **Auto SSL/TLS** — Automatic HTTPS certificates via kamal-proxy. Zero config.
-- **Path-based Routing** — Route traffic based on URL path prefix to different services.
-- **Wildcard Domains** — Support for wildcard domain matching like `*.example.com`.
-- **Multi-port Services** — Route multiple ports on a single service to different domains.
-- **HTTP Health Checks** — Health checking via HTTP endpoints with configurable paths.
-- **Command Health Checks** — Custom shell commands for health verification.
-- **Health Check Timing** — Configurable intervals, timeouts, and deploy timeouts.
+- **Auto SSL/TLS** - Automatic HTTPS certificates via kamal-proxy. Zero config.
+- **Path-based Routing** - Route traffic based on URL path prefix to different services.
+- **Wildcard Domains** - Support for wildcard domain matching like `*.example.com`.
+- **Multi-port Services** - Route multiple ports on a single service to different domains.
+- **HTTP Health Checks** - Health checking via HTTP endpoints with configurable paths.
+- **Command Health Checks** - Custom shell commands for health verification.
+- **Health Check Timing** - Configurable intervals, timeouts, and deploy timeouts.
 
 #### Build
 
-- **Multi-stage Builds** — Support Docker multi-stage builds with target specification.
-- **Custom Dockerfile** — Specify a non-standard Dockerfile path for builds.
-- **Build Arguments** — Pass build-time arguments (ARGs) to Docker.
-- **Remote Builds** — Execute builds on remote SSH hosts for faster CI/CD.
-- **Build Cache** — Control whether to use Docker layer cache for builds.
+- **Multi-stage Builds** - Support Docker multi-stage builds with target specification.
+- **Custom Dockerfile** - Specify a non-standard Dockerfile path for builds.
+- **Build Arguments** - Pass build-time arguments (ARGs) to Docker.
+- **Remote Builds** - Execute builds on remote SSH hosts for faster CI/CD.
+- **Build Cache** - Control whether to use Docker layer cache for builds.
 
 #### Container Config
 
-- **Resource Limits** — CPU, memory, GPU limits. Device mapping support.
-- **Privileged Mode** — Run containers with extended privileges when needed.
-- **Linux Capabilities** — Add specific capabilities like `SYS_ADMIN`, `NET_ADMIN`.
-- **Device Mappings** — Mount host devices into containers (`/dev/video0`, `/dev/snd`).
-- **Named Volumes** — Use Docker named volumes instead of host paths.
-- **File & Directory Mounts** — Mount files/directories with fine grained permissions.
-- **Custom Commands** — Override container ENTRYPOINT/CMD as needed.
-- **Restart Policy** — Configure restart behavior: unless-stopped, always, on-failure, no.
-- **Network Mode** — Set custom network modes (bridge, host, etc.).
+- **Resource Limits** - CPU, memory, GPU limits. Device mapping support.
+- **Privileged Mode** - Run containers with extended privileges when needed.
+- **Linux Capabilities** - Add specific capabilities like `SYS_ADMIN`, `NET_ADMIN`.
+- **Device Mappings** - Mount host devices into containers (`/dev/video0`, `/dev/snd`).
+- **Named Volumes** - Use Docker named volumes instead of host paths.
+- **File & Directory Mounts** - Mount files/directories with fine grained permissions.
+- **Custom Commands** - Override container ENTRYPOINT/CMD as needed.
+- **Restart Policy** - Configure restart behavior: unless-stopped, always, on-failure, no.
+- **Network Mode** - Set custom network modes (bridge, host, etc.).
 
 #### Deployment
 
-- **Rolling Deployments** — Zero-downtime deployments with old container cleanup.
-- **Stop-First Mode** — For stateful services like SQLite — stop old before starting new.
-- **Fail-Safe Health Checks** — A failed candidate is discarded; the previous version is never touched.
-- **Image Retention** — Control how many images to keep per service.
-- **Deployment Locks** — Prevent concurrent deploys. Team safe operations.
-- **Service Filtering** — Deploy specific services by name patterns.
+- **Rolling Deployments** - Zero-downtime deployments with old container cleanup.
+- **Stop-First Mode** - For stateful services like SQLite - stop old before starting new.
+- **Fail-Safe Health Checks** - A failed candidate is discarded; the previous version is never touched.
+- **Image Retention** - Control how many images to keep per service.
+- **Deployment Locks** - Prevent concurrent deploys. Team safe operations.
+- **Service Filtering** - Deploy specific services by name patterns.
 
 #### SSH & Connections
 
-- **SSH Jump Host** — Connect through bastion/intermediate hosts via SSH proxy.
-- **Multiple SSH Keys** — Support multiple SSH keys for authentication.
-- **Key Passphrase** — Support encrypted SSH keys with passphrases.
-- **SSH Config Support** — Use system SSH config (`~/.ssh/config`).
-- **Bounded Concurrency** — Run SSH operations across many hosts without overwhelming any one connection limit.
-- **Interactive SSH** — Shell access to servers via `jiji server exec`.
+- **SSH Jump Host** - Connect through bastion/intermediate hosts via SSH proxy.
+- **Multiple SSH Keys** - Support multiple SSH keys for authentication.
+- **Key Passphrase** - Support encrypted SSH keys with passphrases.
+- **SSH Config Support** - Use system SSH config (`~/.ssh/config`).
+- **Bounded Concurrency** - Run SSH operations across many hosts without overwhelming any one connection limit.
+- **Interactive SSH** - Shell access to servers via `jiji server exec`.
 
 #### Environment & Secrets
 
-- **Secrets Management** — Reference secrets from `.env` files securely.
-- **Shared Environment** — Project level env vars inherited by all services.
-- **Multi-environment** — Load different configurations per environment.
-- **Custom Secrets Path** — Specify a custom location for `.env` files.
+- **Secrets Management** - Reference secrets from `.env` files securely.
+- **Shared Environment** - Project level env vars inherited by all services.
+- **Multi-environment** - Load different configurations per environment.
+- **Custom Secrets Path** - Specify a custom location for `.env` files.
 
 #### Network
 
-- **Custom Network CIDR** — Configure management and container IP ranges per project.
-- **Network Plan Preview** — See interfaces, ports, and VIPs before touching a server.
-- **Per-Replica DNS Records** — Resolve every replica together, or reach one server directly.
-- **Clean Teardown** — Remove a project's network, containers, and routes in one command.
-- **Multi-Project Isolation** — Independent projects share a host with zero shared network state.
+- **Custom Network CIDR** - Configure management and container IP ranges per project.
+- **Network Plan Preview** - See interfaces, ports, and VIPs before touching a server.
+- **Per-Replica DNS Records** - Resolve every replica together, or reach one server directly.
+- **Clean Teardown** - Remove a project's network, containers, and routes in one command.
+- **Multi-Project Isolation** - Independent projects share a host with zero shared network state.
 
 #### Registry
 
-- **Registry Support** — Local registry, GHCR, Docker Hub, ECR, GCP Artifact Registry, or any custom registry.
-- **Registry Login** — Authenticate to remote container registries.
-- **Local Registry Tunneling** — Automatic SSH reverse tunnels let remote servers pull from your local build.
+- **Registry Support** - Local registry, GHCR, Docker Hub, ECR, GCP Artifact Registry, or any custom registry.
+- **Registry Login** - Authenticate to remote container registries.
+- **Local Registry Tunneling** - Automatic SSH reverse tunnels let remote servers pull from your local build.
 
 #### Logging & Monitoring
 
-- **Centralized Logs** — Fetch logs from services with filtering.
-- **Log Grep** — Filter logs by pattern with grep options.
-- **Time-based Filtering** — Show logs since timestamp or relative time.
-- **Log Follow Mode** — Stream logs in real-time like `tail -f`.
-- **Audit Trail** — Complete deployment history with filtering.
-- **Deployment Timing** — Every audit entry records how long the operation took.
+- **Centralized Logs** - Fetch logs from services with filtering.
+- **Log Grep** - Filter logs by pattern with grep options.
+- **Time-based Filtering** - Show logs since timestamp or relative time.
+- **Log Follow Mode** - Stream logs in real-time like `tail -f`.
+- **Audit Trail** - Complete deployment history with filtering.
+- **Deployment Timing** - Every audit entry records how long the operation took.
 
 #### Operations
 
-- **Remote Execution** — Run commands across servers in parallel or sequential, or drop into an interactive shell.
-- **Service Restart** — Restart services without full redeployment.
-- **Service Removal** — Clean removal with network unregistration.
-- **Image Pruning** — Automatic cleanup of old service images.
-- **Server Teardown** — Clean server removal from cluster.
-- **Auto-install Engine** — Install Docker/Podman automatically on servers.
-- **Architecture Support** — Explicitly set server architecture (amd64/arm64).
+- **Remote Execution** - Run commands across servers in parallel or sequential, or drop into an interactive shell.
+- **Service Restart** - Restart services without full redeployment.
+- **Service Removal** - Clean removal with network unregistration.
+- **Image Pruning** - Automatic cleanup of old service images.
+- **Server Teardown** - Clean server removal from cluster.
+- **Auto-install Engine** - Install Docker/Podman automatically on servers.
+- **Architecture Support** - Explicitly set server architecture (amd64/arm64).
 
 ### Network Reference
 
@@ -3024,7 +3137,7 @@ per-service VIPs to whichever backend container is currently active.
 #### Multiple projects on one server
 
 Every piece of this network layer is **per-project isolated**, computed
-purely from `project:` in `deploy.yml` — there is no shared registry and no
+purely from `project:` in `deploy.yml` - there is no shared registry and no
 coordination between projects. Two independent projects (different
 `project:` names, different `deploy.yml` files) can run `jiji server setup`
 against the same physical server, and each gets its own:
@@ -3036,20 +3149,20 @@ against the same physical server, and each gets its own:
 - systemd units
 
 `{slug}` is a short, deterministic, hash-suffixed identifier derived from
-`project:` — run `jiji network plan` to see the exact value for your
+`project:` - run `jiji network plan` to see the exact value for your
 project. The one intentionally shared, multi-tenant component is
 kamal-proxy: one container per host, attached to every project's bridge that
 has active routes on that host, with routes namespaced per project.
 
 Because identity is purely name-derived with no registry, **`project:`
-names must be unique per host**, not just per config repository — two
+names must be unique per host**, not just per config repository - two
 projects that happen to share a literal project name are indistinguishable
 to jiji. There is also a small, real chance of a hash collision between two
 *different* project names that both rely on the default
 `network.container_cidr`/`management_cidr` ranges, since both draw their
 subnets from the same shared address space. If you expect several projects
 on one host, set distinct `network.container_cidr`/`management_cidr` values
-per project — distinct ranges make a collision impossible, not just less
+per project - distinct ranges make a collision impossible, not just less
 likely. `jiji server setup`/`jiji network setup` prints an advisory when a
 project is relying on the shared defaults, and rejects with an actionable
 error if a real collision is ever detected on a host.
@@ -3077,19 +3190,13 @@ network:
   enabled: true
   management_cidr: 198.18.0.0/16
   container_cidr: 100.64.0.0/10
-  host_prefix: 21
 ```
 
-These ranges are shared *by default* across every project that doesn't
-override them — see "Multiple projects on one server" above for why
-setting distinct ranges matters once more than a handful of projects share
-a host.
+These ranges are shared by every configuration that omits explicit overrides. `jiji init` now writes a project-directory-derived `/24` management range and `/16` container range instead. Because the generated container range occupies one of 64 slots, review it for VPN/VPC overlap and rare collisions with other projects before setup.
 
-Management addresses and per-host container subnets are deterministic. Each
-service endpoint receives a stable VIP plus two fixed backend addresses (A
-and B). A deploy always brings the candidate container up on the *inactive*
-slot; once it passes its health check, jiji atomically moves the VIP over to
-that backend.
+Management addresses and per-host container subnets are deterministic. Each service endpoint receives a stable VIP plus two fixed backend addresses (A and B). A deploy always brings the candidate container up on the *inactive* slot; once it passes its health check, jiji atomically moves the VIP over to that backend.
+
+Changing either CIDR and running `jiji network setup` performs a project-scoped migration. Jiji detaches the project.s fixed-slot containers and its attachment to the shared proxy, recreates the bridge, reconnects everything at the new planned addresses, and refreshes service mappings, proxy routes, and public ingress. Other projects and named volumes are not touched. If activation fails, Jiji restores the previous bridge and attachment addresses.
 
 #### DNS
 
@@ -3114,14 +3221,16 @@ through the host resolver. kamal-proxy is the one exception: it's given no
 (never a `.jiji` hostname), and a single resolver can't reliably answer for
 every project's `.jiji` records it might be attached to at once.
 
-#### Installed files
+#### Installed resources
 
-Every path below is rooted under `/etc/jiji/network/{slug}/` — one
+Every path below is rooted under `/etc/jiji/network/{slug}/` - one
 independent tree per project, where `{slug}` is that project's derived
 identifier (`jiji network plan` prints it). Interface/bridge/unit names
 below are similarly derived per project, never fixed literals like `jiji0`.
 
-| Component | Location |
+##### Files and services
+
+| Component | Path or unit |
 | --- | --- |
 | Selected network generation | `/etc/jiji/network/{slug}/current` |
 | Retained network generations | `/etc/jiji/network/{slug}/generations/` |
@@ -3136,15 +3245,35 @@ below are similarly derived per project, never fixed literals like `jiji0`.
 
 `{wireguard_interface}` is a separate short (`jiji` + 8 hex chars)
 identifier from `{slug}`, kept under Linux's 15-character interface name
-limit — see `jiji network plan` for the concrete value.
+limit - see `jiji network plan` for the concrete value.
+
+##### Derived network names
+
+| Resource | Name |
+| --- | --- |
+| Docker/Podman logical bridge network | `jiji-{slug}` |
+| Linux kernel bridge interface | `jijib{7 hex}` |
+| Service VIP nftables table | `jiji_service_nat_{slug_with_underscores}` |
+
+The logical engine network and kernel bridge interface are different
+resources with different names. The kernel name is shortened to stay within
+Linux's 15-character interface limit. The nftables table replaces hyphens
+in `{slug}` with underscores because unquoted nftables identifiers cannot
+contain hyphens.
+
+All three names are deterministic and per-project. `{slug}` is a sanitized,
+hash-suffixed value derived from `project:`, not just the lowercased project
+name. `jiji network plan` prints the WireGuard interface, kernel bridge
+interface, and logical bridge network. Derive the nftables name from the
+printed slug using the rule above.
 
 #### Required firewall access
 
 Allow UDP traffic between the configured server public IP addresses on each
-project's WireGuard port (`jiji network plan` prints the exact port — it's
+project's WireGuard port (`jiji network plan` prints the exact port - it's
 derived per project, somewhere in the range `51820`-`55819`, not always
 `51820`). Container subnets are routed only through WireGuard. There is no
-separate gossip or database port to open — that layer doesn't exist in this
+separate gossip or database port to open - that layer doesn't exist in this
 design.
 
 #### Verification
@@ -3153,6 +3282,10 @@ design.
 # Substitute this project's derived interface name and slug (see `jiji network plan`)
 sudo wg show <wireguard_interface>
 ip route show dev <wireguard_interface>
+docker network inspect <bridge-network>
+podman network inspect <bridge-network>
+ip link show <bridge-interface>
+sudo nft list table ip <service-nat-table>
 systemctl status jiji-network-restore-<slug> jiji-service-nat-<slug> jiji-dns-<slug>
 readlink -f /etc/jiji/network/<slug>/current
 readlink -f /etc/jiji/network/<slug>/dns-current
@@ -3169,11 +3302,12 @@ according to their engine restart policy. No coordination service, SSH
 connection, jiji command, or redeployment is required when topology hasn't
 changed.
 
-Podman keeps its bridge only while a container is attached, so jiji installs
-a minimal local `jiji-network-anchor-{slug}` container (one per project) at
-a reserved address and orders `podman-restart.service` after bridge
-restoration. `podman-restart.service` itself is host-global, gated on every
-project's restore unit via one drop-in file per project.
+Jiji's restore service materializes each Podman bridge directly before
+containers restart. `podman-restart.service` itself is host-global, gated on
+every project's restore unit via one drop-in file per project. This keeps an
+empty project network available with no auxiliary container. The drop-in
+also starts containers using the `unless-stopped` policy, which Podman 4.9's
+packaged restart unit does not start by itself.
 
 #### Repair
 
@@ -3217,7 +3351,7 @@ docker exec <container> getent hosts <project>-<service>.jiji
 #### Upgrading from a pre-isolation jiji version
 
 Per-project isolation changed the on-disk layout, WireGuard interface name,
-and bridge name — every already-provisioned host's installed generation
+and bridge name - every already-provisioned host's installed generation
 becomes incompatible with the new version, even for a host that only ever
 ran one project. There is no in-place migration: run `jiji server teardown`
 against the old layout (or manually remove `/etc/jiji/network`, the old
@@ -3282,7 +3416,7 @@ No auto namespace. Images push to
 
 ##### AWS ECR / GCP Artifact Registry
 
-Same shape as any custom registry — `type: remote` with an explicit
+Same shape as any custom registry - `type: remote` with an explicit
 `server:`. Both providers issue short-lived credentials, so `password:`
 uses the `$(...)` command-value syntax to fetch a fresh one on every run
 (runs locally through a shell, uses the trimmed stdout, 30 second timeout)
@@ -3316,14 +3450,14 @@ builder:
 ```
 
 No namespace, no credentials. Images are stored at
-`localhost:31270/project-service:version` — see "Local Registry Details"
+`localhost:31270/project-service:version` - see "Local Registry Details"
 below for how it reaches remote servers.
 
 #### Registry Password
 
 `password` can be a literal value, an ALL_CAPS secret name resolved the
 same way as everywhere else in config (from `.env`, or host environment
-with `--host-env`), or `$(a local command)` — see "AWS ECR / GCP Artifact
+with `--host-env`), or `$(a local command)` - see "AWS ECR / GCP Artifact
 Registry" above:
 
 ```yaml
@@ -3356,7 +3490,7 @@ jiji registry logout --skip-remote
 By default both commands act on the local machine, then every `-H`-selected
 server (all configured servers if `-H` is omitted). `jiji registry login`
 requires `server`, `username`, and `password` to be set.
-`jiji registry logout` only needs `server`, and is idempotent — an engine
+`jiji registry logout` only needs `server`, and is idempotent - an engine
 reporting "already logged out" counts as success. `-S`/`--services` is
 rejected for both: registry credentials belong to a host's container
 engine, not an individual service. Both commands try every requested
@@ -3379,18 +3513,18 @@ doesn't match.
 ##### How it works
 
 ```
-Local Machine (localhost:31270)
-     │
-     │ SSH reverse tunnel
-     ▼
-Remote Server (localhost:31270)
-     │
-     │ Pull image
-     ▼
-Container Deployment
+Remote Builder (127.0.0.1:<registry.port>)
+        |
+        | SSH reverse tunnel used for build and push
+        v
+Local Machine (127.0.0.1:<registry.port>)
+        |
+        | separate SSH reverse tunnel used for pull
+        v
+Deployment Server (127.0.0.1:<registry.port>)
 ```
 
-Deploying with a local registry:
+For a local build and deploy:
 
 1. Starts or reuses the loopback-bound `jiji-registry` container
 2. Builds and pushes versioned images to `localhost:31270`
@@ -3399,6 +3533,26 @@ Deploying with a local registry:
 4. Each server pulls the newly built image
 5. Tunnels are torn down after the deploy; the registry container itself
    keeps running for the next build
+
+With `builder.local: false`, there are two independent tunnel phases:
+
+1. Jiji binds `127.0.0.1:<registry.port>` on the remote builder through
+   SSH. Build and push commands on the builder use that loopback address to
+   reach the registry on the operator machine.
+2. The builder tunnel is cleaned up with the remote build session.
+3. During deployment, Jiji separately binds the configured port on each
+   selected deployment server so its engine can pull the image.
+
+The builder needs no inbound access to the operator machine, and the
+registry is never publicly exposed. The SSH servers must permit remote
+forwarding, but every forwarded listener remains loopback-only, so
+`GatewayPorts` is not required.
+
+The builder-side port is fixed. Concurrent remote builds using the same
+builder and local-registry port compete for that one loopback listener.
+Jiji reports the bind conflict and does not replace the existing listener
+or automatically select another port. Serialize those builds, or configure
+distinct registry ports for independent invocations.
 
 The registry container is labeled as jiji-managed. If `jiji-registry`
 already refers to something else, or its recorded port doesn't match your
@@ -3414,24 +3568,28 @@ guessing.
 
 ##### Troubleshooting
 
-**Remote server can't connect to `localhost:31270`:**
+**A host can't connect to `localhost:<registry.port>`:**
 
 ```bash
-# Confirm the local registry is actually running
-curl http://localhost:31270/v2/
+# Local operator: confirm the registry is running
+curl http://127.0.0.1:<registry.port>/v2/
 
-# On the remote server, confirm the tunnel is up
-netstat -tlnp | grep 31270
+# Remote builder, during a remote build
+ss -tlnp | grep <registry.port>
+
+# Deployment server, during a deployment
+ss -tlnp | grep <registry.port>
 ```
 
-Check the remote `sshd_config` allows forwarding:
+On the builder or deployment server, check that `sshd_config` allows remote
+forwarding:
 
 ```
 AllowTcpForwarding yes
 ```
 
 Jiji binds the forwarded port to the remote host's `127.0.0.1` only.
-`GatewayPorts` is not required, and shouldn't be enabled just for jiji —
+`GatewayPorts` is not required, and shouldn't be enabled just for jiji -
 it would expose the forwarded registry on non-loopback interfaces.
 
 #### Remote Registry Authentication
@@ -3468,7 +3626,7 @@ builder:
   run: jiji deploy -y
 ```
 
-Never commit `.env` files — add `.env*` to `.gitignore`, and keep separate
+Never commit `.env` files - add `.env*` to `.gitignore`, and keep separate
 tokens per environment.
 
 #### Troubleshooting
@@ -3478,15 +3636,15 @@ username matches the GitHub user/org, and the token can create packages
 under that namespace.
 
 **"GHCR requires username to be configured":** add `username` to
-`builder.registry` — GHCR and Docker Hub both need it for automatic
+`builder.registry` - GHCR and Docker Hub both need it for automatic
 namespace detection.
 
 ### Logs Reference
 
 Source: https://jiji.run/docs/reference/logs
 
-Jiji has two logging commands — `jiji service logs` for your deployed
-services, and `jiji proxy logs` for kamal-proxy — plus `jiji audit` for the
+Jiji has two logging commands - `jiji service logs` for your deployed
+services, and `jiji proxy logs` for kamal-proxy - plus `jiji audit` for the
 deployment audit trail. All three support filtering and following logs
 across multiple servers.
 
@@ -3501,7 +3659,8 @@ jiji service logs -S "web,api,worker"
 jiji service logs -S "web*"
 ```
 
-You need either `-S`/`--services` or `--container-id`.
+Omit `-S`/`--services` to tail every service. `--container-id` can't be
+combined with `-S`.
 
 ##### Options
 
@@ -3555,7 +3714,7 @@ jiji proxy logs --grep "web-app"
 ```
 
 If a service isn't receiving traffic, check proxy logs before service logs
-— it tells you whether kamal-proxy is routing to it at all.
+- it tells you whether kamal-proxy is routing to it at all.
 
 #### Common Use Cases
 
@@ -3579,12 +3738,12 @@ jiji proxy logs --grep "ssl\|tls\|certificate" --grep-options "-E"
 
 #### Best Practices
 
-- **Prefer relative `--since` values** (`30m`, `2h`) over exact timestamps —
+- **Prefer relative `--since` values** (`30m`, `2h`) over exact timestamps -
   easier to write and they stay correct as time passes.
 - **Combine `--since` and `--grep`** rather than scanning full output:
   `jiji service logs -S api --since 1h --grep "ERROR"`.
 - **Check proxy logs before service logs** when a service isn't receiving
-  traffic — it tells you whether kamal-proxy is routing to it at all.
+  traffic - it tells you whether kamal-proxy is routing to it at all.
 - **Use `-q`/`--quiet`** whenever output is being piped into `grep`, `wc`,
   or a script, so host headers don't pollute the stream.
 
@@ -3621,21 +3780,21 @@ jiji audit --follow
 | `--json` | Newline-delimited JSON output |
 | `-f, --follow` | Follow the trail as new entries land (requires exactly one host) |
 
-`-S`/`--services` is rejected — the trail is host-scoped, not
+`-S`/`--services` is rejected - the trail is host-scoped, not
 service-scoped, matching `jiji lock`. Malformed lines are skipped rather
 than treated as a hard error, so one bad write never makes the whole trail
 unreadable.
 
 Each entry is one JSON object: `timestamp`, `action`, `status`, `actor`,
-`message`, `duration_ms` — how long the operation took, captured from
+`message`, `duration_ms` - how long the operation took, captured from
 command start to the audit write (omitted on entries written before this
 field existed, or if there's no start time to measure from). Shown next to
 the action name in the default output, and included in `--json` output.
-Audit writes are best-effort — a failed write is warned about, never
+Audit writes are best-effort - a failed write is warned about, never
 propagated, so audit logging can't mask or block the actual outcome of the
 command it's recording.
 
-There's no cross-host success-rate or average-duration rollup yet — each
+There's no cross-host success-rate or average-duration rollup yet - each
 run of `jiji audit` lists raw per-host entries, one line per entry.
 
 ```bash
