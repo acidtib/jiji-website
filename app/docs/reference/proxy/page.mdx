@@ -14,15 +14,13 @@ zero-downtime deployments.
 ```mermaid
 flowchart TB
   accTitle: Kamal Proxy request path
-  accDescr: Internet traffic reaches Kamal Proxy on ports 80 and 443, then routes through a fixed backend address to the active service container.
+  accDescr: Internet traffic reaches Kamal Proxy on ports 80 and 443, then routes directly to the current Active deployment's dynamically leased address.
   internet([Internet])
   proxy["Kamal Proxy"]
-  backend["Fixed backend<br/>address + service port"]
-  active["Active service container<br/>slot A or B"]
+  active["Active deployment<br/>dynamically leased address"]
 
   internet -->|"TCP 80 / 443"| proxy
-  proxy -->|"HTTP routing"| backend
-  backend --> active
+  proxy -->|"HTTP routing"| active
 
   classDef edge fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
   class proxy edge
@@ -254,20 +252,30 @@ healthcheck:
 | `cmd_runtime` | `docker` or `podman`; defaults to `builder.engine` |
 | `interval` | Delay between health-check attempts |
 | `timeout` | Timeout for one check; defaults to `5s` during proxy activation |
-| `deploy_timeout` | Maximum time allowed for proxy activation; defaults to `30s` |
+| `deploy_timeout` | Maximum time allowed for proxy activation; defaults to `60s` |
+
+A `cmd` check works both for Jiji's own pre-activation gate (the check that
+runs before a candidate is admitted, described below) and for Kamal Proxy's
+own *ongoing* route health check, because each host's Kamal Proxy route
+only ever contains addresses running on that same host (see "Route
+Identity" above) - `cmd` execs into a container, which only ever works for
+one running on the same machine.
 
 During a deployment, Jiji:
 
-1. Starts the candidate on the inactive fixed backend address.
+1. Allocates an address lease and starts a unique Candidate deployment.
 2. Health-checks the candidate directly.
-3. Moves the service VIP to the candidate.
-4. Updates the Kamal Proxy route to the candidate's backend address.
+3. Publishes the candidate Active in the replicated catalog.
+4. Rebuilds the Kamal Proxy route on that host from its own local healthy
+   Active replicas of the service. A host with no local replica has its
+   route withdrawn rather than pointed at a replica on another host - Kamal
+   Proxy does not load-balance across hosts.
 5. Verifies that the route exists.
-6. Removes the previous container.
+6. Drains the previous deployment and releases its lease.
 
 Proxy activation has an outer process timeout five seconds longer than
 `deploy_timeout`. If route activation or verification fails, Jiji restores the
-previous VIP and proxy route, then removes the failed candidate.
+previous Active catalog record and proxy route, then removes the failed candidate.
 
 Use `--skip-proxy` with `jiji deploy` only when an external system manages
 public routing. It skips both proxy readiness and route activation.
@@ -307,13 +315,27 @@ Because the proxy is shared, `-S`/`--services` is rejected.
 
 With private networking enabled, Kamal Proxy is attached to each project's
 bridge at the deterministic proxy address shown by `jiji network plan`.
-Routes point directly to the active backend slot address and service port.
+Routes point directly to the current Active deployment's leased address and
+service port.
+
+Because each host only routes to its own local replicas (see "Route
+Identity" above), point public DNS only at servers that actually run the
+service. If `replicas` is lower than the number of servers in the eligible
+placement set (see [Configuration Reference](/docs/reference/configuration#replicas-and-placement)),
+some of those servers may have no local replica at any given moment and no
+route for the service at all - DNS pointed there gets no response rather
+than a forwarded one. A dedicated load-balancer service is the intended way
+to spread traffic across a server set larger than the running replica
+count; Kamal Proxy does not do this itself.
 
 Docker can ignore IPv4 port publishing when Jiji's routed bridge disables
 masquerading. Jiji compensates with a host-level nftables table named
-`jiji_proxy_ingress` and restores it at boot with
-`jiji-proxy-ingress-restore.service`. This workaround is host-global because
-the proxy itself is host-global. Podman does not use this workaround.
+`jiji_proxy_ingress`. Whichever co-resident project's agent currently holds
+the host-level ingress lease reapplies this table on every reconcile tick -
+there is no separate boot-time restore unit, so ingress self-heals
+continuously rather than only after a reboot. This workaround is host-global
+because the proxy itself is host-global. Podman does not use this
+workaround.
 
 ## Lifecycle and Teardown
 

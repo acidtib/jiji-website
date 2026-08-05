@@ -56,7 +56,7 @@ jiji server setup
 ```
 
 Installs the container engine and the complete private network (WireGuard,
-bridge, DNS, VIP routing) for this project on each server.
+bridge and project agent) for this project on each server.
 
 ## 3. Authenticate the Registry
 
@@ -88,11 +88,13 @@ jiji server exec "docker ps" -H web1
 
 1. **Build** - the image is built locally or on a remote builder
 2. **Push** - pushed to the configured registry
-3. **Deploy** - the new container starts on the inactive backend slot, the
+3. **Deploy** - the new container starts at a freshly leased address, the
    old one keeps serving traffic until the new one passes its health check,
-   then the VIP flips over and the old container is stopped
-4. **Cleanup** - old images are pruned according to each service's
-   `retain` setting
+   then the catalog and proxy routes admit it and the old deployment drains
+
+Old images aren't pruned automatically as part of this flow - run
+`jiji service prune` yourself (or on a schedule) to remove old image tags
+beyond each service's configured `retain` count.
 
 ## Environment-Specific Deployments
 

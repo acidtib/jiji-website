@@ -218,10 +218,14 @@ substitute them for `<wireguard_interface>`/`<slug>` below. See
 
 ### WireGuard Not Connecting
 
+`jiji-agent` brings up the WireGuard interface itself at startup and
+repairs it if torn down externally - there is no separate `wg-quick@`
+systemd unit to check.
+
 ```bash
 jiji server exec "sudo wg show <wireguard_interface>" -H server1
-jiji server exec "sudo systemctl status wg-quick@<wireguard_interface>" -H server1
-jiji server exec "sudo journalctl -u wg-quick@<wireguard_interface> -n 50" -H server1
+jiji server exec "sudo systemctl status jiji-agent-<slug>" -H server1
+jiji server exec "sudo journalctl -u jiji-agent-<slug> -n 50" -H server1
 jiji network plan
 jiji network setup
 ```
@@ -229,22 +233,49 @@ jiji network setup
 ### DNS Not Resolving
 
 ```bash
-jiji server exec "sudo systemctl status jiji-dns-<slug>" -H server1
+jiji server exec "sudo systemctl status jiji-agent-<slug>" -H server1
 jiji server exec "docker exec <container> getent hosts myapp-api.jiji" -H server1
-jiji server exec "sudo journalctl -u jiji-dns-<slug> -n 50" -H server1
-jiji network setup
+jiji server exec "sudo journalctl -u jiji-agent-<slug> -n 50" -H server1
+jiji network catalog
 ```
 
-DNS is compiled from `deploy.yml` when the network is set up - it answers
-with what's configured, not with live health data. Health checks gate the
-VIP switch separately, during deploys.
+DNS is answered from the replicated catalog and returns only reachable,
+healthy Active deployment addresses.
+
+### Container Can't Resolve External Hostnames
+
+A service that calls a normal internet API (or does anything else that
+needs a public hostname to resolve) fails with something like `Name or
+service not known` or `getaddrinfo failed`, even though `.jiji` names
+resolve fine:
+
+```bash
+jiji server exec "docker exec <container> getent hosts myapp-api.jiji" -H server1  # works
+jiji server exec "docker exec <container> getent hosts api.example.com" -H server1  # fails
+```
+
+A service container's `resolv.conf` only ever has the project's own DNS
+address as its nameserver; anything outside the `.jiji` zone is forwarded to
+`network.dns_forwarders` (default `1.1.1.1`/`8.8.8.8`, see the
+[Configuration Reference](/docs/reference/configuration#network)). If
+external lookups still fail, check that the configured forwarders are
+actually reachable from the server (not just from your workstation):
+
+```bash
+jiji server exec "sudo journalctl -u jiji-agent-<slug> -n 50" -H server1
+jiji server exec "dig @1.1.1.1 api.example.com" -H server1
+```
+
+If your network blocks outbound DNS to public resolvers, set
+`network.dns_forwarders` to a resolver the server can actually reach (a
+home router, internal DNS server, Pi-hole, etc.).
 
 ### Containers Can't Communicate
 
 ```bash
 jiji server exec "ip route show dev <wireguard_interface>" -H server1
 jiji server exec "docker exec <container> getent hosts myapp-api.jiji" -H server1
-jiji server exec "docker exec <container> ping <target-vip>" -H server1
+jiji server exec "docker exec <container> ping <leased-address>" -H server1
 ```
 
 ## Build Issues
@@ -338,6 +369,15 @@ jiji server exec "docker inspect <container>" -H server1
 jiji audit --lines 20
 jiji audit --status failed
 ```
+
+## Agent Version Mismatches
+
+### "Agent rejected request ... incompatible protocol or schema"
+
+A node is running a different jiji-agent version than the rest of the
+project's mesh. Mixed versions are rejected outright rather than partially
+joining - upgrade every host's agent (reinstall via `jiji server setup`) to
+the same version before retrying.
 
 ## Common Error Messages
 

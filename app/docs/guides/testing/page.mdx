@@ -52,8 +52,13 @@ curl http://192.168.1.87:3000
 ```bash
 jiji server exec "docker ps" -H server1
 jiji proxy logs -H server1
-jiji server exec "docker inspect myapp-api-a --format '{{.NetworkSettings.Networks}}'" -H server1
+jiji server exec "docker inspect <container> --format '{{.NetworkSettings.Networks}}'" -H server1
 ```
+
+`<container>` is the currently running deployment's container name from
+`docker ps` output above (`{project}-{service}-{first 12 hex chars of a
+deployment ID}`, a fresh name every deploy - there's no fixed `-a`/`-b`
+slot name to hardcode).
 
 ## Testing SSH and the Container Engine
 

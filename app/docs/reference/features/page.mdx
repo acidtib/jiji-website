@@ -45,7 +45,12 @@ Every built-in feature, organized by area.
 - **File & Directory Mounts** - Mount files/directories with fine grained permissions.
 - **Custom Commands** - Override container ENTRYPOINT/CMD as needed.
 - **Restart Policy** - Configure restart behavior: unless-stopped, always, on-failure, no.
-- **Network Mode** - Set custom network modes (bridge, host, etc.).
+- **Network Mode** - `bridge` (default, dynamically-leased address) is the
+  only mode that changes container networking today, alongside namespace
+  sharing below. `host`/`none` are accepted by the config schema but not
+  yet implemented - a service configured with either still gets normal
+  bridge networking.
+- **Container Namespace Sharing** - Share another service's network stack (`network_mode: service:<name>`) for VPN killswitch patterns. Redeploying the upstream automatically redeploys its dependents.
 
 ## Deployment
 
@@ -75,8 +80,9 @@ Every built-in feature, organized by area.
 ## Network
 
 - **Custom Network CIDR** - Configure management and container IP ranges per project.
-- **Network Plan Preview** - See interfaces, ports, and VIPs before touching a server.
+- **Network Plan Preview** - See interfaces, ports, subnets, and infrastructure addresses before touching a server.
 - **Per-Replica DNS Records** - Resolve every replica together, or reach one server directly.
+- **External DNS Forwarding** - Service containers resolve normal internet hostnames too, forwarded to configurable resolvers (default public DNS).
 - **Clean Teardown** - Remove a project's network, containers, and routes in one command.
 - **Multi-Project Isolation** - Independent projects share a host with zero shared network state.
 

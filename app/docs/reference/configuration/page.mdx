@@ -296,6 +296,9 @@ network:
   enabled: true
   management_cidr: "198.18.0.0/16"
   container_cidr: "100.64.0.0/10"
+  dns_forwarders:
+    - "1.1.1.1"
+    - "8.8.8.8"
 ```
 
 | Setting | Default | Description |
@@ -303,9 +306,17 @@ network:
 | `enabled` | `true` | Enable the private network |
 | `management_cidr` | `198.18.0.0/16` | WireGuard host-address pool |
 | `container_cidr` | `100.64.0.0/10` | Routed container-address pool |
+| `dns_forwarders` | `1.1.1.1`, `8.8.8.8` | Resolvers used for any query outside this project's own `.jiji` zone |
 
 The `.jiji` domain is internal-only and not customizable - service
 discovery always resolves names like `myapp-api.jiji`.
+
+Every deployed service container's `resolv.conf` only ever has this
+project's own agent as its nameserver, so a normal internet hostname (an
+API your app calls, a package registry, etc.) is resolved by forwarding the
+query to `dns_forwarders` rather than by the container also getting the
+host's own DNS servers. Override this list to point at a home router,
+Pi-hole, or other local resolver instead of the public default.
 
 `jiji init` writes smaller project-directory-derived ranges into new configurations. The table above describes the fallback values for configurations that omit these fields. Generated ranges are stable for a project directory, but should still be reviewed for overlap and rare slot collisions (see [Network Reference](/docs/reference/network)).
 
@@ -414,6 +425,24 @@ services:
 
 Image names are normalized before Docker or Podman operations. `nginx:latest` becomes `docker.io/library/nginx:latest`, and `owner/image:tag` becomes `docker.io/owner/image:tag`. Already-qualified registries such as `ghcr.io/owner/image`, `localhost:5000/image`, and private registry hostnames remain unchanged.
 
+### Replicas and placement
+
+```yaml
+services:
+  web:
+    image: nginx:latest
+    servers: [server1, server2, server3]   # eligible placement set
+    replicas: 2                             # optional, default: 1
+    placement: spread                       # optional, default: spread
+```
+
+`servers:` is the eligible placement set, not "one copy per server."
+`replicas:` is the desired total count across that whole set. `placement:
+spread` (the default) prefers distinct hosts; `placement: packed` fills
+hosts in deterministic order first. Change the runtime count without
+editing config with `jiji service scale -S web --replicas N` (or `--reset`
+to return to the configured value).
+
 ### Build configuration
 
 Use `build:` instead of `image:` to build from source (only one of the two
@@ -425,12 +454,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile   # optional, default: Dockerfile
+      target: production       # optional, build target for multi-stage Dockerfiles
       args:
-        - NODE_ENV=production
-        - VERSION=1.2.3
+        NODE_ENV: production
+        VERSION: 1.2.3
     servers:
       - server1
 ```
+
+`args:` is a mapping of build-arg names to values, not a list of
+`KEY=value` strings.
 
 `dockerfile:` is resolved relative to **`context:`**, matching Docker
 Compose - if `context: ./web`, `dockerfile: Dockerfile` (the default)
@@ -637,8 +670,44 @@ services:
   monitoring:
     image: prometheus:latest
     servers: [server1]
-    network_mode: host   # bridge (default), host, none, or a container name/ID
+    network_mode: bridge   # bridge (default) or service:<other-service-name>
 ```
+
+`"host"` and `"none"` are accepted by the schema but aren't currently
+implemented -- setting either one is silently ignored and the service still
+gets normal bridge networking. Docker's native `container:<id>` syntax is
+rejected outright by validation.
+
+**Container namespace sharing** (`network_mode: service:<name>`) -- shares
+another ("upstream") service's container network namespace instead of
+getting its own dynamically-leased address. This is the standard "VPN
+killswitch" pattern: a torrent client sharing a VPN gateway container's
+network stack, so all its traffic is forced through the tunnel.
+
+```yaml
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    servers: [server1]
+    proxy:
+      port: 8080
+      hosts: [torrents.example.com]
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    servers: [server1]
+    network_mode: service:gluetun
+```
+
+Naming the upstream via `network_mode` is itself the dependency declaration
+-- there's no separate `depends_on` field. Redeploying `gluetun` (via
+`jiji deploy`, `jiji service restart`, or `jiji service rollback`)
+automatically redeploys `qbittorrent` too, sequenced strictly after
+`gluetun`'s own deploy finishes. A dependent can't set `replicas` above 1 or
+configure its own `proxy:` block: traffic reaches it through the upstream's
+own route, at the upstream's address. The upstream itself must use
+`network_mode: bridge` (chained sharing isn't supported), and the
+dependent's `servers` must be a subset of the upstream's.
 
 ```yaml
 services:
@@ -711,6 +780,24 @@ services:
 ```
 
 Passed straight through to the container engine's `--restart` flag.
+
+### Image retention (`retain`)
+
+```yaml
+services:
+  web:
+    build:
+      context: .
+    servers: [server1]
+    retain: 5   # optional, default: 3
+```
+
+Only relevant for build-configured services (a static `image:` service is
+never pruned). Sets how many recent image tags `jiji service prune` keeps
+per server before removing the rest, as long as they aren't still
+referenced by a running container. Pruning is a separate, manually-invoked
+step - `jiji deploy` never prunes images itself. Run `jiji service prune`
+(or `jiji service prune --retain N` to override this value for one run).
 
 ## Complete example
 

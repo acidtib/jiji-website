@@ -1,282 +1,186 @@
 export const metadata = {
-  description: 'Reference for Jiji WireGuard networking, private DNS, service addressing, and firewall behavior.',
+  description: 'Reference for Jiji WireGuard networking, distributed DNS, dynamic service addressing, and recovery behavior.',
   alternates: { canonical: '/docs/reference/network' },
   openGraph: { url: '/docs/reference/network', images: ['/docs/opengraph-image.png'] }
 }
 
 # Network Reference
 
-Jiji builds a private network between your servers and works it all out up
-front from `deploy.yml`, nothing runs to coordinate it at runtime. WireGuard
-carries encrypted host-to-host traffic, each host owns a routed container
-subnet, `dnsmasq` serves compiled `.jiji` records, and nftables maps stable
-per-service VIPs to whichever backend container is currently active.
-
-## Overview
+Jiji creates a project-isolated WireGuard mesh. Each server owns a routed
+container subnet and runs a per-project agent. Agents replicate membership,
+desired placement, the service catalog, and DNS data directly over the mesh.
+There is no central coordinator.
 
 ```mermaid
 flowchart LR
-  accTitle: Private WireGuard network
-  accDescr: Two servers connect through an encrypted WireGuard tunnel. Each server runs a service container with a stable address and dnsmasq for private jiji records.
-  subgraph mesh["Private network · WireGuard mesh"]
-    direction LR
-    subgraph server0["Server 0 · management IP 0"]
-      direction TB
-      app0["Service container<br/>stable VIP + active slot"]
-      dns0["dnsmasq<br/>.jiji records"]
-    end
+  accTitle: Distributed Jiji service network
+  accDescr: Two project agents replicate membership, desired placement, and the service catalog over WireGuard. Each agent answers DNS from the same converged catalog, while service containers use dynamically leased addresses.
 
-    subgraph server1["Server 1 · management IP 1"]
-      direction TB
-      app1["Service container<br/>stable VIP + active slot"]
-      dns1["dnsmasq<br/>.jiji records"]
-    end
-
-    server0 <-->|"Encrypted WireGuard tunnel"| server1
+  subgraph a["node-a"]
+    agentA["Jiji agent<br/>DNS + catalog"]
+    appA["web replica<br/>dynamic lease"]
+    proxyA["kamal-proxy<br/>all healthy targets"]
   end
 
-  classDef service fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
-  class app0,app1 service
+  subgraph b["node-b"]
+    agentB["Jiji agent<br/>DNS + catalog"]
+    appB["web replica<br/>dynamic lease"]
+    proxyB["kamal-proxy<br/>all healthy targets"]
+  end
+
+  agentA <-->|"WireGuard replication"| agentB
+  appA --> agentA
+  appB --> agentB
+  proxyA --> appA
+  proxyA --> appB
+  proxyB --> appA
+  proxyB --> appB
 ```
 
-## Multiple projects on one server
+## Project isolation
 
-Every piece of this network layer is **per-project isolated**, computed
-purely from `project:` in `deploy.yml` - there is no shared registry and no
-coordination between projects. Two independent projects (different
-`project:` names, different `deploy.yml` files) can run `jiji server setup`
-against the same physical server, and each gets its own:
+Every project derives its own WireGuard interface, UDP port, bridge, agent
+unit, state directory, Unix socket, DNS address, and replication ports from
+`project:`. Multiple projects can share a physical server. Kamal-proxy is the
+one host-global component and is attached to each project bridge that owns
+routes on that host.
 
-- WireGuard interface, port, and keypair
-- container-engine bridge network and subnet
-- `dnsmasq` resolver process
-- compiled state tree under `/etc/jiji/network/{slug}/`
-- systemd units
+Default address pools are shared across projects. Project hashing makes normal
+collisions unlikely, but it is not a global allocator. Configure explicit
+non-overlapping CIDRs when independent projects must share hosts with a hard
+guarantee.
 
-`{slug}` is a short, deterministic, hash-suffixed identifier derived from
-`project:` - run `jiji network plan` to see the exact value for your
-project. The one intentionally shared, multi-tenant component is
-kamal-proxy: one container per host, attached to every project's bridge that
-has active routes on that host, with routes namespaced per project.
+## Addressing
 
-Because identity is purely name-derived with no registry, **`project:`
-names must be unique per host**, not just per config repository - two
-projects that happen to share a literal project name are indistinguishable
-to jiji. There is also a small, real chance of a hash collision between two
-*different* project names that both rely on the default
-`network.container_cidr`/`management_cidr` ranges, since both draw their
-subnets from the same shared address space. If you expect several projects
-on one host, set distinct `network.container_cidr`/`management_cidr` values
-per project - distinct ranges make a collision impossible, not just less
-likely. `jiji server setup`/`jiji network setup` prints an advisory when a
-project is relying on the shared defaults, and rejects with an actionable
-error if a real collision is ever detected on a host.
+`jiji network plan` deterministically assigns:
 
-## Commands
+- one management `/32` per server;
+- one routed `/21` container subnet per server;
+- bridge gateway, agent DNS, and kamal-proxy infrastructure addresses.
 
-```bash
-# Print the deterministic plan without changing hosts
-jiji network plan
+Service addresses are not compiled into the plan. The owner agent allocates a
+durable address lease when a deployment is created. Infrastructure addresses,
+network, and broadcast addresses are reserved. Released leases enter
+quarantine before reuse.
 
-# Install, update, or repair the complete network
-jiji network setup
+Each replacement receives a unique deployment ID and can coexist with the
+current Active deployment during a health check.
 
-# The full server setup includes the same network workflow
-jiji server setup
-```
+A service configured with `network_mode: service:<upstream>` is the one
+exception: it never allocates an address of its own, and instead shares
+whichever container its upstream is currently running as (`--network
+container:<name>`, the standard VPN-killswitch/sidecar pattern). See the
+[Configuration Reference](/docs/reference/configuration#container-runtime-options)
+for the full dependency/cascade behavior.
 
-`-H`/`--hosts` limits which hosts are changed, but planning always uses the
-complete configured topology.
+## Distributed DNS
 
-## Default address ranges
+Every project agent is authoritative for:
 
-```yaml
-network:
-  enabled: true
-  management_cidr: 198.18.0.0/16
-  container_cidr: 100.64.0.0/10
-```
+- `{project}-{service}.jiji`, all reachable healthy Active replicas;
+- `{project}-{service}-{server}.jiji`, healthy Active replicas owned by one
+  server.
 
-These ranges are shared by every configuration that omits explicit overrides. `jiji init` now writes a project-directory-derived `/24` management range and `/16` container range instead. Because the generated container range occupies one of 64 slots, review it for VPN/VPC overlap and rare collisions with other projects before setup.
+Agents answer UDP and TCP DNS on the project's DNS address. Candidate,
+Draining, Stopped, Tombstoned, unhealthy, and unreachable-owner records are
+excluded. A new replica appears after its owner publishes it Active; no
+cluster-wide network generation or DNS reload is required.
 
-Management addresses and per-host container subnets are deterministic. Each service endpoint receives a stable VIP plus two fixed backend addresses (A and B). A deploy always brings the candidate container up on the *inactive* slot; once it passes its health check, jiji atomically moves the VIP over to that backend.
+Jiji-managed service containers receive their project DNS address explicitly.
+Docker and Podman IPAM do not understand Jiji's infrastructure reservations,
+so containers attached manually to a Jiji bridge should always use an explicit
+address.
 
-Changing either CIDR and running `jiji network setup` performs a project-scoped migration. Jiji detaches the project.s fixed-slot containers and its attachment to the shared proxy, recreates the bridge, reconnects everything at the new planned addresses, and refreshes service mappings, proxy routes, and public ingress. Other projects and named volumes are not touched. If activation fails, Jiji restores the previous bridge and attachment addresses.
+A service container's `resolv.conf` has only the project's own DNS address
+as its nameserver, so any query outside the `.jiji` zone (a normal internet
+hostname an application needs, such as a third-party API) is forwarded to
+`network.dns_forwarders` (default `1.1.1.1`/`8.8.8.8`, see the
+[Configuration Reference](/docs/reference/configuration#network)) rather
+than answered locally. The first forwarder to answer wins; if every
+configured forwarder is unreachable the query fails with `SERVFAIL`, not a
+false `NXDOMAIN`.
 
-## DNS
+## Membership and replication
 
-The aggregate name `{project}-{service}.jiji` resolves to the stable VIPs
-for all configured replicas of a service. The name
-`{project}-{service}-{server}.jiji` resolves only to that one server's
-replica VIP. Both forms are compiled directly from `deploy.yml`, so they
-show what's configured rather than what's currently healthy.
+Membership records are authority-signed. Catalog and desired-placement records
+are signed by active member nodes. Agents exchange durable operations directly
+with authenticated peers and converge after duplicate, reordered, or delayed
+delivery.
 
-```bash
-# All replicas of the api service
-docker exec <container> getent hosts myapp-api.jiji
+A filtered `jiji server setup -H new-node` connects the new node plus one
+reachable seed for enrollment. Existing offline peers are not required. Adding
+or removing actual servers changes the mesh; deploying or scaling services
+does not.
 
-# Just the replica on server "web1"
-docker exec <container> getent hosts myapp-api-web1.jiji
-```
+WireGuard UDP must be allowed between server public addresses on the
+project-specific port shown by `jiji network plan`.
 
-Containers are started with their own project's `dnsmasq` resolver, the
-`jiji` search domain, and `ndots:1`. Queries outside `.jiji` are forwarded
-through the host resolver. kamal-proxy is the one exception: it's given no
-`--dns` at all, since its routing targets are raw backend IP addresses
-(never a `.jiji` hostname), and a single resolver can't reliably answer for
-every project's `.jiji` records it might be attached to at once.
+## Service placement and scale
 
-With Podman, the container queries Aardvark at the bridge gateway. Aardvark
-then forwards that container's requests to the project's dnsmasq address.
-Netavark can remove dnsmasq's secondary bridge address while activating a
-container, so jiji restores the address after every jiji-managed Podman
-container start or network attachment. The same repair runs after containers
-restart during boot.
+`services.*.servers` is the eligible host set. `replicas` is the total desired
+count, not a count per host. `placement: spread` balances replicas;
+`placement: packed` chooses hosts deterministically.
 
-## Installed resources
+`jiji service scale` writes signed replicated desired placement before it
+changes containers. Scale-up and scale-down are resumable. Scale-to-zero
+withdraws DNS records and proxy routes and retires every deployment.
 
-Every path below is rooted under `/etc/jiji/network/{slug}/` - one
-independent tree per project, where `{slug}` is that project's derived
-identifier (`jiji network plan` prints it). Interface/bridge/unit names
-below are similarly derived per project, never fixed literals like `jiji0`.
+## Proxy routing
 
-### Files and services
+Each ingress route is rebuilt from healthy Active catalog records and may
+contain local and remote targets. Jiji reconciles the route on every eligible
+ingress owner. A deployment is admitted only after direct health checks pass;
+proxy reconciliation failure rolls back the candidate and keeps the previous
+Active deployment serving.
 
-| Component | Path or unit |
-| --- | --- |
-| Selected network generation | `/etc/jiji/network/{slug}/current` |
-| Retained network generations | `/etc/jiji/network/{slug}/generations/` |
-| WireGuard config | `/etc/wireguard/{wireguard_interface}.conf` |
-| Selected DNS generation | `/etc/jiji/network/{slug}/dns-current` |
-| Retained DNS generations | `/etc/jiji/network/{slug}/dns-generations/` |
-| Selected service VIP mapping | `/etc/jiji/network/{slug}/service-nat-current` |
-| WireGuard service | `wg-quick@{wireguard_interface}.service` |
-| Bridge restoration service | `jiji-network-restore-{slug}.service` |
-| VIP restoration service | `jiji-service-nat-{slug}.service` |
-| Static DNS service | `jiji-dns-{slug}.service` |
+## Recovery
 
-`{wireguard_interface}` is a separate short (`jiji` + 8 hex chars)
-identifier from `{slug}`, kept under Linux's 15-character interface name
-limit - see `jiji network plan` for the concrete value.
+Agent state is durable. After an agent or server restart, membership, desired
+placement, leases, and catalog history are loaded before replication catches
+up. DNS returns persisted healthy records immediately, with reachability used
+as a reversible eligibility overlay.
 
-### Derived network names
+Explicit tombstones, not timeouts, remove durable membership or catalog
+ownership. A temporary partition can suppress unreachable replicas from DNS
+without deleting them.
 
-| Resource | Name |
-| --- | --- |
-| Docker/Podman logical bridge network | `jiji-{slug}` |
-| Linux kernel bridge interface | `jijib{7 hex}` |
-| Service VIP nftables table | `jiji_service_nat_{slug_with_underscores}` |
+## Important paths and units
 
-The logical engine network and kernel bridge interface are different
-resources with different names. The kernel name is shortened to stay within
-Linux's 15-character interface limit. The nftables table replaces hyphens
-in `{slug}` with underscores because unquoted nftables identifiers cannot
-contain hyphens.
+For project slug `{slug}`:
 
-All three names are deterministic and per-project. `{slug}` is a sanitized,
-hash-suffixed value derived from `project:`, not just the lowercased project
-name. `jiji network plan` prints the WireGuard interface, kernel bridge
-interface, and logical bridge network. Derive the nftables name from the
-printed slug using the rule above.
+| Resource | Location |
+|---|---|
+| Mesh generations | `/etc/jiji/network/{slug}/generations/` |
+| Current mesh | `/etc/jiji/network/{slug}/current` |
+| WireGuard config | `/etc/wireguard/{interface}.conf` |
+| Agent root | `/etc/jiji/agent/{slug}/` |
+| Agent state | `/etc/jiji/agent/{slug}/state/` |
+| Agent socket | `/etc/jiji/agent/{slug}/agent.sock` |
+| Agent unit | `jiji-agent-{slug}.service` |
 
-## Required firewall access
+`jiji-agent-{slug}.service` is the only Jiji-authored systemd unit installed
+per project. The agent brings up its own WireGuard interface, bridge
+network, DNS binding, and proxy attachment at startup and repairs them if
+torn down externally -- there is no separate restore/bring-up unit, and
+nothing needs to reload when a peer or address changes.
 
-Allow UDP traffic between the configured server public IP addresses on each
-project's WireGuard port (`jiji network plan` prints the exact port - it's
-derived per project, somewhere in the range `51820`-`55819`, not always
-`51820`). Container subnets are routed only through WireGuard. There is no
-separate gossip or database port to open - that layer doesn't exist in this
-design.
+Network setup removes exact legacy `jiji-dns-{slug}`,
+`jiji-service-nat-{slug}`, and (from installations predating agent-native
+bring-up) `jiji-network-restore-{slug}` artifacts when upgrading an older
+installation. They are not part of the current runtime.
 
 ## Verification
 
 ```bash
-# Substitute this project's derived interface name and slug (see `jiji network plan`)
-sudo wg show <wireguard_interface>
-ip route show dev <wireguard_interface>
-docker network inspect <bridge-network>
-podman network inspect <bridge-network>
-ip link show <bridge-interface>
-sudo nft list table ip <service-nat-table>
-systemctl status jiji-network-restore-<slug> jiji-service-nat-<slug> jiji-dns-<slug>
-readlink -f /etc/jiji/network/<slug>/current
-readlink -f /etc/jiji/network/<slug>/dns-current
-docker exec <container> getent hosts <project>-<service>.jiji
+jiji network plan
+jiji network catalog
+jiji network diagnostics
+jiji server exec -- 'wg show'
+jiji server exec -- 'systemctl status jiji-agent-<slug>'
 ```
 
-Use `podman exec` instead of `docker exec` when Podman is selected.
-
-## Reboot behavior
-
-WireGuard and the jiji systemd units restore the selected local generations
-on their own. Containers restart with their assigned backend addresses
-according to their engine restart policy. No coordination service, SSH
-connection, jiji command, or redeployment is required when topology hasn't
-changed.
-
-Jiji's restore service materializes each Podman bridge directly before
-containers restart. `podman-restart.service` itself is host-global, gated on
-every project's restore unit via one drop-in file per project. This keeps an
-empty project network available with no auxiliary container. After Podman
-starts the containers, the drop-in restores the project's secondary dnsmasq
-address in case Netavark removed it during bridge activation. The drop-in also
-starts containers using the `unless-stopped` policy, which Podman 4.9's
-packaged restart unit does not start by itself.
-
-## Repair
-
-Run `jiji network setup`. It stages and validates a complete generation on
-every selected host before activation. If activation or verification fails,
-all attempted hosts roll back to their previous retained generations.
-Repairing one project's network never touches another project's tree,
-units, or bridge on a shared host.
-
-`jiji deploy` checks every configured host before making deployment changes.
-When it detects a stale generation, it automatically applies the complete
-network plan to the full cluster using the same transactional setup path.
-The explicit command remains available for network-only maintenance.
-
-## Troubleshooting
-
-### WireGuard not connecting
+From a server, query its planned DNS address:
 
 ```bash
-jiji server exec "sudo wg show <wireguard_interface>"
-jiji server exec "sudo systemctl status wg-quick@<wireguard_interface>"
-jiji server exec "sudo journalctl -u wg-quick@<wireguard_interface> --since '1 hour ago'"
+dig +short @<dns-address> myproject-web.jiji
 ```
-
-### DNS not resolving
-
-```bash
-jiji server exec "sudo systemctl status jiji-dns-<slug>"
-jiji server exec "sudo journalctl -u jiji-dns-<slug> -f"
-docker exec <container> getent hosts <project>-<service>.jiji
-```
-
-With Podman, verify both the project dnsmasq address and resolution through
-the container's Aardvark resolver:
-
-```bash
-jiji server exec "ip -4 address show dev <bridge-interface>"
-jiji server exec "podman exec <container> getent hosts <project>-<service>.jiji"
-jiji server exec "podman exec <container> getent hosts example.com"
-```
-
-### Containers can't reach each other
-
-```bash
-jiji server exec "ip route show dev <wireguard_interface>"
-docker exec <container> ip route
-docker exec <container> getent hosts <project>-<service>.jiji
-```
-
-## Upgrading from a pre-isolation jiji version
-
-Per-project isolation changed the on-disk layout, WireGuard interface name,
-and bridge name - every already-provisioned host's installed generation
-becomes incompatible with the new version, even for a host that only ever
-ran one project. There is no in-place migration: run `jiji server teardown`
-against the old layout (or manually remove `/etc/jiji/network`, the old
-`jiji0` WireGuard interface, and the old `jiji` bridge network), then run
-`jiji server setup` again on the new version.

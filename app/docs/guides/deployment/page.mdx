@@ -8,30 +8,29 @@ export const metadata = {
 
 ## Zero-Downtime Deployment
 
-Every deploy targets two fixed backend addresses per service endpoint
-(slots A and B) plus one stable VIP. The candidate always starts on
-whichever slot is currently inactive, so the running container never has to
-be renamed or interrupted:
+Every logical replica has a stable replica ID. Each replacement gets a unique
+deployment ID and a durable address lease. The candidate starts beside the
+current Active deployment, so the running container is not interrupted:
 
 ```mermaid
 flowchart TB
   accTitle: Zero-downtime deployment decision flow
   accDescr: Jiji starts a candidate beside the active container. A healthy candidate receives traffic before the old container is removed, while a failed candidate is rolled back without affecting the active container.
-  active["Active slot<br/>keeps serving"]
-  candidate["Candidate<br/>starts on inactive slot"]
+  active["Active deployment<br/>keeps serving"]
+  candidate["Candidate deployment<br/>gets an address lease"]
   health{"Healthy?"}
-  switch["Switch VIP<br/>nftables DNAT"]
-  routes["Verify<br/>proxy routes"]
-  cleanup["Remove<br/>old container"]
-  rollback["Roll back candidate<br/>active slot is untouched"]
+  catalog["Publish Active<br/>in replicated catalog"]
+  routes["Reconcile DNS<br/>and proxy targets"]
+  cleanup["Drain old deployment<br/>and release its lease"]
+  rollback["Remove candidate<br/>Active deployment is untouched"]
 
   active --> candidate --> health
-  health -->|"yes"| switch --> routes --> cleanup
+  health -->|"yes"| catalog --> routes --> cleanup
   health -->|"no"| rollback
 
   classDef success fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
   classDef failure fill:#b45309,color:#fff,stroke:#92400e,stroke-width:2px
-  class switch success
+  class catalog success
   class rollback failure
 ```
 
@@ -73,8 +72,8 @@ services:
         deploy_timeout: 60s
 ```
 
-The health check always runs directly against the candidate's own backend
-address, never through the VIP or kamal-proxy - so a healthy result really
+The health check always runs directly against the candidate's leased
+address, never through DNS or kamal-proxy, so a healthy result really
 means the new container is ready, not just that routing happens to work.
 
 ## Deployment Strategies
@@ -128,8 +127,9 @@ jiji service rollback --version v1.2.2 -S api
 jiji service rollback --version v1.2.2 -S api -H server1.example.com
 ```
 
-This runs the same zero-downtime slot cycle as `jiji deploy` - health
-check, VIP cutover, old-slot cleanup - targeting the image tag you pass
+This runs the same catalog-driven replacement as `jiji deploy`: candidate
+lease, health check, catalog admission, proxy reconciliation, and old
+deployment cleanup. It targets the image tag you pass
 instead of building a new one. For a `build:`-configured service it
 resolves that tag from `builder.registry` directly (no rebuild, trusting a
 prior `jiji build`/`jiji deploy --build` already pushed it); for a static
@@ -138,23 +138,55 @@ prior `jiji build`/`jiji deploy --build` already pushed it); for a static
 
 ## Deployment Locks
 
+`jiji deploy`, `jiji service restart`, and `jiji service rollback`
+automatically lock only the replica and ingress owners they mutate. They
+release their own locks after success or failure. An unrelated offline host
+does not block a targeted service deployment.
+
+`jiji lock acquire`/`release` are a separate, whole-project lock used
+around network-layer maintenance (`jiji network setup`/`backup`/`restore`/
+`import`/`compact`) - acquiring it does **not** block a deploy, restart, or
+rollback, since those use the finer-grained per-replica lock above instead:
+
 ```bash
-jiji lock acquire "Deploying v1.2.3"
-jiji lock acquire "Deploying v1.2.3" --timeout 300   # seconds to wait (default 300)
-jiji lock acquire "Taking over stuck deployment" --force
+jiji lock acquire "Network maintenance window"
+jiji lock acquire "Network maintenance window" --timeout 300   # seconds to wait (default 300)
+jiji lock acquire "Taking over stuck network maintenance" --force
 
 jiji lock status
 jiji lock status --json
 jiji lock show
 
-jiji lock release
+jiji lock release                          # release the project lock
+jiji lock release --replica <replica-id>   # release one stuck replica lock instead
 ```
 
-`jiji deploy`, `jiji service restart`, and `jiji service rollback`
-automatically acquire the project lock across every configured server
-before network reconciliation. They release their own lock after success or
-failure. If another operation holds any project lock, the command stops
-before making changes.
+## Scaling
+
+Set the configured total replica count with `replicas:` and choose
+`placement: spread` or `packed`. `servers:` is the eligible placement set:
+
+```yaml
+services:
+  web:
+    image: nginx:alpine
+    servers: [app1, app2, app3]
+    replicas: 3
+    placement: spread
+```
+
+Change the replicated runtime desired count without editing configuration:
+
+```bash
+jiji service scale -S web --replicas 5
+jiji service scale -S web --replicas 0
+jiji service scale -S web --reset
+jiji service scale -S web --replicas 3 --dry-run
+```
+
+Scale commits signed desired placement first, then adds or retires replicas.
+If an owner is offline, retry the same command after it returns. Healthy
+catalog records keep serving throughout partial progress.
 
 The explicit commands above are for maintenance windows or intentionally
 blocking deployments. Normal CI usage does not need manual lock management:
@@ -199,6 +231,34 @@ services:
   system-tool:
     privileged: true
 ```
+
+## VPN Killswitch (Container Namespace Sharing)
+
+`network_mode: service:<name>` shares another ("upstream") service's
+container network namespace instead of giving the dependent its own
+address -- the standard way to force one container's traffic through
+another's tunnel, with no leak path if the upstream isn't running.
+
+```yaml
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    cap_add:
+      - NET_ADMIN
+    proxy:
+      port: 8080
+      hosts: [torrents.example.com]
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    network_mode: service:gluetun
+```
+
+Naming `gluetun` in `qbittorrent`'s `network_mode` is itself the dependency
+declaration -- redeploying `gluetun` automatically redeploys `qbittorrent`
+too, sequenced after `gluetun`'s own deploy finishes. See the
+[Configuration Reference](/docs/reference/configuration#container-runtime-options)
+for the full behavior and constraints.
 
 ## Multi-Architecture Support
 

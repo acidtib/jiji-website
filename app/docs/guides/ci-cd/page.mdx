@@ -160,18 +160,24 @@ echo "ssh-ed25519 AAAA... deploy@ci" >> ~/.ssh/authorized_keys
 
 ### Deployment locks
 
-`jiji deploy` automatically acquires the project lock across every
-configured server before network reconciliation and releases it when the
-command finishes. A normal pipeline only needs the deploy step:
+`jiji deploy` locks only the specific logical replicas it's about to
+touch (plus a shared proxy lock on any ingress host involved), not the
+whole project - an unrelated offline host or a different replica never
+blocks a targeted deploy. Locks are released on both the success and
+failure path. A normal pipeline only needs the deploy step:
 
 ```yaml
 - name: Deploy
   run: jiji deploy --build -y
 ```
 
-Use `jiji lock acquire` separately when you need a maintenance window that
-blocks deploy, service restart, and service rollback operations.
-```
+`jiji lock acquire` is a separate, whole-project maintenance lock used
+by `jiji network setup`/`backup`/`restore`/`import`/`compact`. It does
+**not** block `jiji deploy`, `service restart`, or `service rollback` -
+those use a different, per-replica lock scope entirely. Use `jiji lock
+acquire` to reserve a window around network-layer maintenance, not to gate
+deploys; if a specific replica's lock is stuck, clear it directly with
+`jiji lock release --replica <id>` instead.
 
 ### Tag every deployment
 
