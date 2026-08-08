@@ -7,14 +7,14 @@ export const metadata = {
 # Logs Reference
 
 Jiji has two logging commands - `jiji service logs` for your deployed
-services, and `jiji proxy logs` for kamal-proxy - plus `jiji audit` for the
+services, and `jiji proxy logs` for jiji-proxy - plus `jiji audit` for the
 deployment audit trail. All three support filtering and following logs
 across multiple servers.
 
 ## Service Logs
 
 `jiji service logs` tails the Active catalog deployment for each
-selected endpoint.
+selected replica.
 
 ```bash
 jiji service logs -S web
@@ -55,7 +55,7 @@ jiji service logs -S web -q | grep -i warning | wc -l
 
 ## Proxy Logs
 
-`jiji proxy logs` reads from the kamal-proxy container that handles
+`jiji proxy logs` reads from the jiji-proxy container that handles
 HTTP/HTTPS routing.
 
 ```bash
@@ -77,7 +77,7 @@ jiji proxy logs --grep "web-app"
 ```
 
 If a service isn't receiving traffic, check proxy logs before service logs
-- it tells you whether kamal-proxy is routing to it at all.
+- it tells you whether jiji-proxy is routing to it at all.
 
 ## Common Use Cases
 
@@ -106,7 +106,7 @@ jiji proxy logs --grep "ssl\|tls\|certificate" --grep-options "-E"
 - **Combine `--since` and `--grep`** rather than scanning full output:
   `jiji service logs -S api --since 1h --grep "ERROR"`.
 - **Check proxy logs before service logs** when a service isn't receiving
-  traffic - it tells you whether kamal-proxy is routing to it at all.
+  traffic - it tells you whether jiji-proxy is routing to it at all.
 - **Use `-q`/`--quiet`** whenever output is being piped into `grep`, `wc`,
   or a script, so host headers don't pollute the stream.
 

@@ -14,7 +14,7 @@ These flags are accepted by every command:
 |--------|-------------|
 | `-v, --verbose` | Detailed logging output |
 | `-q, --quiet` | Minimal output (suppress host headers and extra messages) |
-| `-c, --config-file <path>` | Path to config file |
+| `-c, --config <path>` | Path to config file |
 | `-e, --environment <env>` | Use environment-specific config (e.g. `staging` -> `jiji.staging.yml`) |
 | `--version <version>` | Run against a specific app version (e.g. `jiji deploy --version 1.2.3`) |
 | `-H, --hosts <pattern>` | Target specific hosts instead of all (comma-separated, supports wildcards) |
@@ -91,7 +91,7 @@ jiji deploy -y                   # Skip the confirmation prompt
 |--------|-------------|
 | `--build` | Build images before deploying |
 | `--no-cache` | Build without cache (only relevant with `--build`) |
-| `--skip-proxy` | Skip kamal-proxy route activation |
+| `--skip-proxy` | Skip jiji-proxy route activation |
 | `-y`, `--yes` | Auto-confirm the deployment plan; required when running non-interactively (e.g. CI/CD) |
 | `--lock-timeout <SECONDS>` | Wait up to this many seconds for an existing lock to clear (default: 300) |
 | `--force-lock` | Replace an existing deployment lock instead of waiting for it |
@@ -121,14 +121,45 @@ are upgraded.
 
 ```bash
 jiji server setup
-jiji server setup -H "web*"  # Only web servers
+jiji server setup -H "web*"          # Only web servers
+jiji server setup --rotate-key       # Force a fresh WireGuard keypair on the targeted hosts
+jiji server setup --import           # Seed pre-existing containers as historical catalog history
+jiji server setup --import-dry-run   # Preview --import without committing anything
 ```
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Skip the confirmation prompt |
+| `--rotate-key` | Force a fresh WireGuard keypair on the targeted hosts, fencing out their old identity |
+| `--import` | Once a targeted host's agent is running, assess it and import any pre-existing container as historical (`Stopped`) catalog history |
+| `--import-dry-run` | Preview `--import` without committing anything |
 
 On Debian and Ubuntu, jiji installs a pinned
 [`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
 5.8.4 bundle. This is an unofficial, single-maintainer distribution, so it
 has a different supply-chain trust boundary from distro packages. Jiji
 verifies the pinned archive checksum before installing it.
+
+Every run also reconciles membership: it compares each target's freshly
+observed WireGuard public key and endpoint against its last known record.
+Endpoint-only drift bumps the record's revision, while a changed key fences
+a new owner epoch. Any server still marked active in the gathered mesh view
+but no longer listed in `servers:` is tombstoned. Both are gated by
+confirmation unless `-y`/`--yes` is passed, and the command bails with an
+actionable message instead of hanging when there is no TTY and no `--yes`.
+
+`--import`, once each targeted host's agent is up, first prints a read-only
+assessment (legacy runtime, enrollment, catalog count, importable, migrated,
+or orphaned) and then one-way seeds any pre-existing container as
+historical (`Stopped`) catalog history. It never marks anything active,
+never allocates an address lease, and never touches a replica that already
+has a live catalog record: a normal `jiji deploy` remains the only way to
+actually bring a service up on the dynamic-lease runtime. `--import-dry-run`
+prints the same plan without committing it.
+
+There is no standalone `assess`, `import`, `decommission`,
+`update-endpoint`, `rotate-key`, or `replace` command. `jiji server setup`
+absorbs all of it.
 
 #### Agent installation
 
@@ -218,36 +249,6 @@ jiji network setup -H web1
 
 Idempotent, with rollback on partial failure. If configured CIDRs change, setup migrates the project bridge, reattaches its service containers and the shared proxy at their newly planned addresses, and refreshes proxy ingress and routes. A failed activation restores the previous bridge and addresses. `jiji server setup` and `jiji deploy` both call this same path when a host's network is missing or stale.
 
-### `jiji network assess`
-
-Read-only comparison of a host's current resources against the distributed control plane: labeled containers, mesh membership, catalog records, and address capacity.
-
-```bash
-jiji network assess
-jiji network assess -H web1
-```
-
-Never mutates anything. Reports, per host, any old container found with no catalog record yet (a candidate for `jiji network import`), any already-migrated service, and any container that isn't eligible for import at all (its service isn't configured for that server). Run this before deciding between a clean `jiji server teardown` + `jiji server setup`, or a one-way `jiji network import`.
-
-### `jiji network import`
-
-One-way seeding of catalog history from a stopped old installation, so `jiji service`/`jiji network catalog` show continuity instead of a blank slate.
-
-```bash
-jiji network import --dry-run   # Preview what would be imported
-jiji network import
-jiji network import -y          # Skip the confirmation prompt
-```
-
-An operator convenience, not a compatibility layer: it only ever writes historical `Stopped` catalog records for containers it discovers with no live catalog entry. It never marks anything active, never allocates an address lease, and never touches a replica that already has a live catalog record — a normal `jiji deploy` remains the only way to actually bring a service up on the current dynamic-lease runtime. Requires the target host's `jiji-agent` to already be running (run `jiji server setup` first). Safely retryable: re-running after an interruption only fills in what's still missing.
-
-| Option | Description |
-|--------|-------------|
-| `--dry-run` | Print what would be imported without committing anything |
-| `-y, --yes` | Skip the confirmation prompt |
-
-There is no downgrade path back to a pre-agent installation after cutover — restoring an older state means restoring a `jiji network backup` taken from this control plane, not resurrecting the old runtime. A node running an incompatible protocol or schema version is always rejected outright rather than partially joining the mesh.
-
 ### `jiji network catalog`
 
 Read-only inspection of a selected host's locally replicated service catalog.
@@ -318,54 +319,10 @@ jiji network recover --input backup.enc --passphrase-file passphrase.txt -y
 | `--passphrase-file <PATH>` | File containing the encryption passphrase |
 | `-y, --yes` | Confirm the destructive epoch advancement |
 
-### `jiji network decommission`
-
-Publish an authenticated tombstone for a node through one reachable seed, removing it from the mesh.
-
-```bash
-jiji network decommission web2 --seed web1
-```
-
-### `jiji network update-endpoint`
-
-Publish a node's changed public endpoint (IP or port) through one reachable seed.
-
-```bash
-jiji network update-endpoint web1 --endpoint 203.0.113.10:51900 --seed web2
-```
-
-### `jiji network rotate-key`
-
-Rotate a node's WireGuard transport key through one reachable seed.
-
-```bash
-jiji network rotate-key web1 --public-key <new-key> --endpoint 203.0.113.10:51900 --seed web2
-```
-
-### `jiji network replace`
-
-Fence and replace a node's identity through one reachable seed - use when a host was rebuilt and needs a fresh identity under the same server name.
-
-```bash
-jiji network replace web1 --public-key <new-key> --endpoint 203.0.113.10:51900 --seed web2
-```
-
-### `jiji network rotate-authority`
-
-Rotate the project's membership signing authority across every enrolled host.
-
-```bash
-jiji network rotate-authority
-jiji network rotate-authority --finalize   # Retire the previous signer once every host has accepted the new authority
-```
-
-| Option | Description |
-|--------|-------------|
-| `--finalize` | Retire the previous private signer after every host has accepted the new authority |
-
-`decommission`, `update-endpoint`, `rotate-key`, `replace`, and
-`rotate-authority` all publish signed membership changes through one
-reachable seed host rather than requiring every host to be online at once.
+Node decommissioning, endpoint updates, and key rotation are not separate
+commands: re-running `jiji server setup` handles all of it. It reconciles
+membership on every run (see above), and `--rotate-key` forces a fresh
+WireGuard keypair on the targeted hosts.
 
 ## Registry Management
 
@@ -409,7 +366,7 @@ jiji registry teardown --dry-run   # Show what would be removed
 
 ### `jiji proxy restart`
 
-Pull and recreate kamal-proxy on selected servers.
+Pull and recreate jiji-proxy on selected servers.
 
 ```bash
 jiji proxy restart
@@ -418,7 +375,7 @@ jiji proxy restart -H web1
 
 ### `jiji proxy logs`
 
-View kamal-proxy logs on selected servers.
+View jiji-proxy logs on selected servers.
 
 ```bash
 jiji proxy logs
@@ -517,7 +474,7 @@ jiji service remove --volumes   # Also remove named volumes
 
 ### `jiji service scale`
 
-Change the signed replicated desired count for exactly one service:
+Change the replicated desired count for exactly one service:
 
 ```bash
 jiji service scale -S web --replicas 4

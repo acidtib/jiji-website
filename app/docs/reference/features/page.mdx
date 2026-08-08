@@ -19,9 +19,10 @@ Every built-in feature, organized by area.
 
 ## Proxy & SSL
 
-- **Auto SSL/TLS** - Automatic HTTPS certificates via kamal-proxy. Zero config.
+- **Auto SSL/TLS** - Automatic HTTPS certificates via jiji-proxy. Zero config.
 - **Path-based Routing** - Route traffic based on URL path prefix to different services.
-- **Wildcard Domains** - Support for wildcard domain matching like `*.example.com`.
+- **Cross-host Load Balancing** - jiji-proxy discovers every healthy replica of a service across the whole server mesh, not just ones on the same host.
+- **Wildcard Domains** - Support for single-level wildcard domain matching like `*.example.com`.
 - **Multi-port Services** - Route multiple ports on a single service to different domains.
 - **HTTP Health Checks** - Health checking via HTTP endpoints with configurable paths.
 - **Command Health Checks** - Custom shell commands for health verification.

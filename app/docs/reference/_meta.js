@@ -12,7 +12,7 @@ export default {
     title: 'Network'
   },
   proxy: {
-    title: 'Kamal Proxy'
+    title: 'Jiji Proxy'
   },
   registry: {
     title: 'Registry'

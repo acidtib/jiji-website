@@ -6,7 +6,7 @@ export const metadata = {
 
 # Architecture
 
-## System overview
+## System Overview
 
 You run the Rust `jiji` CLI from a laptop or CI. It loads `deploy.yml`,
 validates intent, selects the owners affected by a command, and connects over
@@ -16,7 +16,7 @@ distributed state and answers private DNS.
 ```mermaid
 flowchart TB
   accTitle: Jiji distributed architecture
-  accDescr: The CLI coordinates mutations over SSH. Project agents replicate membership, desired placement, catalog records, and DNS over WireGuard without a central coordinator.
+  accDescr: The CLI pushes membership directly over SSH. Project agents then continuously replicate desired placement, catalog records, and DNS peer-to-peer over WireGuard, without a central coordinator.
 
   cli["Jiji CLI<br/>config + placement + SSH"]
 
@@ -25,20 +25,20 @@ flowchart TB
     a["node-a<br/>agent + runtime + proxy"]
     b["node-b<br/>agent + runtime + proxy"]
     c["node-c<br/>agent + runtime + proxy"]
-    a <-->|"signed replication"| b
-    b <-->|"signed replication"| c
-    c <-->|"signed replication"| a
+    a <-->|"catalog replication"| b
+    b <-->|"catalog replication"| c
+    c <-->|"catalog replication"| a
   end
 
   cli -->|"targeted SSH mutations"| mesh
 ```
 
-Everything except kamal-proxy is project-scoped. Independent projects on one
+Everything except jiji-proxy is project-scoped. Independent projects on one
 host get different WireGuard interfaces and ports, bridges, agent units,
-state, sockets, DNS addresses, and replication ports. Kamal-proxy is a shared
+state, sockets, DNS addresses, and replication ports. jiji-proxy is a shared
 host-global container attached to each project bridge that owns routes there.
 
-## Core components
+## Core Components
 
 ### Jiji CLI
 
@@ -46,12 +46,14 @@ Plans deployments and placement, uploads configuration and binaries, acquires
 locks only on mutation owners, and drives transactional service changes. It is
 not a central control plane and does not need to remain running.
 
-### Jiji agent
+### jiji-agent
 
 One root-owned process per project and server:
 
-- authenticates and replicates mesh membership;
-- stores signed desired placement and service catalog operations;
+- receives membership pushed directly over SSH by the CLI and repairs its
+  own WireGuard peers from it;
+- stores desired placement and service catalog operations, continuously
+  replicated peer-to-peer with other agents;
 - allocates and quarantines dynamic container address leases;
 - discovers labeled containers and reconciles local observations;
 - serves authoritative UDP and TCP `.jiji` DNS, forwarding any other query
@@ -64,13 +66,15 @@ WireGuard carries management and routed container-subnet traffic between
 servers. Each server owns one project container subnet. Docker or Podman
 containers use explicit leased addresses on that bridge.
 
-### kamal-proxy
+### jiji-proxy
 
-The shared reverse proxy terminates HTTP/TLS and routes to every healthy Active
-deployment in the replicated catalog. A route can contain local and remote
-targets. Candidate deployments are checked directly before they are admitted.
+The shared reverse proxy terminates HTTP/TLS and, via its own continuous DNS
+resolution against the project's `.jiji` zone, routes to every healthy Active
+deployment in the replicated catalog. Backends can be local or on another
+host in the mesh. Candidate deployments are checked directly before they are
+admitted.
 
-## Deployment flow
+## Deployment Flow
 
 Logical replicas have stable IDs. Every replacement has a unique deployment
 ID, container name, and address lease:
@@ -104,11 +108,11 @@ remains in service.
 `stop_first` uses a separate singleton transaction for workloads that cannot
 run two containers at once.
 
-## Placement and scaling
+## Placement and Scaling
 
 `services.*.servers` defines eligible owners. `replicas` is the total count,
-and `placement` is `spread` or `packed`. Runtime overrides are signed,
-replicated desired state:
+and `placement` is `spread` or `packed`. Runtime overrides are replicated
+desired state:
 
 ```bash
 jiji service scale -S web --replicas 4
@@ -119,14 +123,14 @@ Scale writes desired placement first, then converges containers, DNS, and
 proxy routes. Interrupted work is retried with the same command. Scale-to-zero
 withdraws DNS and ingress before leaving no service containers.
 
-## Service discovery
+## Service Discovery
 
 ```mermaid
 sequenceDiagram
   accTitle: Distributed service discovery
   accDescr: A container queries its local project agent. The agent returns only healthy Active catalog addresses, and the container connects directly over the routed project network.
   participant app as Service container
-  participant dns as Local Jiji agent DNS
+  participant dns as Local jiji-agent DNS
   participant catalog as Replicated catalog
   participant backend as Healthy Active replica
 
@@ -140,21 +144,26 @@ Candidate, Draining, Stopped, Tombstoned, unhealthy, and unreachable-owner
 records are excluded. DNS updates follow catalog replication and never require
 a cluster-wide network regeneration.
 
-## Failure model
+## Failure Model
 
 Durable membership, desired placement, catalog history, and leases survive
 agent restart. Liveness is a reversible eligibility overlay: an unreachable
 owner can be suppressed from DNS without deleting its durable records.
 Explicit authenticated tombstones, not timeouts, remove ownership.
 
-The CLI can enroll a new server through one reachable seed. Ordinary deploy
-and scale commands do not require every mesh member to be reachable.
+The CLI enrolls a new server by connecting to it directly over SSH, with no
+dependency on any other host's availability. Ordinary deploy and scale
+commands do not require every mesh member to be reachable.
 
-## Security and ports
+## Security and Ports
 
 - SSH keys, ssh-agent, or inline keys authenticate CLI access.
-- Membership is authority-signed; catalog and desired records are signed by
-  active member nodes.
+- Membership has no signature: the CLI pushes it directly over SSH, so a
+  host's trust boundary is that the file was installed by root. Catalog and
+  desired records carry no signature either; a receiver authenticates an
+  inbound record by resolving the connection's source address against its
+  local membership view, which WireGuard's own peer authentication makes
+  unspoofable within the mesh.
 - Secrets are staged in remote `--env-file` files, not command-line `-e`
   values.
 - WireGuard encrypts management and container traffic.
@@ -164,7 +173,7 @@ and scale commands do not require every mesh member to be reachable.
 | 22 | TCP | SSH |
 | 80/443 | TCP | Public HTTP/HTTPS |
 | 51820-55819 | UDP | Project-specific WireGuard |
-| Project-derived | TCP | Membership and catalog replication over the mesh |
+| Project-derived | TCP | Catalog and desired-state replication over the mesh (membership has no port of its own; it's pushed over SSH) |
 
 See the [Network Reference](/docs/reference/network) for address, naming, and
 recovery details.

@@ -73,7 +73,7 @@ services:
 ```
 
 The health check always runs directly against the candidate's leased
-address, never through DNS or kamal-proxy, so a healthy result really
+address, never through DNS or jiji-proxy, so a healthy result really
 means the new container is ready, not just that routing happens to work.
 
 ## Deployment Strategies
@@ -184,7 +184,7 @@ jiji service scale -S web --reset
 jiji service scale -S web --replicas 3 --dry-run
 ```
 
-Scale commits signed desired placement first, then adds or retires replicas.
+Scale commits desired placement first, then adds or retires replicas.
 If an owner is offline, retry the same command after it returns. Healthy
 catalog records keep serving throughout partial progress.
 

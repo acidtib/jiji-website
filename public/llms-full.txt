@@ -176,7 +176,7 @@ jiji server setup
 This installs the container engine (if needed), the complete private
 network for this project (WireGuard, a routed container bridge, and the
 distributed agent for `.jiji` DNS, catalog, membership, and leases), and provisions the shared
-kamal-proxy container for HTTP/HTTPS routing.
+jiji-proxy container for HTTP/HTTPS routing.
 
 ### Quick Start
 
@@ -300,7 +300,7 @@ jiji deploy -e production
 
 Source: https://jiji.run/docs/getting-started/architecture
 
-#### System overview
+#### System Overview
 
 You run the Rust `jiji` CLI from a laptop or CI. It loads `deploy.yml`,
 validates intent, selects the owners affected by a command, and connects over
@@ -310,7 +310,7 @@ distributed state and answers private DNS.
 ```mermaid
 flowchart TB
   accTitle: Jiji distributed architecture
-  accDescr: The CLI coordinates mutations over SSH. Project agents replicate membership, desired placement, catalog records, and DNS over WireGuard without a central coordinator.
+  accDescr: The CLI pushes membership directly over SSH. Project agents then continuously replicate desired placement, catalog records, and DNS peer-to-peer over WireGuard, without a central coordinator.
 
   cli["Jiji CLI<br/>config + placement + SSH"]
 
@@ -319,20 +319,20 @@ flowchart TB
     a["node-a<br/>agent + runtime + proxy"]
     b["node-b<br/>agent + runtime + proxy"]
     c["node-c<br/>agent + runtime + proxy"]
-    a <-->|"signed replication"| b
-    b <-->|"signed replication"| c
-    c <-->|"signed replication"| a
+    a <-->|"catalog replication"| b
+    b <-->|"catalog replication"| c
+    c <-->|"catalog replication"| a
   end
 
   cli -->|"targeted SSH mutations"| mesh
 ```
 
-Everything except kamal-proxy is project-scoped. Independent projects on one
+Everything except jiji-proxy is project-scoped. Independent projects on one
 host get different WireGuard interfaces and ports, bridges, agent units,
-state, sockets, DNS addresses, and replication ports. Kamal-proxy is a shared
+state, sockets, DNS addresses, and replication ports. jiji-proxy is a shared
 host-global container attached to each project bridge that owns routes there.
 
-#### Core components
+#### Core Components
 
 ##### Jiji CLI
 
@@ -340,12 +340,14 @@ Plans deployments and placement, uploads configuration and binaries, acquires
 locks only on mutation owners, and drives transactional service changes. It is
 not a central control plane and does not need to remain running.
 
-##### Jiji agent
+##### jiji-agent
 
 One root-owned process per project and server:
 
-- authenticates and replicates mesh membership;
-- stores signed desired placement and service catalog operations;
+- receives membership pushed directly over SSH by the CLI and repairs its
+  own WireGuard peers from it;
+- stores desired placement and service catalog operations, continuously
+  replicated peer-to-peer with other agents;
 - allocates and quarantines dynamic container address leases;
 - discovers labeled containers and reconciles local observations;
 - serves authoritative UDP and TCP `.jiji` DNS, forwarding any other query
@@ -358,13 +360,15 @@ WireGuard carries management and routed container-subnet traffic between
 servers. Each server owns one project container subnet. Docker or Podman
 containers use explicit leased addresses on that bridge.
 
-##### kamal-proxy
+##### jiji-proxy
 
-The shared reverse proxy terminates HTTP/TLS and routes to every healthy Active
-deployment in the replicated catalog. A route can contain local and remote
-targets. Candidate deployments are checked directly before they are admitted.
+The shared reverse proxy terminates HTTP/TLS and, via its own continuous DNS
+resolution against the project's `.jiji` zone, routes to every healthy Active
+deployment in the replicated catalog. Backends can be local or on another
+host in the mesh. Candidate deployments are checked directly before they are
+admitted.
 
-#### Deployment flow
+#### Deployment Flow
 
 Logical replicas have stable IDs. Every replacement has a unique deployment
 ID, container name, and address lease:
@@ -398,11 +402,11 @@ remains in service.
 `stop_first` uses a separate singleton transaction for workloads that cannot
 run two containers at once.
 
-#### Placement and scaling
+#### Placement and Scaling
 
 `services.*.servers` defines eligible owners. `replicas` is the total count,
-and `placement` is `spread` or `packed`. Runtime overrides are signed,
-replicated desired state:
+and `placement` is `spread` or `packed`. Runtime overrides are replicated
+desired state:
 
 ```bash
 jiji service scale -S web --replicas 4
@@ -413,14 +417,14 @@ Scale writes desired placement first, then converges containers, DNS, and
 proxy routes. Interrupted work is retried with the same command. Scale-to-zero
 withdraws DNS and ingress before leaving no service containers.
 
-#### Service discovery
+#### Service Discovery
 
 ```mermaid
 sequenceDiagram
   accTitle: Distributed service discovery
   accDescr: A container queries its local project agent. The agent returns only healthy Active catalog addresses, and the container connects directly over the routed project network.
   participant app as Service container
-  participant dns as Local Jiji agent DNS
+  participant dns as Local jiji-agent DNS
   participant catalog as Replicated catalog
   participant backend as Healthy Active replica
 
@@ -434,21 +438,26 @@ Candidate, Draining, Stopped, Tombstoned, unhealthy, and unreachable-owner
 records are excluded. DNS updates follow catalog replication and never require
 a cluster-wide network regeneration.
 
-#### Failure model
+#### Failure Model
 
 Durable membership, desired placement, catalog history, and leases survive
 agent restart. Liveness is a reversible eligibility overlay: an unreachable
 owner can be suppressed from DNS without deleting its durable records.
 Explicit authenticated tombstones, not timeouts, remove ownership.
 
-The CLI can enroll a new server through one reachable seed. Ordinary deploy
-and scale commands do not require every mesh member to be reachable.
+The CLI enrolls a new server by connecting to it directly over SSH, with no
+dependency on any other host's availability. Ordinary deploy and scale
+commands do not require every mesh member to be reachable.
 
-#### Security and ports
+#### Security and Ports
 
 - SSH keys, ssh-agent, or inline keys authenticate CLI access.
-- Membership is authority-signed; catalog and desired records are signed by
-  active member nodes.
+- Membership has no signature: the CLI pushes it directly over SSH, so a
+  host's trust boundary is that the file was installed by root. Catalog and
+  desired records carry no signature either; a receiver authenticates an
+  inbound record by resolving the connection's source address against its
+  local membership view, which WireGuard's own peer authentication makes
+  unspoofable within the mesh.
 - Secrets are staged in remote `--env-file` files, not command-line `-e`
   values.
 - WireGuard encrypts management and container traffic.
@@ -458,7 +467,7 @@ and scale commands do not require every mesh member to be reachable.
 | 22 | TCP | SSH |
 | 80/443 | TCP | Public HTTP/HTTPS |
 | 51820-55819 | UDP | Project-specific WireGuard |
-| Project-derived | TCP | Membership and catalog replication over the mesh |
+| Project-derived | TCP | Catalog and desired-state replication over the mesh (membership has no port of its own; it's pushed over SSH) |
 
 See the [Network Reference](/docs/reference/network) for address, naming, and
 recovery details.
@@ -536,7 +545,7 @@ services:
 ```
 
 The health check always runs directly against the candidate's leased
-address, never through DNS or kamal-proxy, so a healthy result really
+address, never through DNS or jiji-proxy, so a healthy result really
 means the new container is ready, not just that routing happens to work.
 
 #### Deployment Strategies
@@ -647,7 +656,7 @@ jiji service scale -S web --reset
 jiji service scale -S web --replicas 3 --dry-run
 ```
 
-Scale commits signed desired placement first, then adds or retires replicas.
+Scale commits desired placement first, then adds or retires replicas.
 If an owner is offline, retry the same command after it returns. Healthy
 catalog records keep serving throughout partial progress.
 
@@ -955,7 +964,7 @@ curl http://myapp.example.com
 #### Bypassing the Proxy
 
 Test a container directly through its host port mapping, skipping
-kamal-proxy entirely:
+jiji-proxy entirely:
 
 ```yaml
 services:
@@ -1093,7 +1102,7 @@ jiji server exec "df -h" -H server1
 
 #### Common Issues
 
-**"Permission denied" on port 80:** rootless Podman runs kamal-proxy on high
+**"Permission denied" on port 80:** rootless Podman runs jiji-proxy on high
 ports internally (8080/8443) and maps them to host 80/443 - check that
 mapping is actually in place rather than trying to bind 80/443 directly.
 
@@ -2419,7 +2428,7 @@ container compatibility (`DEBUG: true` becomes `"true"`).
 
 ##### Proxy
 
-Enables kamal-proxy routing for a service.
+Enables jiji-proxy routing for a service.
 
 ```yaml
 proxy:
@@ -2438,16 +2447,23 @@ proxy:
   ssl: true
 ```
 
-**Wildcard subdomains** - kamal-proxy matches a leading `*` against any
-single subdomain level, so one service can catch every subdomain of a
-domain (`foo.example.com` and `bar.example.com` both match; the nested
-`deep.foo.example.com` doesn't, since `*` only covers one label):
+**Wildcard subdomains** - a `hosts` entry may be a single-label wildcard, so
+one service can catch every direct subdomain of a domain
+(`foo.example.com` and `bar.example.com` both match; the nested
+`deep.foo.example.com` doesn't, since `*` only covers one label; neither
+does the bare `example.com`):
 
 ```yaml
 proxy:
   port: 3000
   hosts: ["*.example.com"]
 ```
+
+A wildcard host cannot use `ssl: true` (jiji-proxy's automatic certificate
+provisioning can't issue a wildcard certificate); provide your own
+certificate via `ssl: { certificate_pem, private_key_pem }` instead, or
+skip TLS for that host. See the [Proxy Reference](/docs/reference/proxy)
+for details.
 
 **HTTP health check:**
 
@@ -2762,7 +2778,7 @@ These flags are accepted by every command:
 |--------|-------------|
 | `-v, --verbose` | Detailed logging output |
 | `-q, --quiet` | Minimal output (suppress host headers and extra messages) |
-| `-c, --config-file <path>` | Path to config file |
+| `-c, --config <path>` | Path to config file |
 | `-e, --environment <env>` | Use environment-specific config (e.g. `staging` -> `jiji.staging.yml`) |
 | `--version <version>` | Run against a specific app version (e.g. `jiji deploy --version 1.2.3`) |
 | `-H, --hosts <pattern>` | Target specific hosts instead of all (comma-separated, supports wildcards) |
@@ -2839,7 +2855,7 @@ jiji deploy -y                   # Skip the confirmation prompt
 |--------|-------------|
 | `--build` | Build images before deploying |
 | `--no-cache` | Build without cache (only relevant with `--build`) |
-| `--skip-proxy` | Skip kamal-proxy route activation |
+| `--skip-proxy` | Skip jiji-proxy route activation |
 | `-y`, `--yes` | Auto-confirm the deployment plan; required when running non-interactively (e.g. CI/CD) |
 | `--lock-timeout <SECONDS>` | Wait up to this many seconds for an existing lock to clear (default: 300) |
 | `--force-lock` | Replace an existing deployment lock instead of waiting for it |
@@ -2869,14 +2885,45 @@ are upgraded.
 
 ```bash
 jiji server setup
-jiji server setup -H "web*"  # Only web servers
+jiji server setup -H "web*"          # Only web servers
+jiji server setup --rotate-key       # Force a fresh WireGuard keypair on the targeted hosts
+jiji server setup --import           # Seed pre-existing containers as historical catalog history
+jiji server setup --import-dry-run   # Preview --import without committing anything
 ```
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Skip the confirmation prompt |
+| `--rotate-key` | Force a fresh WireGuard keypair on the targeted hosts, fencing out their old identity |
+| `--import` | Once a targeted host's agent is running, assess it and import any pre-existing container as historical (`Stopped`) catalog history |
+| `--import-dry-run` | Preview `--import` without committing anything |
 
 On Debian and Ubuntu, jiji installs a pinned
 [`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
 5.8.4 bundle. This is an unofficial, single-maintainer distribution, so it
 has a different supply-chain trust boundary from distro packages. Jiji
 verifies the pinned archive checksum before installing it.
+
+Every run also reconciles membership: it compares each target's freshly
+observed WireGuard public key and endpoint against its last known record.
+Endpoint-only drift bumps the record's revision, while a changed key fences
+a new owner epoch. Any server still marked active in the gathered mesh view
+but no longer listed in `servers:` is tombstoned. Both are gated by
+confirmation unless `-y`/`--yes` is passed, and the command bails with an
+actionable message instead of hanging when there is no TTY and no `--yes`.
+
+`--import`, once each targeted host's agent is up, first prints a read-only
+assessment (legacy runtime, enrollment, catalog count, importable, migrated,
+or orphaned) and then one-way seeds any pre-existing container as
+historical (`Stopped`) catalog history. It never marks anything active,
+never allocates an address lease, and never touches a replica that already
+has a live catalog record: a normal `jiji deploy` remains the only way to
+actually bring a service up on the dynamic-lease runtime. `--import-dry-run`
+prints the same plan without committing it.
+
+There is no standalone `assess`, `import`, `decommission`,
+`update-endpoint`, `rotate-key`, or `replace` command. `jiji server setup`
+absorbs all of it.
 
 ###### Agent installation
 
@@ -2966,36 +3013,6 @@ jiji network setup -H web1
 
 Idempotent, with rollback on partial failure. If configured CIDRs change, setup migrates the project bridge, reattaches its service containers and the shared proxy at their newly planned addresses, and refreshes proxy ingress and routes. A failed activation restores the previous bridge and addresses. `jiji server setup` and `jiji deploy` both call this same path when a host's network is missing or stale.
 
-##### `jiji network assess`
-
-Read-only comparison of a host's current resources against the distributed control plane: labeled containers, mesh membership, catalog records, and address capacity.
-
-```bash
-jiji network assess
-jiji network assess -H web1
-```
-
-Never mutates anything. Reports, per host, any old container found with no catalog record yet (a candidate for `jiji network import`), any already-migrated service, and any container that isn't eligible for import at all (its service isn't configured for that server). Run this before deciding between a clean `jiji server teardown` + `jiji server setup`, or a one-way `jiji network import`.
-
-##### `jiji network import`
-
-One-way seeding of catalog history from a stopped old installation, so `jiji service`/`jiji network catalog` show continuity instead of a blank slate.
-
-```bash
-jiji network import --dry-run   # Preview what would be imported
-jiji network import
-jiji network import -y          # Skip the confirmation prompt
-```
-
-An operator convenience, not a compatibility layer: it only ever writes historical `Stopped` catalog records for containers it discovers with no live catalog entry. It never marks anything active, never allocates an address lease, and never touches a replica that already has a live catalog record — a normal `jiji deploy` remains the only way to actually bring a service up on the current dynamic-lease runtime. Requires the target host's `jiji-agent` to already be running (run `jiji server setup` first). Safely retryable: re-running after an interruption only fills in what's still missing.
-
-| Option | Description |
-|--------|-------------|
-| `--dry-run` | Print what would be imported without committing anything |
-| `-y, --yes` | Skip the confirmation prompt |
-
-There is no downgrade path back to a pre-agent installation after cutover — restoring an older state means restoring a `jiji network backup` taken from this control plane, not resurrecting the old runtime. A node running an incompatible protocol or schema version is always rejected outright rather than partially joining the mesh.
-
 ##### `jiji network catalog`
 
 Read-only inspection of a selected host's locally replicated service catalog.
@@ -3066,54 +3083,10 @@ jiji network recover --input backup.enc --passphrase-file passphrase.txt -y
 | `--passphrase-file <PATH>` | File containing the encryption passphrase |
 | `-y, --yes` | Confirm the destructive epoch advancement |
 
-##### `jiji network decommission`
-
-Publish an authenticated tombstone for a node through one reachable seed, removing it from the mesh.
-
-```bash
-jiji network decommission web2 --seed web1
-```
-
-##### `jiji network update-endpoint`
-
-Publish a node's changed public endpoint (IP or port) through one reachable seed.
-
-```bash
-jiji network update-endpoint web1 --endpoint 203.0.113.10:51900 --seed web2
-```
-
-##### `jiji network rotate-key`
-
-Rotate a node's WireGuard transport key through one reachable seed.
-
-```bash
-jiji network rotate-key web1 --public-key <new-key> --endpoint 203.0.113.10:51900 --seed web2
-```
-
-##### `jiji network replace`
-
-Fence and replace a node's identity through one reachable seed - use when a host was rebuilt and needs a fresh identity under the same server name.
-
-```bash
-jiji network replace web1 --public-key <new-key> --endpoint 203.0.113.10:51900 --seed web2
-```
-
-##### `jiji network rotate-authority`
-
-Rotate the project's membership signing authority across every enrolled host.
-
-```bash
-jiji network rotate-authority
-jiji network rotate-authority --finalize   # Retire the previous signer once every host has accepted the new authority
-```
-
-| Option | Description |
-|--------|-------------|
-| `--finalize` | Retire the previous private signer after every host has accepted the new authority |
-
-`decommission`, `update-endpoint`, `rotate-key`, `replace`, and
-`rotate-authority` all publish signed membership changes through one
-reachable seed host rather than requiring every host to be online at once.
+Node decommissioning, endpoint updates, and key rotation are not separate
+commands: re-running `jiji server setup` handles all of it. It reconciles
+membership on every run (see above), and `--rotate-key` forces a fresh
+WireGuard keypair on the targeted hosts.
 
 #### Registry Management
 
@@ -3157,7 +3130,7 @@ jiji registry teardown --dry-run   # Show what would be removed
 
 ##### `jiji proxy restart`
 
-Pull and recreate kamal-proxy on selected servers.
+Pull and recreate jiji-proxy on selected servers.
 
 ```bash
 jiji proxy restart
@@ -3166,7 +3139,7 @@ jiji proxy restart -H web1
 
 ##### `jiji proxy logs`
 
-View kamal-proxy logs on selected servers.
+View jiji-proxy logs on selected servers.
 
 ```bash
 jiji proxy logs
@@ -3265,7 +3238,7 @@ jiji service remove --volumes   # Also remove named volumes
 
 ##### `jiji service scale`
 
-Change the signed replicated desired count for exactly one service:
+Change the replicated desired count for exactly one service:
 
 ```bash
 jiji service scale -S web --replicas 4
@@ -3487,9 +3460,10 @@ Every built-in feature, organized by area.
 
 #### Proxy & SSL
 
-- **Auto SSL/TLS** - Automatic HTTPS certificates via kamal-proxy. Zero config.
+- **Auto SSL/TLS** - Automatic HTTPS certificates via jiji-proxy. Zero config.
 - **Path-based Routing** - Route traffic based on URL path prefix to different services.
-- **Wildcard Domains** - Support for wildcard domain matching like `*.example.com`.
+- **Cross-host Load Balancing** - jiji-proxy discovers every healthy replica of a service across the whole server mesh, not just ones on the same host.
+- **Wildcard Domains** - Support for single-level wildcard domain matching like `*.example.com`.
 - **Multi-port Services** - Route multiple ports on a single service to different domains.
 - **HTTP Health Checks** - Health checking via HTTP endpoints with configurable paths.
 - **Command Health Checks** - Custom shell commands for health verification.
@@ -3584,25 +3558,26 @@ Every built-in feature, organized by area.
 Source: https://jiji.run/docs/reference/network
 
 Jiji creates a project-isolated WireGuard mesh. Each server owns a routed
-container subnet and runs a per-project agent. Agents replicate membership,
-desired placement, the service catalog, and DNS data directly over the mesh.
+container subnet and runs a per-project agent. Agents replicate desired
+placement, the service catalog, and DNS data directly over the mesh
+(membership is pushed separately, over SSH by the CLI, not agent-to-agent).
 There is no central coordinator.
 
 ```mermaid
 flowchart LR
   accTitle: Distributed Jiji service network
-  accDescr: Two project agents replicate membership, desired placement, and the service catalog over WireGuard. Each agent answers DNS from the same converged catalog, while service containers use dynamically leased addresses.
+  accDescr: Two project agents replicate desired placement and the service catalog over WireGuard. Each agent answers DNS from the same converged catalog, while service containers use dynamically leased addresses.
 
   subgraph a["node-a"]
-    agentA["Jiji agent<br/>DNS + catalog"]
+    agentA["jiji-agent<br/>DNS + catalog"]
     appA["web replica<br/>dynamic lease"]
-    proxyA["kamal-proxy<br/>all healthy targets"]
+    proxyA["jiji-proxy<br/>all healthy targets"]
   end
 
   subgraph b["node-b"]
-    agentB["Jiji agent<br/>DNS + catalog"]
+    agentB["jiji-agent<br/>DNS + catalog"]
     appB["web replica<br/>dynamic lease"]
-    proxyB["kamal-proxy<br/>all healthy targets"]
+    proxyB["jiji-proxy<br/>all healthy targets"]
   end
 
   agentA <-->|"WireGuard replication"| agentB
@@ -3614,11 +3589,11 @@ flowchart LR
   proxyB --> appB
 ```
 
-#### Project isolation
+#### Project Isolation
 
 Every project derives its own WireGuard interface, UDP port, bridge, agent
 unit, state directory, Unix socket, DNS address, and replication ports from
-`project:`. Multiple projects can share a physical server. Kamal-proxy is the
+`project:`. Multiple projects can share a physical server. jiji-proxy is the
 one host-global component and is attached to each project bridge that owns
 routes on that host.
 
@@ -3633,7 +3608,7 @@ guarantee.
 
 - one management `/32` per server;
 - one routed `/21` container subnet per server;
-- bridge gateway, agent DNS, and kamal-proxy infrastructure addresses.
+- bridge gateway, agent DNS, and jiji-proxy infrastructure addresses.
 
 Service addresses are not compiled into the plan. The owner agent allocates a
 durable address lease when a deployment is created. Infrastructure addresses,
@@ -3677,32 +3652,39 @@ than answered locally. The first forwarder to answer wins; if every
 configured forwarder is unreachable the query fails with `SERVFAIL`, not a
 false `NXDOMAIN`.
 
-#### Membership and replication
+#### Membership and Replication
 
-Membership records are authority-signed. Catalog and desired-placement records
-are signed by active member nodes. Agents exchange durable operations directly
-with authenticated peers and converge after duplicate, reordered, or delayed
-delivery.
+Membership has no key material and no peer-to-peer relay: the CLI computes
+it locally from `jiji.yml` and pushes it directly over SSH to every
+reachable host, so a host's trust boundary is "this file was installed by
+root," not a signature. Catalog and desired-placement records are different:
+they are genuinely node-originated at runtime and stay continuously
+converged through direct-only peer-to-peer anti-entropy between hosts.
+Because WireGuard's own peer authentication makes a connection's source
+address unspoofable within the mesh, a receiver authenticates an inbound
+record by resolving the TCP connection's source address against its local
+membership view, rather than by checking a signature. Agents converge after
+duplicate, reordered, or delayed delivery.
 
-A filtered `jiji server setup -H new-node` connects the new node plus one
-reachable seed for enrollment. Existing offline peers are not required. Adding
-or removing actual servers changes the mesh; deploying or scaling services
-does not.
+A filtered `jiji server setup -H new-node` connects to that host directly
+over SSH and pushes it the current membership file; no other host needs to
+be reachable. Adding or removing actual servers changes membership;
+deploying or scaling services does not.
 
 WireGuard UDP must be allowed between server public addresses on the
 project-specific port shown by `jiji network plan`.
 
-#### Service placement and scale
+#### Service Placement and Scale
 
 `services.*.servers` is the eligible host set. `replicas` is the total desired
 count, not a count per host. `placement: spread` balances replicas;
 `placement: packed` chooses hosts deterministically.
 
-`jiji service scale` writes signed replicated desired placement before it
+`jiji service scale` writes a replicated desired-placement record before it
 changes containers. Scale-up and scale-down are resumable. Scale-to-zero
 withdraws DNS records and proxy routes and retires every deployment.
 
-#### Proxy routing
+#### Proxy Routing
 
 Each ingress route is rebuilt from healthy Active catalog records and may
 contain local and remote targets. Jiji reconciles the route on every eligible
@@ -3721,7 +3703,7 @@ Explicit tombstones, not timeouts, remove durable membership or catalog
 ownership. A temporary partition can suppress unreachable replicas from DNS
 without deleting them.
 
-#### Important paths and units
+#### Important Paths and Units
 
 For project slug `{slug}`:
 
@@ -3752,8 +3734,8 @@ installation. They are not part of the current runtime.
 jiji network plan
 jiji network catalog
 jiji network diagnostics
-jiji server exec -- 'wg show'
-jiji server exec -- 'systemctl status jiji-agent-<slug>'
+jiji server exec "wg show"
+jiji server exec "systemctl status jiji-agent-<slug>"
 ```
 
 From a server, query its planned DNS address:
@@ -3762,25 +3744,30 @@ From a server, query its planned DNS address:
 dig +short @<dns-address> myproject-web.jiji
 ```
 
-### Kamal Proxy Reference
+### Jiji Proxy Reference
 
 Source: https://jiji.run/docs/reference/proxy
 
-Jiji uses Kamal Proxy as the public HTTP and HTTPS entry point for proxied
-services. Jiji installs and manages the proxy container, translates each
-service's `proxy:` configuration into routes, and updates those routes during
-zero-downtime deployments.
+Jiji uses **jiji-proxy**, its own Pingora-based (Rust) reverse proxy, as the
+public HTTP and HTTPS entry point for proxied services. Jiji installs and
+manages the proxy container, translates each service's `proxy:` configuration
+into a route definition, and jiji-proxy itself continuously discovers that
+route's backends over DNS rather than being told an address on every deploy.
 
 ```mermaid
 flowchart TB
-  accTitle: Kamal Proxy request path
-  accDescr: Internet traffic reaches Kamal Proxy on ports 80 and 443, then routes directly to the current Active deployment's dynamically leased address.
+  accTitle: jiji-proxy request path
+  accDescr: Internet traffic reaches jiji-proxy on ports 80 and 443. jiji-proxy resolves the service's aggregate DNS name mesh-wide and load-balances across every healthy backend it discovers, not just ones on the same host.
   internet([Internet])
-  proxy["Kamal Proxy"]
-  active["Active deployment<br/>dynamically leased address"]
+  proxy["jiji-proxy"]
+  dns[(".jiji DNS<br/>mesh-wide catalog")]
+  b1["Backend on host A"]
+  b2["Backend on host B"]
 
   internet -->|"TCP 80 / 443"| proxy
-  proxy -->|"HTTP routing"| active
+  proxy -->|"resolve {project}-{service}.jiji"| dns
+  proxy -->|"load balance"| b1
+  proxy -->|"load balance"| b2
 
   classDef edge fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
   class proxy edge
@@ -3788,36 +3775,36 @@ flowchart TB
 
 #### Container
 
-Jiji runs one Kamal Proxy container on each server that needs proxy routes.
+Jiji runs one jiji-proxy container on each server that needs proxy routes.
 
 | Property | Value |
 |---|---|
-| Container name | `kamal-proxy` |
-| Image | `ghcr.io/acidtib/kamal-proxy:jiji` |
+| Container name | `jiji-proxy` |
+| Image | `ghcr.io/acidtib/jiji-proxy:jiji` |
 | Restart policy | `unless-stopped` |
 | Public ports | `80` and `443` |
 | Internal ports | `8080` and `8443` |
-| Configuration volume | `kamal-proxy-config` |
-| Certificate directory | `/etc/jiji/certs` on the host, mounted read-only at `/jiji-certs` |
+| Configuration | `/etc/jiji/proxy/config.yml` on the host, mounted read-only |
+| Certificate directory | `/etc/jiji/certs` on the host, mounted read-write |
 
 The container is labeled `jiji.managed=true`. Jiji pulls the configured image
 and replaces the container when its managed configuration is out of date.
-
-With Docker, Kamal Proxy uses the Docker socket. With Podman, it runs with the
-host access needed to manage routes through the Podman runtime.
+Unlike some reverse proxies, jiji-proxy needs no Docker/Podman socket access
+and no engine-specific runtime privileges: it only ever talks to a project's
+`.jiji` DNS resolver and to backend addresses directly, so its container
+configuration is identical on Docker and Podman.
 
 #### Shared Per-Host Ownership
 
-Kamal Proxy is shared by every Jiji project on a host. It is the exception to
+jiji-proxy is shared by every Jiji project on a host. It is the exception to
 Jiji's otherwise per-project network isolation:
 
-- There is one `kamal-proxy` container per physical host.
-- Route names include the project name.
+- There is one `jiji-proxy` container per physical host.
 - The container is attached to every project bridge that has routes on that
   host.
 - Each attachment uses that project's deterministic proxy address.
-- Routes target numeric backend addresses, so the proxy does not use a
-  project's `.jiji` DNS resolver.
+- Routes resolve backend addresses over DNS at the project's own `.jiji`
+  resolver, never a hardcoded address.
 
 Attaching a new project is additive. Jiji does not remove the proxy's existing
 project networks when it attaches another one.
@@ -3847,7 +3834,6 @@ services:
         path: /health
         interval: 10s
         timeout: 5s
-        deploy_timeout: 60s
 ```
 
 ##### Single-target fields
@@ -3858,7 +3844,7 @@ services:
 | `hosts` | Hostnames accepted by the route |
 | `ssl` | `false` or omitted for HTTP, `true` for TLS, or a custom certificate object |
 | `path_prefix` | Optional path prefix used to select the route |
-| `healthcheck` | Health-check settings applied when activating the route |
+| `healthcheck` | Active health-check settings jiji-proxy runs continuously against this route's backends |
 
 ##### Multiple targets
 
@@ -3887,15 +3873,20 @@ Each target supports `port`, `hosts`, `ssl`, `path_prefix`, and
 `healthcheck`. When `targets` is present, it takes precedence over the flat
 single-target fields.
 
-#### Route Identity
+#### Route Identity and Backend Discovery
 
-Jiji names each route using:
+A jiji-proxy route is identified by the `hosts`/`path_prefix` you configure,
+not a generated name. jiji-proxy pushes no explicit backend address into the
+route at all: instead it continuously resolves the service's **aggregate**
+DNS name,
 
 ```text
-{project}-{service}-{port}
+{project}-{service}.jiji
 ```
 
-For this configuration:
+against the project's own `.jiji` resolver, and load-balances across
+whatever healthy addresses that name currently answers with. For this
+configuration:
 
 ```yaml
 project: storefront
@@ -3907,15 +3898,15 @@ services:
       hosts: [api.example.com]
 ```
 
-the route is named:
+the route on `api.example.com` resolves backends from `storefront-api.jiji`.
 
-```text
-storefront-api-3000
-```
-
-The route name does not include the server name. Each host has its own local
-Kamal Proxy route table, so the same route name on two hosts points to the
-backend running on that host.
+Because discovery is mesh-wide (every host's agent replicates the same
+service catalog), **jiji-proxy load-balances across every host running a
+healthy replica of the service, not just the host it's running on.** A
+request landing on any server's jiji-proxy can be routed to a backend on a
+different server entirely. This is a deliberate change from Jiji's earlier
+proxy: point public DNS at any server that runs jiji-proxy, not only ones
+that happen to run a local replica.
 
 #### Host and Path Routing
 
@@ -3953,6 +3944,39 @@ services:
 Longer path prefixes take priority over shorter prefixes. A route without
 `path_prefix` acts as the catch-all for its host.
 
+#### Wildcard Subdomains
+
+A `hosts` entry may be a single-label wildcard:
+
+```yaml
+proxy:
+  port: 3000
+  hosts: ["*.example.com"]
+```
+
+`*.example.com` matches any single subdomain level -
+`foo.example.com` and `bar.example.com` both match. It does **not** match a
+nested subdomain (`deep.foo.example.com`) or the bare domain
+(`example.com`) itself. An exact `hosts` entry always takes priority over a
+matching wildcard, so `hosts: [api.example.com, "*.example.com"]` routes
+`api.example.com` to its own target even though `*.example.com` would also
+match it.
+
+Wildcard hosts cannot use `ssl: true`: jiji-proxy's automatic certificate
+provisioning only performs HTTP-01 challenges, which cannot issue a
+wildcard certificate (that requires DNS-01). Jiji rejects `ssl: true` on a
+wildcard host at config-validation time. A wildcard host can still serve
+HTTPS with a certificate you provide yourself:
+
+```yaml
+proxy:
+  port: 3000
+  hosts: ["*.example.com"]
+  ssl:
+    certificate_pem: CERTIFICATE_PEM
+    private_key_pem: PRIVATE_KEY_PEM
+```
+
 #### TLS
 
 Set `ssl: true` to enable TLS for a target:
@@ -3964,9 +3988,11 @@ proxy:
   ssl: true
 ```
 
-Public DNS for every configured hostname must point to the server, and inbound
-TCP ports 80 and 443 must be open. Kamal Proxy handles certificate provisioning
-for TLS-enabled routes.
+Public DNS for every configured hostname must point to a server running
+jiji-proxy, and inbound TCP ports 80 and 443 must be open. jiji-proxy handles
+certificate provisioning through its own built-in ACME client (HTTP-01
+challenges only), issuing and renewing certificates automatically for any
+host with at least one TLS-enabled route.
 
 The configuration schema also accepts certificate and private-key values:
 
@@ -3979,8 +4005,10 @@ proxy:
     private_key_pem: PRIVATE_KEY_PEM
 ```
 
-The values can use Jiji's secret resolution. Do not place private key material
-directly in a committed configuration file.
+Jiji writes these straight into jiji-proxy's certificate directory before the
+route is applied, so jiji-proxy serves them as-is and never attempts ACME
+issuance for that host. The values can use Jiji's secret resolution. Do not
+place private key material directly in a committed configuration file.
 
 #### Health Checks and Activation
 
@@ -3994,7 +4022,8 @@ healthcheck:
   deploy_timeout: 60s
 ```
 
-Or a command executed against the candidate container:
+Or a command executed against the candidate container, checked only before a
+new deployment is admitted:
 
 ```yaml
 healthcheck:
@@ -4007,38 +4036,47 @@ healthcheck:
 
 | Field | Description |
 |---|---|
-| `path` | HTTP endpoint used for the check |
-| `cmd` | Command used instead of an HTTP endpoint |
+| `path` | HTTP endpoint jiji-proxy checks continuously against every discovered backend |
+| `interval` | Delay between jiji-proxy's own health-check attempts |
+| `timeout` | Timeout for one jiji-proxy check |
+| `cmd` | Command used instead of `path` for Jiji's own pre-activation gate |
 | `cmd_runtime` | `docker` or `podman`; defaults to `builder.engine` |
-| `interval` | Delay between health-check attempts |
-| `timeout` | Timeout for one check; defaults to `5s` during proxy activation |
-| `deploy_timeout` | Maximum time allowed for proxy activation; defaults to `60s` |
+| `deploy_timeout` | Maximum time allowed for both the pre-activation gate and proxy activation; defaults to `60s` |
 
-A `cmd` check works both for Jiji's own pre-activation gate (the check that
-runs before a candidate is admitted, described below) and for Kamal Proxy's
-own *ongoing* route health check, because each host's Kamal Proxy route
-only ever contains addresses running on that same host (see "Route
-Identity" above) - `cmd` execs into a container, which only ever works for
-one running on the same machine.
+`path` and `cmd` serve two different checks with two different scopes.
+`path` becomes jiji-proxy's own *ongoing* health check, run on its own
+schedule (`interval`/`timeout`) against every backend it discovers over DNS
+for that route, mesh-wide: a backend that starts failing mid-interval is
+evicted from load balancing without waiting for the next deploy. `cmd` is
+never translated to jiji-proxy: it only ever configures Jiji's own
+pre-activation gate, the check that runs directly against a fresh candidate
+container before it is admitted at all, because execing into a container
+only works when the checker and the container are on the same host, an
+assumption jiji-proxy's mesh-wide routing can no longer make. A `healthcheck:`
+block with only `cmd` set still enables jiji-proxy's own check as a
+TCP-only probe. Omit `healthcheck:` entirely and jiji-proxy relies on DNS
+re-resolution alone to notice a backend has disappeared.
 
 During a deployment, Jiji:
 
 1. Allocates an address lease and starts a unique Candidate deployment.
-2. Health-checks the candidate directly.
-3. Publishes the candidate Active in the replicated catalog.
-4. Rebuilds the Kamal Proxy route on that host from its own local healthy
-   Active replicas of the service. A host with no local replica has its
-   route withdrawn rather than pointed at a replica on another host - Kamal
-   Proxy does not load-balance across hosts.
-5. Verifies that the route exists.
-6. Drains the previous deployment and releases its lease.
+2. Health-checks the candidate directly at its own address (`cmd`, or an
+   engine-native readiness check if no `healthcheck:` is configured).
+3. Publishes the candidate Active in the replicated catalog. This is what
+   makes the candidate's address resolvable at all, since jiji-proxy
+   discovers backends by resolving DNS against this same catalog.
+4. Re-applies the route's (unchanged) definition, forcing jiji-proxy to
+   re-resolve immediately instead of waiting out its normal refresh
+   interval, then polls jiji-proxy directly until it reports the
+   candidate's address as a healthy backend.
+5. Drains the previous deployment and releases its lease.
 
-Proxy activation has an outer process timeout five seconds longer than
-`deploy_timeout`. If route activation or verification fails, Jiji restores the
-previous Active catalog record and proxy route, then removes the failed candidate.
+If route verification fails, Jiji tombstones the failed candidate and
+releases its lease; the previous deployment was never touched and keeps
+serving traffic throughout.
 
 Use `--skip-proxy` with `jiji deploy` only when an external system manages
-public routing. It skips both proxy readiness and route activation.
+public routing. It skips proxy readiness verification entirely.
 
 #### Commands
 
@@ -4068,25 +4106,22 @@ jiji proxy restart
 jiji proxy restart -H web1
 ```
 
-Restart pulls the image and recreates Kamal Proxy on each selected host.
+Restart pulls the image and recreates jiji-proxy on each selected host.
 Because the proxy is shared, `-S`/`--services` is rejected.
 
 #### Network and Public Ingress
 
-With private networking enabled, Kamal Proxy is attached to each project's
+With private networking enabled, jiji-proxy is attached to each project's
 bridge at the deterministic proxy address shown by `jiji network plan`.
-Routes point directly to the current Active deployment's leased address and
-service port.
+Routes resolve backend addresses from the project's own `.jiji` DNS at the
+address and interval jiji-proxy was configured with (see "Route Identity
+and Backend Discovery" above).
 
-Because each host only routes to its own local replicas (see "Route
-Identity" above), point public DNS only at servers that actually run the
-service. If `replicas` is lower than the number of servers in the eligible
-placement set (see [Configuration Reference](/docs/reference/configuration#replicas-and-placement)),
-some of those servers may have no local replica at any given moment and no
-route for the service at all - DNS pointed there gets no response rather
-than a forwarded one. A dedicated load-balancer service is the intended way
-to spread traffic across a server set larger than the running replica
-count; Kamal Proxy does not do this itself.
+Because discovery is mesh-wide, public DNS can point at any server running
+jiji-proxy for the project, regardless of whether that specific server also
+runs a replica of the service. If every server currently eligible to run a
+service happens to be unreachable or unhealthy, jiji-proxy simply has no
+healthy backend to route to and returns an error until one recovers.
 
 Docker can ignore IPv4 port publishing when Jiji's routed bridge disables
 masquerading. Jiji compensates with a host-level nftables table named
@@ -4099,13 +4134,15 @@ workaround.
 
 #### Lifecycle and Teardown
 
-`jiji server setup` installs or repairs Kamal Proxy. Deploy, service restart,
+`jiji server setup` installs or repairs jiji-proxy. Deploy, service restart,
 and service rollback also verify that it is running before changing routes.
 
 During `jiji server teardown`, Jiji removes only the selected project's
-routes and bridge attachment. The shared container, configuration volume,
-certificates, and public-ingress rule are removed only when no route for any
-project remains on the host.
+routes and bridge attachment. The shared container, certificates, and
+public-ingress rule are removed only when no route for any project remains
+on the host. `jiji-agent` is stopped before any of this, so its own
+continuous reconciliation can't reapply a route or recreate the proxy
+container behind the teardown's back.
 
 #### Troubleshooting
 
@@ -4113,23 +4150,30 @@ Check proxy state and recent logs:
 
 ```bash
 jiji proxy logs --since 15m
-jiji server exec "docker inspect kamal-proxy"
-jiji server exec "docker logs --tail 100 kamal-proxy"
+jiji server exec "docker inspect jiji-proxy"
+jiji server exec "docker logs --tail 100 jiji-proxy"
+jiji server exec "docker exec jiji-proxy jiji-proxy route list"
+jiji server exec "docker exec jiji-proxy jiji-proxy route status --host example.com"
 ```
 
-Use `podman` in the remote commands when Podman is configured.
+Use `podman` in the remote commands when Podman is configured. `route list`
+shows every route currently configured on that host's jiji-proxy; `route
+status --host <host>` shows the backend addresses it has actually discovered
+for that route and whether each one currently passes its health check.
 
 If a route does not receive traffic:
 
-1. Confirm public DNS points to the intended server.
+1. Confirm public DNS points to a server running jiji-proxy for the project.
 2. Confirm TCP ports 80 and 443 are open.
 3. Check `jiji proxy logs` for routing or certificate errors.
-4. Check the service health endpoint directly.
-5. Run `jiji network plan` and verify the proxy is attached to the expected
+4. Run `route status --host <host>` (above) to see whether jiji-proxy has
+   discovered any healthy backend for the route at all.
+5. Check the service health endpoint directly.
+6. Run `jiji network plan` and verify the proxy is attached to the expected
    project bridge.
-6. Run `jiji network setup` to repair project networking.
+7. Run `jiji network setup` to repair project networking.
 
-If Kamal Proxy is attached to the right bridge with the wrong address, Jiji
+If jiji-proxy is attached to the right bridge with the wrong address, Jiji
 reports address drift instead of changing it silently. Remove the proxy
 container and rerun `jiji server setup`, or investigate the network plan
 before recreating it.
@@ -4423,14 +4467,14 @@ namespace detection.
 Source: https://jiji.run/docs/reference/logs
 
 Jiji has two logging commands - `jiji service logs` for your deployed
-services, and `jiji proxy logs` for kamal-proxy - plus `jiji audit` for the
+services, and `jiji proxy logs` for jiji-proxy - plus `jiji audit` for the
 deployment audit trail. All three support filtering and following logs
 across multiple servers.
 
 #### Service Logs
 
 `jiji service logs` tails the Active catalog deployment for each
-selected endpoint.
+selected replica.
 
 ```bash
 jiji service logs -S web
@@ -4471,7 +4515,7 @@ jiji service logs -S web -q | grep -i warning | wc -l
 
 #### Proxy Logs
 
-`jiji proxy logs` reads from the kamal-proxy container that handles
+`jiji proxy logs` reads from the jiji-proxy container that handles
 HTTP/HTTPS routing.
 
 ```bash
@@ -4493,7 +4537,7 @@ jiji proxy logs --grep "web-app"
 ```
 
 If a service isn't receiving traffic, check proxy logs before service logs
-- it tells you whether kamal-proxy is routing to it at all.
+- it tells you whether jiji-proxy is routing to it at all.
 
 #### Common Use Cases
 
@@ -4522,7 +4566,7 @@ jiji proxy logs --grep "ssl\|tls\|certificate" --grep-options "-E"
 - **Combine `--since` and `--grep`** rather than scanning full output:
   `jiji service logs -S api --since 1h --grep "ERROR"`.
 - **Check proxy logs before service logs** when a service isn't receiving
-  traffic - it tells you whether kamal-proxy is routing to it at all.
+  traffic - it tells you whether jiji-proxy is routing to it at all.
 - **Use `-q`/`--quiet`** whenever output is being piped into `grep`, `wc`,
   or a script, so host headers don't pollute the stream.
 

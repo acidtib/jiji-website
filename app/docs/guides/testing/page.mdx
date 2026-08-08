@@ -34,7 +34,7 @@ curl http://myapp.example.com
 ## Bypassing the Proxy
 
 Test a container directly through its host port mapping, skipping
-kamal-proxy entirely:
+jiji-proxy entirely:
 
 ```yaml
 services:
@@ -172,7 +172,7 @@ jiji server exec "df -h" -H server1
 
 ## Common Issues
 
-**"Permission denied" on port 80:** rootless Podman runs kamal-proxy on high
+**"Permission denied" on port 80:** rootless Podman runs jiji-proxy on high
 ports internally (8080/8443) and maps them to host 80/443 - check that
 mapping is actually in place rather than trying to bind 80/443 directly.
 

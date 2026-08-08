@@ -569,7 +569,7 @@ container compatibility (`DEBUG: true` becomes `"true"`).
 
 ### Proxy
 
-Enables kamal-proxy routing for a service.
+Enables jiji-proxy routing for a service.
 
 ```yaml
 proxy:
@@ -588,16 +588,23 @@ proxy:
   ssl: true
 ```
 
-**Wildcard subdomains** - kamal-proxy matches a leading `*` against any
-single subdomain level, so one service can catch every subdomain of a
-domain (`foo.example.com` and `bar.example.com` both match; the nested
-`deep.foo.example.com` doesn't, since `*` only covers one label):
+**Wildcard subdomains** - a `hosts` entry may be a single-label wildcard, so
+one service can catch every direct subdomain of a domain
+(`foo.example.com` and `bar.example.com` both match; the nested
+`deep.foo.example.com` doesn't, since `*` only covers one label; neither
+does the bare `example.com`):
 
 ```yaml
 proxy:
   port: 3000
   hosts: ["*.example.com"]
 ```
+
+A wildcard host cannot use `ssl: true` (jiji-proxy's automatic certificate
+provisioning can't issue a wildcard certificate); provide your own
+certificate via `ssl: { certificate_pem, private_key_pem }` instead, or
+skip TLS for that host. See the [Proxy Reference](/docs/reference/proxy)
+for details.
 
 **HTTP health check:**
 

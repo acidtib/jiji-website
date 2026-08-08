@@ -7,25 +7,26 @@ export const metadata = {
 # Network Reference
 
 Jiji creates a project-isolated WireGuard mesh. Each server owns a routed
-container subnet and runs a per-project agent. Agents replicate membership,
-desired placement, the service catalog, and DNS data directly over the mesh.
+container subnet and runs a per-project agent. Agents replicate desired
+placement, the service catalog, and DNS data directly over the mesh
+(membership is pushed separately, over SSH by the CLI, not agent-to-agent).
 There is no central coordinator.
 
 ```mermaid
 flowchart LR
   accTitle: Distributed Jiji service network
-  accDescr: Two project agents replicate membership, desired placement, and the service catalog over WireGuard. Each agent answers DNS from the same converged catalog, while service containers use dynamically leased addresses.
+  accDescr: Two project agents replicate desired placement and the service catalog over WireGuard. Each agent answers DNS from the same converged catalog, while service containers use dynamically leased addresses.
 
   subgraph a["node-a"]
-    agentA["Jiji agent<br/>DNS + catalog"]
+    agentA["jiji-agent<br/>DNS + catalog"]
     appA["web replica<br/>dynamic lease"]
-    proxyA["kamal-proxy<br/>all healthy targets"]
+    proxyA["jiji-proxy<br/>all healthy targets"]
   end
 
   subgraph b["node-b"]
-    agentB["Jiji agent<br/>DNS + catalog"]
+    agentB["jiji-agent<br/>DNS + catalog"]
     appB["web replica<br/>dynamic lease"]
-    proxyB["kamal-proxy<br/>all healthy targets"]
+    proxyB["jiji-proxy<br/>all healthy targets"]
   end
 
   agentA <-->|"WireGuard replication"| agentB
@@ -37,11 +38,11 @@ flowchart LR
   proxyB --> appB
 ```
 
-## Project isolation
+## Project Isolation
 
 Every project derives its own WireGuard interface, UDP port, bridge, agent
 unit, state directory, Unix socket, DNS address, and replication ports from
-`project:`. Multiple projects can share a physical server. Kamal-proxy is the
+`project:`. Multiple projects can share a physical server. jiji-proxy is the
 one host-global component and is attached to each project bridge that owns
 routes on that host.
 
@@ -56,7 +57,7 @@ guarantee.
 
 - one management `/32` per server;
 - one routed `/21` container subnet per server;
-- bridge gateway, agent DNS, and kamal-proxy infrastructure addresses.
+- bridge gateway, agent DNS, and jiji-proxy infrastructure addresses.
 
 Service addresses are not compiled into the plan. The owner agent allocates a
 durable address lease when a deployment is created. Infrastructure addresses,
@@ -100,32 +101,39 @@ than answered locally. The first forwarder to answer wins; if every
 configured forwarder is unreachable the query fails with `SERVFAIL`, not a
 false `NXDOMAIN`.
 
-## Membership and replication
+## Membership and Replication
 
-Membership records are authority-signed. Catalog and desired-placement records
-are signed by active member nodes. Agents exchange durable operations directly
-with authenticated peers and converge after duplicate, reordered, or delayed
-delivery.
+Membership has no key material and no peer-to-peer relay: the CLI computes
+it locally from `jiji.yml` and pushes it directly over SSH to every
+reachable host, so a host's trust boundary is "this file was installed by
+root," not a signature. Catalog and desired-placement records are different:
+they are genuinely node-originated at runtime and stay continuously
+converged through direct-only peer-to-peer anti-entropy between hosts.
+Because WireGuard's own peer authentication makes a connection's source
+address unspoofable within the mesh, a receiver authenticates an inbound
+record by resolving the TCP connection's source address against its local
+membership view, rather than by checking a signature. Agents converge after
+duplicate, reordered, or delayed delivery.
 
-A filtered `jiji server setup -H new-node` connects the new node plus one
-reachable seed for enrollment. Existing offline peers are not required. Adding
-or removing actual servers changes the mesh; deploying or scaling services
-does not.
+A filtered `jiji server setup -H new-node` connects to that host directly
+over SSH and pushes it the current membership file; no other host needs to
+be reachable. Adding or removing actual servers changes membership;
+deploying or scaling services does not.
 
 WireGuard UDP must be allowed between server public addresses on the
 project-specific port shown by `jiji network plan`.
 
-## Service placement and scale
+## Service Placement and Scale
 
 `services.*.servers` is the eligible host set. `replicas` is the total desired
 count, not a count per host. `placement: spread` balances replicas;
 `placement: packed` chooses hosts deterministically.
 
-`jiji service scale` writes signed replicated desired placement before it
+`jiji service scale` writes a replicated desired-placement record before it
 changes containers. Scale-up and scale-down are resumable. Scale-to-zero
 withdraws DNS records and proxy routes and retires every deployment.
 
-## Proxy routing
+## Proxy Routing
 
 Each ingress route is rebuilt from healthy Active catalog records and may
 contain local and remote targets. Jiji reconciles the route on every eligible
@@ -144,7 +152,7 @@ Explicit tombstones, not timeouts, remove durable membership or catalog
 ownership. A temporary partition can suppress unreachable replicas from DNS
 without deleting them.
 
-## Important paths and units
+## Important Paths and Units
 
 For project slug `{slug}`:
 
@@ -175,8 +183,8 @@ installation. They are not part of the current runtime.
 jiji network plan
 jiji network catalog
 jiji network diagnostics
-jiji server exec -- 'wg show'
-jiji server exec -- 'systemctl status jiji-agent-<slug>'
+jiji server exec "wg show"
+jiji server exec "systemctl status jiji-agent-<slug>"
 ```
 
 From a server, query its planned DNS address:
