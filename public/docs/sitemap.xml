@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://jiji.run/docs</loc></url>
+  <url><loc>https://jiji.run/docs/getting-started/installation</loc></url>
+  <url><loc>https://jiji.run/docs/getting-started/quick-start</loc></url>
+  <url><loc>https://jiji.run/docs/getting-started/architecture</loc></url>
+  <url><loc>https://jiji.run/docs/guides/deployment</loc></url>
+  <url><loc>https://jiji.run/docs/guides/testing</loc></url>
+  <url><loc>https://jiji.run/docs/guides/ci-cd</loc></url>
+  <url><loc>https://jiji.run/docs/guides/llms</loc></url>
+  <url><loc>https://jiji.run/docs/guides/troubleshooting</loc></url>
+  <url><loc>https://jiji.run/docs/reference/configuration</loc></url>
+  <url><loc>https://jiji.run/docs/reference/commands</loc></url>
+  <url><loc>https://jiji.run/docs/reference/features</loc></url>
+  <url><loc>https://jiji.run/docs/reference/network</loc></url>
+  <url><loc>https://jiji.run/docs/reference/proxy</loc></url>
+  <url><loc>https://jiji.run/docs/reference/registry</loc></url>
+  <url><loc>https://jiji.run/docs/reference/logs</loc></url>
+</urlset>

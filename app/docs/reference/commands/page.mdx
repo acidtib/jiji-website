@@ -1,19 +1,25 @@
+export const metadata = {
+  description: 'Reference for Jiji CLI commands, arguments, and deployment operations.',
+  alternates: { canonical: '/docs/reference/commands' },
+  openGraph: { url: '/docs/reference/commands', images: ['/docs/opengraph-image.png'] }
+}
+
 # Commands Reference
 
 ## Global Options
 
-All commands support these options:
+These flags are accepted by every command:
 
 | Option | Description |
 |--------|-------------|
 | `-v, --verbose` | Detailed logging output |
-| `-q, --quiet` | Minimal output |
-| `-c, --config-file <path>` | Path to config file (default: `.jiji/deploy.yml`) |
-| `-e, --environment <env>` | Use environment-specific config (e.g., `staging` → `.jiji/deploy.staging.yml`) |
-| `--version <version>` | Run against specific app version |
-| `-H, --hosts <pattern>` | Target specific hosts (supports wildcards, comma-separated) |
-| `-S, --services <pattern>` | Target specific services (supports wildcards, comma-separated) |
-| `--host-env` | Fallback to host environment variables when secrets not found in .env |
+| `-q, --quiet` | Minimal output (suppress host headers and extra messages) |
+| `-c, --config <path>` | Path to config file |
+| `-e, --environment <env>` | Use environment-specific config (e.g. `staging` -> `jiji.staging.yml`) |
+| `--version <version>` | Run against a specific app version (e.g. `jiji deploy --version 1.2.3`) |
+| `-H, --hosts <pattern>` | Target specific hosts instead of all (comma-separated, supports wildcards) |
+| `-S, --services <pattern>` | Target specific services instead of all (comma-separated, supports wildcards) |
+| `--host-env` | Fallback to host environment variables when secrets aren't found in `.env` files |
 
 ### Wildcard Patterns
 
@@ -30,381 +36,598 @@ jiji deploy -S "api,worker"     # Multiple services
 
 ### `jiji init`
 
-Create a new configuration file.
+Create a config stub at `.jiji/deploy.yml`. The generated file persists a project-directory-derived `/24` management range and `/16` container range. Review them for overlap with LAN, VPN, cloud VPC, and other Jiji project ranges before setup.
 
 ```bash
 jiji init
-```
-
-Creates `.jiji/deploy.yml` with a starter template.
-
-## Server Management
-
-### `jiji server init`
-
-Initialize servers with required components.
-
-```bash
-jiji server init
-jiji server init -H "web*"  # Only web servers
-```
-
-Installs WireGuard, Corrosion, jiji-dns, and kamal-proxy.
-
-### `jiji server exec`
-
-Execute commands on servers.
-
-```bash
-jiji server exec "docker ps"
-jiji server exec "df -h" -H web1
-jiji server exec "systemctl status jiji-dns"
-```
-
-### `jiji server teardown`
-
-Remove all Jiji components from servers.
-
-```bash
-jiji server teardown
-jiji server teardown -H web1  # Specific server
-```
-
-## Build
-
-### `jiji build`
-
-Build container images.
-
-```bash
-jiji build
-jiji build -S api              # Build specific service
-jiji build --version v1.2.3    # Tag with version
-jiji build --no-cache          # Build without cache
-jiji build --no-push           # Build without pushing to registry
-```
-
-| Option | Description |
-|--------|-------------|
-| `-S, --services` | Target specific services |
-| `--version` | Version tag for images |
-| `--no-cache` | Disable build cache |
-| `--push` / `--no-push` | Push to registry (default: true) |
-
-## Deploy
-
-### `jiji deploy`
-
-Deploy services to servers.
-
-```bash
-jiji deploy
-jiji deploy --build              # Build before deploy
-jiji deploy --build --no-cache   # Build without cache before deploy
-jiji deploy --version v1.2.3     # Deploy specific version
-jiji deploy -S "api,worker"      # Deploy specific services
-jiji deploy -H "prod*"           # Deploy to matching hosts
-jiji deploy -e production        # Use production config
-jiji deploy -y                   # Skip confirmation prompt
-```
-
-| Option | Description |
-|--------|-------------|
-| `--build` | Build images before deploying |
-| `--no-cache` | Build without cache (requires `--build`) |
-| `--version` | Deploy specific version |
-| `-y, --yes` | Skip confirmation prompt |
-| `-S, --services` | Target specific services |
-| `-H, --hosts` | Target specific hosts |
-| `-e, --environment` | Use environment-specific config |
-
-## Service Management
-
-### `jiji services logs`
-
-View service logs.
-
-```bash
-jiji services logs
-jiji services logs -S api
-jiji services logs --lines 100
-jiji services logs --since 30m
-jiji services logs --since 2h
-jiji services logs --grep "error"
-jiji services logs --follow
-jiji services logs -H web1 -S api
-```
-
-| Option | Description |
-|--------|-------------|
-| `--lines, -n` | Number of lines |
-| `--since` | Time filter (30m, 2h, 1d) |
-| `--grep` | Filter by pattern |
-| `--grep-options` | Options for grep (e.g., `-i` for case-insensitive) |
-| `--follow, -f` | Stream logs |
-| `--container-id` | Show container IDs |
-
-### `jiji services restart`
-
-Restart running services.
-
-```bash
-jiji services restart
-jiji services restart -S api
-jiji services restart -H web1
-```
-
-### `jiji services remove`
-
-Remove services from servers.
-
-```bash
-jiji services remove
-jiji services remove -S api
-```
-
-### `jiji services prune`
-
-Clean up old container images.
-
-```bash
-jiji services prune
-jiji services prune -S api
-jiji services prune --retain 5   # Keep 5 versions (default: 3)
-```
-
-| Option | Description |
-|--------|-------------|
-| `-S, --services` | Target specific services |
-| `--retain` | Number of image versions to keep (default: 3) |
-
-## Proxy Management
-
-### `jiji proxy logs`
-
-View kamal-proxy logs.
-
-```bash
-jiji proxy logs
-jiji proxy logs -H web1
-jiji proxy logs --since 1h
-jiji proxy logs --grep "error"
-```
-
-## Registry
-
-### `jiji registry setup`
-
-Setup container registry on servers.
-
-```bash
-jiji registry setup
-```
-
-### `jiji registry login`
-
-Authenticate with container registry.
-
-```bash
-jiji registry login
-```
-
-### `jiji registry logout`
-
-Logout from container registry.
-
-```bash
-jiji registry logout
-```
-
-### `jiji registry remove`
-
-Remove registry configuration from servers.
-
-```bash
-jiji registry remove
-```
-
-## Network
-
-### `jiji network status`
-
-Show network topology and connectivity.
-
-```bash
-jiji network status
-```
-
-Shows WireGuard peer connections, Corrosion cluster state, and DNS service status.
-
-### `jiji network dns`
-
-Show DNS records from service discovery.
-
-```bash
-jiji network dns
-jiji network dns -S api        # Filter by service
-jiji network dns -S "api,web"  # Multiple services
-```
-
-### `jiji network inspect`
-
-Inspect container networking details.
-
-```bash
-jiji network inspect
-jiji network inspect -S api
-jiji network inspect --container abc123
-```
-
-| Option | Description |
-|--------|-------------|
-| `-S, --services` | Filter by service |
-| `--container` | Inspect specific container by ID |
-
-### `jiji network gc`
-
-Garbage collect stale DNS records.
-
-```bash
-jiji network gc          # Dry run - shows what would be deleted
-jiji network gc --force  # Actually delete stale records
-```
-
-| Option | Description |
-|--------|-------------|
-| `--force` | Actually delete stale records (without this, only shows what would be deleted) |
-
-### `jiji network db stats`
-
-Show Corrosion database statistics.
-
-```bash
-jiji network db stats
-```
-
-### `jiji network db query`
-
-Execute raw SQL query on Corrosion database.
-
-```bash
-jiji network db query "SELECT * FROM containers"
-jiji network db query "SELECT * FROM services WHERE project = 'myapp'"
-```
-
-### `jiji network teardown`
-
-Remove network infrastructure from servers.
-
-```bash
-jiji network teardown
-jiji network teardown -H web1  # Specific server
-```
-
-Removes WireGuard, Corrosion, and jiji-dns.
-
-## Secrets
-
-### `jiji secrets print`
-
-Display configured secrets and their resolution status.
-
-```bash
-jiji secrets print
-jiji secrets print -e production
-jiji secrets print --show-values  # Reveal actual values (use with caution)
-```
-
-| Option | Description |
-|--------|-------------|
-| `-e, --environment` | Check secrets for specific environment |
-| `--show-values` | Reveal actual secret values |
-
-Shows which secrets are defined and whether they can be resolved from `.env` files.
-
-## Audit Trail
-
-### `jiji audit`
-
-View deployment audit trail.
-
-```bash
-jiji audit
-jiji audit --lines 50
-jiji audit --filter deploy
-jiji audit --status success
-jiji audit --since 2024-01-01
-jiji audit --follow
-jiji audit --json
-jiji audit --aggregate  # Combine logs chronologically from all hosts
-```
-
-| Option | Description |
-|--------|-------------|
-| `-n, --lines` | Number of recent entries (default: 20) |
-| `--filter <action>` | Filter by action type (e.g., deploy, build) |
-| `--status <status>` | Filter by status (started, success, failed, warning) |
-| `--since <date>` | Show entries since date |
-| `--until <date>` | Show entries until date |
-| `--raw` | Show raw format |
-| `--json` | Output as JSON |
-| `--follow, -f` | Follow like tail -f |
-| `--aggregate` | Combine logs chronologically from all hosts |
-
-Audit logs are stored at `/var/log/jiji/{project}/` on remote hosts.
-
-## Deployment Locks
-
-### `jiji lock acquire`
-
-Acquire deployment lock to prevent concurrent deployments.
-
-```bash
-jiji lock acquire "Deploying v1.2.3"
-jiji lock acquire "CI deploy" --timeout 300   # Timeout in seconds
-jiji lock acquire "Emergency fix" --force     # Force acquire even if locked
-```
-
-| Argument/Option | Description |
-|-----------------|-------------|
-| `<message>` | Lock message (required) |
-| `--timeout` | Timeout in seconds (default: 300) |
-| `--force` | Force acquire even if already locked |
-
-### `jiji lock release`
-
-Release deployment lock.
-
-```bash
-jiji lock release
-```
-
-### `jiji lock status`
-
-Check current lock status.
-
-```bash
-jiji lock status
-jiji lock status --json  # Output as JSON
-```
-
-### `jiji lock show`
-
-Show detailed lock information.
-
-```bash
-jiji lock show
 ```
 
 ## Version
 
 ### `jiji version`
 
-Show Jiji version.
+Show the compiled jiji version.
 
 ```bash
 jiji version
 ```
+
+## Build
+
+### `jiji build`
+
+Build and push images for services with `build:` configured.
+
+```bash
+jiji build
+jiji build -S api              # Build a specific service
+jiji build --no-cache          # Build without cache
+jiji build --no-push           # Build without pushing (single-architecture only)
+```
+
+| Option | Description |
+|--------|-------------|
+| `--no-cache` | Build without using the cache |
+| `--push` / `--no-push` | Push built images (default: push) |
+
+## Deploy
+
+### `jiji deploy`
+
+Deploy configured services across their target servers with zero downtime.
+
+```bash
+jiji deploy
+jiji deploy --build              # Build images before deploying
+jiji deploy --build --no-cache   # Build without cache before deploying
+jiji deploy --version 1.2.3      # Deploy a specific version
+jiji deploy -S "api,worker"      # Deploy specific services
+jiji deploy -H "prod*"           # Deploy to matching hosts
+jiji deploy -e production        # Use jiji.production.yml
+jiji deploy -y                   # Skip the confirmation prompt
+```
+
+| Option | Description |
+|--------|-------------|
+| `--build` | Build images before deploying |
+| `--no-cache` | Build without cache (only relevant with `--build`) |
+| `--skip-proxy` | Skip jiji-proxy route activation |
+| `-y`, `--yes` | Auto-confirm the deployment plan; required when running non-interactively (e.g. CI/CD) |
+| `--lock-timeout <SECONDS>` | Wait up to this many seconds for an existing lock to clear (default: 300) |
+| `--force-lock` | Replace an existing deployment lock instead of waiting for it |
+| `--wait-for-peers <N>` | After a successful deploy, best-effort check up to N other peers' catalogs for the new deployment (never blocks past a short bound, never affects the exit code) |
+
+`jiji deploy` prints the deployment plan (project, environment, target
+servers/endpoints, and the flags above) and asks for confirmation before
+doing anything - before build, mesh reconciliation, or any mutating SSH
+connection. `-y`/`--yes` skips the prompt. Without it and without a
+real terminal attached, `jiji deploy` exits with an error instead of
+hanging on a prompt nothing can answer - always pass `-y` in CI/CD.
+
+After confirmation, `jiji deploy` locks and connects only the selected
+replica owners plus eligible ingress owners (see
+[Deployment Locks](#deployment-locks) below), not every configured server.
+Service deployment does not recompile or reconcile the WireGuard mesh
+unless a targeted host is actually stale. Locks are released after the
+deploy succeeds or fails.
+
+## Server Management
+
+### `jiji server setup`
+
+Install or reconcile the container engine and complete private network on
+each server. Existing Podman installations older than the required 5.8.4
+are upgraded.
+
+```bash
+jiji server setup
+jiji server setup -H "web*"          # Only web servers
+jiji server setup --rotate-key       # Force a fresh WireGuard keypair on the targeted hosts
+jiji server setup --import           # Seed pre-existing containers as historical catalog history
+jiji server setup --import-dry-run   # Preview --import without committing anything
+```
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Skip the confirmation prompt |
+| `--rotate-key` | Force a fresh WireGuard keypair on the targeted hosts, fencing out their old identity |
+| `--import` | Once a targeted host's agent is running, assess it and import any pre-existing container as historical (`Stopped`) catalog history |
+| `--import-dry-run` | Preview `--import` without committing anything |
+
+On Debian and Ubuntu, jiji installs a pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle. This is an unofficial, single-maintainer distribution, so it
+has a different supply-chain trust boundary from distro packages. Jiji
+verifies the pinned archive checksum before installing it.
+
+Every run also reconciles membership: it compares each target's freshly
+observed WireGuard public key and endpoint against its last known record.
+Endpoint-only drift bumps the record's revision, while a changed key fences
+a new owner epoch. Any server still marked active in the gathered mesh view
+but no longer listed in `servers:` is tombstoned. Both are gated by
+confirmation unless `-y`/`--yes` is passed, and the command bails with an
+actionable message instead of hanging when there is no TTY and no `--yes`.
+
+`--import`, once each targeted host's agent is up, first prints a read-only
+assessment (legacy runtime, enrollment, catalog count, importable, migrated,
+or orphaned) and then one-way seeds any pre-existing container as
+historical (`Stopped`) catalog history. It never marks anything active,
+never allocates an address lease, and never touches a replica that already
+has a live catalog record: a normal `jiji deploy` remains the only way to
+actually bring a service up on the dynamic-lease runtime. `--import-dry-run`
+prints the same plan without committing it.
+
+There is no standalone `assess`, `import`, `decommission`,
+`update-endpoint`, `rotate-key`, or `replace` command. `jiji server setup`
+absorbs all of it.
+
+#### Agent installation
+
+`jiji server setup` also installs `jiji-agent`, the per-project systemd
+service that owns WireGuard repair, DNS, the service catalog, and container
+reconciliation on that host. Jiji resolves which binary to install, in
+order:
+
+1. `JIJI_AGENT_BINARY` - an explicit local override. An invalid path here
+   is always a hard failure, never a silent fallback to the next step.
+2. A `jiji-agent` binary already sitting next to the running `jiji` (the
+   case for `mise install` and in-repo dev builds).
+3. The default for a release install: a host-side script that downloads
+   the matching-version agent directly onto each server from the GitHub
+   release and verifies it against a published `sha256` checksum before
+   installing it.
+
+Set `JIJI_AGENT_VERSION` to pin a different release tag than the running
+CLI's own version, or `JIJI_RELEASE_BASE_URL` to fetch from a self-hosted
+mirror.
+
+### `jiji server exec`
+
+Run a command on any number of selected servers, or attach an interactive
+shell to exactly one.
+
+```bash
+jiji server exec "docker ps"                       # Every configured server, concurrently
+jiji server exec "docker ps" -H "web*"              # Only matching servers
+jiji server exec "docker ps" --sequential            # One host at a time instead of concurrently
+jiji server exec -H web1                             # Interactive login shell
+jiji server exec "top" -H web1 --interactive         # Attach a PTY to a command
+```
+
+| Option | Description |
+|--------|-------------|
+| `--interactive` | Attach a PTY even when a command is given (requires exactly one matched host) |
+| `--sequential` | With multiple matched hosts, run one at a time instead of concurrently |
+
+An interactive session (no command given, or `--interactive`) is bound to
+one local terminal, so `-H`/`--hosts` must resolve to exactly one server in
+that case; a plain command has no such limit. Interactive sessions
+automatically downgrade to non-interactive if stdin/stdout isn't a real
+TTY.
+
+### `jiji server teardown`
+
+Remove jiji-managed applications and the private network from selected
+servers.
+
+```bash
+jiji server teardown
+jiji server teardown -H web1     # Specific server
+jiji server teardown --dry-run   # Print the plan without changing anything
+jiji server teardown --volumes   # Also remove jiji-owned named volumes
+```
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Skip the destructive confirmation prompt |
+| `--volumes` | Also remove jiji-owned named volumes for this project |
+| `--dry-run` | Print the teardown plan without changing any host |
+
+`-S`/`--services` is rejected - teardown always acts on the whole project.
+
+## Network Management
+
+### `jiji network plan`
+
+Print the deterministic private network plan without changing any host.
+
+```bash
+jiji network plan
+```
+
+Shows the exact per-project derived names (WireGuard interface, port,
+bridge, slug) for your configuration.
+
+### `jiji network setup`
+
+Install or repair the complete private network.
+
+```bash
+jiji network setup
+jiji network setup -H web1
+```
+
+Idempotent, with rollback on partial failure. If configured CIDRs change, setup migrates the project bridge, reattaches its service containers and the shared proxy at their newly planned addresses, and refreshes proxy ingress and routes. A failed activation restores the previous bridge and addresses. `jiji server setup` and `jiji deploy` both call this same path when a host's network is missing or stale.
+
+### `jiji network catalog`
+
+Read-only inspection of a selected host's locally replicated service catalog.
+
+```bash
+jiji network catalog
+jiji network catalog -H web1
+```
+
+### `jiji network diagnostics`
+
+Read-only inspection of a selected host's agent self-healing, replication, quota, and component diagnostics.
+
+```bash
+jiji network diagnostics
+jiji network diagnostics --json
+```
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Emit one JSON object per server |
+
+### `jiji network compact`
+
+Compact each selected host's superseded replicated operation history.
+
+```bash
+jiji network compact
+```
+
+### `jiji network backup`
+
+Export an encrypted, operator-controlled control-plane backup: project identity, membership, address claims, and catalog operations. Never includes host WireGuard private keys or deployed secrets.
+
+```bash
+jiji network backup --output backup.enc --passphrase-file passphrase.txt
+```
+
+| Option | Description |
+|--------|-------------|
+| `--output <PATH>` | Where to write the encrypted backup |
+| `--passphrase-file <PATH>` | File containing the encryption passphrase |
+
+### `jiji network restore`
+
+Restore an encrypted backup into surviving hosts in the same recovery epoch.
+
+```bash
+jiji network restore --input backup.enc --passphrase-file passphrase.txt
+```
+
+| Option | Description |
+|--------|-------------|
+| `--input <PATH>` | Path to the encrypted backup to restore |
+| `--passphrase-file <PATH>` | File containing the encryption passphrase |
+
+### `jiji network recover`
+
+Recover a lost control plane into a new fenced recovery epoch. Destructive: advances the recovery epoch, so it always requires explicit confirmation.
+
+```bash
+jiji network recover --input backup.enc --passphrase-file passphrase.txt -y
+```
+
+| Option | Description |
+|--------|-------------|
+| `--input <PATH>` | Path to the encrypted backup to recover from |
+| `--passphrase-file <PATH>` | File containing the encryption passphrase |
+| `-y, --yes` | Confirm the destructive epoch advancement |
+
+Node decommissioning, endpoint updates, and key rotation are not separate
+commands: re-running `jiji server setup` handles all of it. It reconciles
+membership on every run (see above), and `--rotate-key` forces a fresh
+WireGuard keypair on the targeted hosts.
+
+## Registry Management
+
+### `jiji registry login`
+
+Authenticate the local machine and/or configured servers to the configured
+registry.
+
+```bash
+jiji registry login
+jiji registry login --skip-local    # Only authenticate servers
+jiji registry login --skip-remote   # Only authenticate the local machine
+```
+
+### `jiji registry logout`
+
+Remove registry credentials from the local machine and/or configured
+servers.
+
+```bash
+jiji registry logout
+jiji registry logout --skip-local
+jiji registry logout --skip-remote
+```
+
+### `jiji registry teardown`
+
+Remove the jiji-managed local registry container.
+
+```bash
+jiji registry teardown
+jiji registry teardown --dry-run   # Show what would be removed
+```
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Skip the destructive confirmation prompt |
+| `--dry-run` | Show what would be removed without changing anything |
+
+## Proxy Management
+
+### `jiji proxy restart`
+
+Pull and recreate jiji-proxy on selected servers.
+
+```bash
+jiji proxy restart
+jiji proxy restart -H web1
+```
+
+### `jiji proxy logs`
+
+View jiji-proxy logs on selected servers.
+
+```bash
+jiji proxy logs
+jiji proxy logs -H web1
+jiji proxy logs --since 1h
+jiji proxy logs --grep "error"
+jiji proxy logs --follow   # Requires exactly one host
+```
+
+| Option | Description |
+|--------|-------------|
+| `-n, --lines` | Number of lines to show |
+| `-s, --since` | Show logs since this timestamp or relative duration |
+| `-g, --grep` | Filter log lines |
+| `-f, --follow` | Follow logs (requires exactly one host) |
+
+## Service Management
+
+### `jiji service logs`
+
+Tail the Active catalog deployment for each selected replica.
+
+```bash
+jiji service logs
+jiji service logs -S api
+jiji service logs --lines 100
+jiji service logs --since 30m
+jiji service logs --grep "error"
+jiji service logs --follow
+jiji service logs -H web1 -S api
+```
+
+| Option | Description |
+|--------|-------------|
+| `-n, --lines` | Number of lines to show |
+| `-s, --since` | Show logs since this timestamp or relative duration |
+| `-g, --grep` | Filter log lines |
+| `--grep-options` | Extra flags passed to grep (e.g. `-i` for case-insensitive) |
+| `-f, --follow` | Follow logs (requires exactly one target) |
+| `--container-id` | Show logs for an arbitrary container name instead of a configured service |
+
+### `jiji service restart`
+
+Restart running services with the same lease, Candidate, health, Active,
+proxy reconciliation, and draining transaction as `jiji deploy`, while
+reusing the currently running image.
+
+```bash
+jiji service restart
+jiji service restart -S api
+jiji service restart -H web1
+```
+
+| Option | Description |
+|--------|-------------|
+| `--lock-timeout <SECONDS>` | Wait up to this many seconds for an existing lock to clear (default: 300) |
+| `--force-lock` | Replace an existing lock on an affected replica |
+
+### `jiji service rollback`
+
+Roll back services to a previously built image through the catalog-driven
+zero-downtime replacement. Requires `--version`.
+
+```bash
+jiji service rollback --version 1.2.2
+jiji service rollback --version 1.2.2 -S api
+```
+
+A build-configured service resolves the target from `builder.registry` +
+project + service name (no rebuild, trusting the tag was already pushed by
+a prior `jiji build`/`jiji deploy --build`). A static-`image:` service gets
+`--version` applied the same way `jiji deploy --version` does.
+
+| Option | Description |
+|--------|-------------|
+| `--lock-timeout <SECONDS>` | Wait up to this many seconds for an existing lock to clear (default: 300) |
+| `--force-lock` | Replace an existing lock on an affected replica |
+
+### `jiji service remove`
+
+Retire selected catalog deployments, remove their containers and address
+leases, and reconcile proxy routes.
+
+```bash
+jiji service remove
+jiji service remove -S api
+jiji service remove --volumes   # Also remove named volumes
+```
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Skip the destructive confirmation prompt |
+| `--volumes` | Also remove jiji-owned named volumes for selected services |
+| `--lock-timeout <SECONDS>` | Wait up to this many seconds for an existing lock to clear (default: 300) |
+| `--force-lock` | Replace an existing lock on an affected replica |
+
+### `jiji service scale`
+
+Change the replicated desired count for exactly one service:
+
+```bash
+jiji service scale -S web --replicas 4
+jiji service scale -S web --replicas 0
+jiji service scale -S web --reset
+jiji service scale -S web --replicas 3 --dry-run
+```
+
+| Option | Description |
+|---|---|
+| `--replicas N` | Set the runtime desired total |
+| `--reset` | Return to the configured `replicas:` value |
+| `--dry-run` | Print placement and mutations without changing state |
+| `-y, --yes` | Skip confirmation |
+
+`-S` must match exactly one service. `-H` is rejected because placement,
+not a host filter, decides replica ownership. Interrupted scale operations
+are resumable by retrying the same command.
+
+### `jiji service prune`
+
+Clean up old container images for build-configured services (services with
+only a static `image:` are never pruned).
+
+```bash
+jiji service prune
+jiji service prune -S api
+jiji service prune --retain 5   # Keep 5 versions instead of the configured default
+```
+
+| Option | Description |
+|--------|-------------|
+| `-r, --retain` | Number of image versions to keep (default: the service's configured `retain`, normally 3) |
+
+## Secrets
+
+### `jiji secrets print`
+
+Print resolved secrets and their resolution status for debugging.
+
+```bash
+jiji secrets print
+jiji secrets print -e production
+jiji secrets print --show-values   # Reveal actual values, use with caution
+```
+
+Shows `[SET]`/`[MISSING]` for every secret-shaped reference in
+configuration. `environment.secrets`, `builder.registry.password`, and
+ALL_CAPS references in SSH `keys` are resolved from `.env`/host-env;
+other fields (SSH key passphrase, proxy SSL certs, build args) are scanned
+and reported for visibility only.
+
+## Deployment Locks
+
+Locking scope matches what a command actually mutates, not the whole
+project. `jiji deploy`, `service restart/rollback/remove`, and `service
+scale` each lock only the specific logical replicas they touch (plus a
+shared proxy lock when a route on an ingress host is involved) - an
+unrelated offline host or a different replica never blocks a targeted
+operation. `server setup`/`teardown` lock the whole targeted host.
+`network setup`/`backup`/`restore`/`import`/`compact` lock the whole
+project. Every lock is released on both the success and failure path of the
+command that took it.
+
+`jiji lock acquire`/`release` default to that same whole-project scope -
+**not** the per-replica scope a normal deploy uses, so acquiring the
+project lock does not block an unrelated `jiji deploy`, `service restart`,
+or `service rollback`; it only blocks other project-scoped commands
+(`network setup`/`backup`/`restore`/`import`/`compact`, and any other
+`jiji lock acquire`). Use it to reserve a maintenance window around those
+operations, or use `jiji lock release --replica/--service/--scope` to clear
+a specific stuck finer-grained lock (see below) instead.
+
+### `jiji lock acquire`
+
+```bash
+jiji lock acquire "Network maintenance window"
+jiji lock acquire "CI maintenance" --timeout 300   # Seconds to wait for an existing lock (default: 300)
+jiji lock acquire "Emergency fix" --force          # Force acquire even if already locked
+```
+
+### `jiji lock release`
+
+```bash
+jiji lock release                                # Release the project-maintenance lock
+jiji lock release --replica <replica-id>         # Release one stuck logical-replica lock
+jiji lock release --service <name>               # Release one stuck service-scale lock
+jiji lock release --scope host-runtime           # Release a stuck host-runtime lock
+jiji lock release --scope proxy                  # Release the host-global proxy lock
+```
+
+| Option | Description |
+|--------|-------------|
+| `--replica <REPLICA_ID>` | Release the logical-replica lock for this replica ID instead of the project lock |
+| `--service <NAME>` | Release the service-scale lock for this service instead of the project lock |
+| `--scope <host-runtime\|proxy>` | Release the named host-scoped lock instead of the project lock |
+
+### `jiji lock status`
+
+```bash
+jiji lock status
+jiji lock status --json
+```
+
+### `jiji lock show`
+
+```bash
+jiji lock show
+```
+
+`-S`/`--services` is rejected for every `lock` subcommand - locks are
+host-scoped, not service-scoped.
+
+## Audit Trail
+
+### `jiji audit`
+
+Show the per-server, append-only audit trail at `.jiji/{project}/audit.log`.
+
+```bash
+jiji audit
+jiji audit --lines 50
+jiji audit --grep deploy
+jiji audit --status success
+jiji audit --json
+jiji audit --stats
+jiji audit --stats --since 24h
+jiji audit --stats --since 7d --json
+jiji audit --follow   # Requires exactly one host
+```
+
+| Option | Description |
+|--------|-------------|
+| `-n, --lines` | Number of entries to show per server (default: 20) |
+| `-g, --grep` | Filter entries by action or message (substring match) |
+| `--status` | Filter by status: `success` or `failed` |
+| `--json` | Output entries as newline-delimited JSON, or one structured object with `--stats` |
+| `--stats` | Show overall, per-action, and per-server success-rate and duration statistics |
+| `-s, --since` | Limit statistics to a relative window such as `30m`, `12h`, or `7d` (requires `--stats`) |
+| `-f, --follow` | Follow the audit trail as new entries are appended (requires exactly one host) |
+
+Statistics read the full live project audit log from every selected server on
+each invocation; no local cache is maintained. Entries without `duration_ms`
+still count toward totals and success rates, but are excluded from the average
+duration. The output reports timed-entry coverage so that distinction remains
+visible. `--stats` cannot be combined with `--lines` or `--follow`. With
+`--stats --json`, Jiji emits one structured object containing `overall`,
+`by_action`, and `by_server` aggregates.
+
+`-S`/`--services` is rejected - the trail is host-scoped, not
+service-scoped. Every state-changing command writes to it: `deploy`,
+`service restart/rollback/remove/prune/scale`, `lock acquire/release`,
+`network backup/restore/compact/import`, and `server setup/teardown`.
 
 ## Examples
 
@@ -414,7 +637,7 @@ jiji version
 jiji deploy --build -e staging
 ```
 
-### Deploy specific service to specific host
+### Deploy a specific service to a specific host
 
 ```bash
 jiji deploy -S api -H web1
@@ -423,30 +646,35 @@ jiji deploy -S api -H web1
 ### View logs with filtering
 
 ```bash
-jiji services logs -S api --since 1h --grep "ERROR" --follow
+jiji service logs -S api --since 1h --grep "ERROR" --follow
 ```
 
-### Execute command across all servers
+### Execute a command across all servers
 
 ```bash
 jiji server exec "docker system prune -f"
 ```
 
-### Check network health
+### Roll back a failed release
 
 ```bash
-jiji network status
-jiji network dns
+jiji service rollback --version 1.2.2 -S api
 ```
 
-### View audit trail for failed deployments
+### View recent failed deployments
 
 ```bash
-jiji audit --status failed --since 7d
+jiji audit --status failed
 ```
 
-### Force acquire a stuck lock
+### Force acquire a stuck project-maintenance lock
 
 ```bash
-jiji lock acquire "Taking over stuck deployment" --force
+jiji lock acquire "Taking over stuck network maintenance" --force
+```
+
+### Release a stuck replica lock without waiting on the project lock
+
+```bash
+jiji lock release --replica <replica-id>
 ```

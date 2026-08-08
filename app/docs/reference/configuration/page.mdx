@@ -1,55 +1,176 @@
+export const metadata = {
+  description: 'Complete deploy.yml configuration reference for Jiji applications, servers, services, networking, and health checks.',
+  alternates: { canonical: '/docs/reference/configuration' },
+  openGraph: { url: '/docs/reference/configuration', images: ['/docs/opengraph-image.png'] }
+}
+
 # Configuration Reference
 
-Jiji uses YAML configuration files stored in `.jiji/deploy.yml`. Environment-specific overrides can be placed in `.jiji/deploy.{environment}.yml`.
+Complete reference for Jiji configuration files (`.jiji/deploy.yml` or
+`jiji.<environment>.yml`).
+
+## Configuration File Structure
+
+Jiji uses YAML to define your infrastructure. The default file is
+`.jiji/deploy.yml`; you can also create environment-specific configs like
+`jiji.staging.yml` or `jiji.production.yml`.
+
+```bash
+# Use default .jiji/deploy.yml
+jiji deploy
+
+# Use environment-specific config
+jiji -e staging deploy      # Uses jiji.staging.yml
+jiji -e production deploy   # Uses jiji.production.yml
+
+# Use a custom config file
+jiji -c /path/to/custom.yml deploy
+```
+
+When no config file is specified, Jiji searches upward from the current
+directory for `.jiji/deploy.yml` (or `jiji.{environment}.yml` when
+`-e`/`--environment` is given), continuing up the directory tree until a
+config file is found or the filesystem root is reached.
+
+### Minimal Configuration
+
+```yaml
+project: myapp
+
+builder:
+  engine: docker
+  local: true
+  registry:
+    type: local
+    port: 31270
+
+ssh:
+  user: deploy
+
+servers:
+  server1:
+    host: server1.example.com
+
+services:
+  web:
+    image: nginx:latest
+    servers:
+      - server1
+    ports:
+      - "80"
+```
 
 ## Project
 
-```yaml
-project: myapp  # Required, unique identifier for your project
-```
+### `project` (required)
 
-The project name is used in container naming, DNS resolution, and registry namespacing. Must be alphanumeric with hyphens only.
+Unique identifier for your application. Used to namespace container names,
+audit logs, and deployment locks.
+
+```yaml
+project: myapp
+```
 
 ## Builder
 
-```yaml
-builder:
-  engine: docker        # docker or podman
-  local: true           # Build locally (true) or on remote server (false)
-  cache: true           # Enable Docker build caching
-  remote: ssh://user@builder.example.com  # Remote builder (if local: false)
-  registry:
-    type: local         # local or remote
-    port: 9270          # Local registry port (default: 9270)
-    server: ghcr.io     # Registry server (for remote)
-    username: myuser    # Registry username
-    password: GITHUB_TOKEN  # Secret name (loaded from .env file)
-```
-
-### Container Engine
+Controls how container images are built and where they're stored.
 
 ```yaml
 builder:
-  engine: docker  # docker (default) or podman
+  # Container engine (required): docker or podman
+  engine: docker
+
+  # Build location (required)
+  # true = build on the local machine, false = build on a remote builder
+  local: true
+
+  # Enable build cache (optional, default: true)
+  cache: true
+
+  # Remote builder SSH connection (required when local: false)
+  remote: ssh://builder@192.168.1.50:22
 ```
 
-| Engine | Minimum Version |
-|--------|----------------|
-| Docker | 28.2.0+ |
-| Podman | 4.9.3+ |
+**Local development:**
 
-### Registry Types
+```yaml
+builder:
+  engine: docker
+  local: true
+  cache: true
+```
 
-**Local Registry**
+**Remote building** (offload to a dedicated build server):
+
+```yaml
+builder:
+  engine: docker
+  local: false
+  remote: ssh://builder@build-server.example.com
+  cache: true
+```
+
+If the configured `engine` (Docker or Podman) is not already installed on
+the remote builder host, `jiji build` installs it automatically. It also
+upgrades Podman when the installed version is older than the required
+5.8.4. This is the same distro-aware installer `jiji server setup` uses for
+a deployment host, and jiji prints a status line confirming what it
+installed or upgraded.
+
+On Debian and Ubuntu, the installer uses the pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle and verifies its archive checksum before installation. This
+bundle is an unofficial, single-maintainer Podman distribution. jiji
+doesn't do anything else to a builder host beyond that: no network,
+WireGuard, or proxy setup, only the engine itself. Multi-architecture
+tooling (Buildx for Docker, manifest support for Podman) is **not**
+auto-installed - if your build needs more than one platform, install
+Buildx/manifest support on the builder yourself first; jiji only detects
+and reports whether it's there. The build context is streamed over SSH
+into a staging directory on the builder, which is always cleaned up
+afterward, including when the build fails.
+
+With `builder.registry.type: remote`, credentials are used to log in on
+the builder itself (the machine that actually runs `push`), not on your
+local machine. With `type: local`, jiji opens a reverse SSH tunnel from
+the builder's own `127.0.0.1:<registry.port>` back to your local
+registry - the same fixed-port design `jiji deploy` already uses when
+tunneling a local registry to a deployment host (see
+[Local Registry Details](/docs/reference/registry#local-registry-details)
+below). Two concurrent `jiji build` runs for the same project against the
+same builder will race for that port; the loser fails with an actionable
+message. `jiji build` has no deployment lock, so either serialize
+concurrent builds against one builder, or give each run its own
+`builder.registry.port`.
+
+**CI/CD** (always fresh builds):
+
+```yaml
+builder:
+  engine: docker
+  local: true
+  cache: false
+```
+
+### Registry
+
+Where built images are stored and pulled from, configured under
+`builder.registry`.
+
+**Local registry** - a loopback registry with SSH reverse tunnels to
+deployment hosts, useful for development. `jiji` runs it on
+`localhost:31270`, tunnels it to each remote server for the duration of the
+deploy, and tears the tunnel down afterward.
+
 ```yaml
 builder:
   registry:
     type: local
-    port: 9270  # Optional, default: 9270
-    # Uses localhost:9270, forwarded via SSH to remote servers
+    port: 31270 # optional, defaults to 31270
 ```
 
-**GitHub Container Registry**
+**Remote registry:**
+
 ```yaml
 builder:
   registry:
@@ -59,647 +180,729 @@ builder:
     password: GITHUB_TOKEN
 ```
 
-**Docker Hub**
-```yaml
-builder:
-  registry:
-    type: remote
-    server: docker.io
-    username: myuser
-    password: DOCKER_TOKEN
-```
+| Registry | `server` | Auto namespace | Result |
+|---|---|---|---|
+| GHCR | `ghcr.io` | `username/project-name` | `ghcr.io/username/project-name/service:version` |
+| Docker Hub | `docker.io` | `username` | `docker.io/username/project-service:version` |
+| Custom | `registry.example.com:5000` | none | `registry.example.com:5000/project-service:version` |
 
-**AWS ECR**
-```yaml
-builder:
-  registry:
-    type: remote
-    server: 123456789012.dkr.ecr.us-west-2.amazonaws.com
-    username: AWS
-    password: AWS_ECR_TOKEN
-```
+`password` can be a literal value, an ALL_CAPS secret name resolved from
+`.env`/host-env (see Environment Variables below), or `$(a local command)`
+- useful for registries like AWS ECR or GCP Artifact Registry that issue
+short-lived tokens, see [Registry Reference](/docs/reference/registry).
 
 ## SSH
 
 ```yaml
 ssh:
-  user: deploy                    # SSH username (default: root)
-  port: 22                        # SSH port (default: 22)
-  key_path: ~/.ssh/id_rsa         # SSH private key path
-  key_passphrase: ""              # SSH key passphrase
-  connect_timeout: 30             # Connection timeout in seconds (default: 30)
-  command_timeout: 300            # Command timeout in seconds (default: 300)
-  log_level: error                # SSH logging (debug|info|warn|error|fatal)
+  user: deploy            # required
+  port: 22                 # optional, default 22
+  connect_timeout: 30      # optional, seconds, default 30
+  command_timeout: 300     # optional, seconds, default 300
+```
 
-  # Multiple SSH keys
+**Authentication** - ssh-agent is used by default if no keys are specified.
+Configure one or more identities with `keys`:
+
+```yaml
+ssh:
+  user: deploy
   keys:
-    - ~/.ssh/id_rsa
+    - ~/.ssh/id_ed25519
+    - /path/to/deploy_key
+```
+
+Each `keys` entry accepts a literal path or inline private key, an ALL_CAPS variable
+resolved from `.env` (or the host environment with `--host-env`), or
+`$(a local command)`. Resolved values beginning with a private-key PEM header
+are used as inline key material; other values are treated as paths.
+
+```yaml
+# Inline key material can use the same keys list
+ssh:
+  user: deploy
+  keys:
+    - |
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      ...
+      -----END OPENSSH PRIVATE KEY-----
+```
+
+```yaml
+# Disable ssh-agent, use only the listed keys
+ssh:
+  user: deploy
+  keys_only: true
+  keys:
     - ~/.ssh/deploy_key
-
-  # Keys from environment variables
-  key_data:
-    - SSH_PRIVATE_KEY_1
-    - SSH_PRIVATE_KEY_2
-
-  keys_only: false                # Ignore ssh-agent (default: false)
-  max_concurrent_starts: 30       # Concurrent SSH connections (default: 30)
-  pool_idle_timeout: 900          # Pool idle timeout in seconds (default: 900)
-  dns_retries: 3                  # DNS retry attempts (default: 3)
 ```
 
-### SSH Proxy/Jump Host
+### Proxy / jump hosts
 
-For servers behind a bastion host:
+```yaml
+# ProxyJump
+ssh:
+  user: deploy
+  proxy: bastion.example.com
+  # or deploy@bastion.example.com, or bastion.example.com:2222
+```
+
+```yaml
+# ProxyCommand, connect through an arbitrary command
+ssh:
+  user: deploy
+  proxy_command: "ssh -W %h:%p bastion.example.com"
+```
+
+`proxy_command` supports the `%h`/`%p`/`%r`/`%%` tokens (other OpenSSH
+tokens aren't substituted) and is mutually exclusive with `proxy` on the
+same server. The command is spawned as a subprocess and its stdio becomes
+the SSH transport, matching real OpenSSH behavior.
+
+### SSH config file
 
 ```yaml
 ssh:
-  # ProxyJump format
-  proxy: root@bastion.example.com
-
-  # OR ProxyCommand format
-  proxy_command: "ssh -W %h:%p user@proxy.example.com"
+  user: deploy
+  config: true   # load ~/.ssh/config
+  # or: config: ~/.ssh/custom_config
+  # or: config: [~/.ssh/config, ~/.ssh/work_config]
 ```
 
-### SSH Config File
+Host-specific settings (wildcards supported), `HostName`/`User`/`Port`/
+`IdentityFile`, `ProxyJump`/`ProxyCommand`, and `ConnectTimeout`/
+`IdentitiesOnly` are all inherited. Explicit `ssh:` fields in `deploy.yml`
+take precedence over the SSH config file.
 
-Load settings from SSH config files:
+### Advanced
 
 ```yaml
 ssh:
-  # Load ~/.ssh/config
-  config: true
-
-  # Load specific file
-  config: "~/.ssh/custom_config"
-
-  # Load multiple files
-  config:
-    - ~/.ssh/config
-    - ~/.ssh/work_config
+  user: deploy
+  max_concurrent_starts: 30   # limit concurrent SSH connections
+  pool_idle_timeout: 900       # seconds before idle connections close
+  dns_retries: 3                # retry DNS lookups with backoff
+  log_level: error              # debug, info, warn, error, fatal
 ```
-
-SSH config files support:
-- Host patterns and aliases
-- ProxyJump/ProxyCommand inheritance
-- IdentityFile discovery
-- Port and user overrides
 
 ## Network
 
+Enables the private, encrypted WireGuard mesh with automatic `.jiji`
+service discovery. See [Network Reference](/docs/reference/network) for the
+full design.
+
 ```yaml
 network:
-  enabled: true                  # Enable private networking (default: false)
-  cluster_cidr: "10.210.0.0/16"  # IP range for WireGuard mesh (default)
+  enabled: true
+  management_cidr: "198.18.0.0/16"
+  container_cidr: "100.64.0.0/10"
+  dns_forwarders:
+    - "1.1.1.1"
+    - "8.8.8.8"
 ```
 
-When enabled, Jiji sets up:
-- WireGuard mesh VPN between all servers (port 51820/UDP)
-- Corrosion for distributed service registry (port 9280/TCP, API 9220/TCP)
-- jiji-dns for service discovery
+| Setting | Default | Description |
+| --- | --- | --- |
+| `enabled` | `true` | Enable the private network |
+| `management_cidr` | `198.18.0.0/16` | WireGuard host-address pool |
+| `container_cidr` | `100.64.0.0/10` | Routed container-address pool |
+| `dns_forwarders` | `1.1.1.1`, `8.8.8.8` | Resolvers used for any query outside this project's own `.jiji` zone |
 
-### IP Allocation
+The `.jiji` domain is internal-only and not customizable - service
+discovery always resolves names like `myapp-api.jiji`.
 
-With default `10.210.0.0/16`:
-- Server 0: 10.210.0.1 (containers: 10.210.0.2-254)
-- Server 1: 10.210.1.1 (containers: 10.210.1.2-254)
-- Maximum: 256 servers, 253 containers per server
+Every deployed service container's `resolv.conf` only ever has this
+project's own agent as its nameserver, so a normal internet hostname (an
+API your app calls, a package registry, etc.) is resolved by forwarding the
+query to `dns_forwarders` rather than by the container also getting the
+host's own DNS servers. Override this list to point at a home router,
+Pi-hole, or other local resolver instead of the public default.
+
+`jiji init` writes smaller project-directory-derived ranges into new configurations. The table above describes the fallback values for configurations that omit these fields. Generated ranges are stable for a project directory, but should still be reviewed for overlap and rare slot collisions (see [Network Reference](/docs/reference/network)).
+
+```yaml
+# Avoid CIDR conflicts with an existing network
+network:
+  enabled: true
+  management_cidr: "198.19.0.0/16"
+  container_cidr: "172.16.0.0/12"
+```
+
+```yaml
+# Disable networking entirely
+network:
+  enabled: false
+```
+
+### Service discovery example
+
+```yaml
+servers:
+  server1:
+    host: server1.example.com
+  server2:
+    host: server2.example.com
+  server3:
+    host: server3.example.com
+
+services:
+  api:
+    servers: [server1, server2]
+  database:
+    servers: [server3]
+```
+
+```bash
+# From the api container, connect to database
+DATABASE_URL: postgresql://user:pass@myapp-database.jiji:5432/myapp
+
+# From the database container, connect to api
+API_URL: http://myapp-api.jiji:3000
+
+# Reach only the api replica on server1
+API_SERVER1_URL: http://myapp-api-server1.jiji:3000
+```
 
 ## Servers
 
 ```yaml
 servers:
-  web1:
-    host: server1.example.com     # IP or hostname (required)
-    arch: amd64                   # amd64 or arm64 (default: amd64)
-
-    # Override SSH settings per server
-    user: admin
-    port: 2222
-    key_path: ~/.ssh/special_key
-    key_passphrase: ""
-    keys:
-      - ~/.ssh/key1
-      - ~/.ssh/key2
-    key_data:
-      - SSH_KEY_ENV_VAR
-
-  web2:
-    host: server2.example.com
-
-  db:
-    host: db.example.com
-    arch: arm64
-```
-
-### Multi-Architecture Support
-
-Jiji automatically builds and deploys the correct architecture for each server:
-
-```yaml
-servers:
-  x86-server:
-    host: amd64.example.com
+  app-amd:
+    host: app-amd.example.com
     arch: amd64
-
-  arm-server:
-    host: arm64.example.com
+  app-arm:
+    host: app-arm.example.com
     arch: arm64
+    user: ubuntu
+    port: 2222
+    keys:
+      - ~/.ssh/app-arm
 ```
+
+`host` is required and is the SSH destination unless an enabled OpenSSH
+configuration supplies a matching `HostName`. `-H`/`--hosts` filters match
+both the config key name (`app-arm`) and the configured `host` value
+(`app-arm.example.com`).
+
+`arch` is optional and defaults to `amd64`. The supported values are
+`amd64` and `arm64`. When a service targets servers with both architectures,
+Jiji builds it for both `linux/amd64` and `linux/arm64`. Multi-platform
+images must be pushed, so `jiji build --no-push` is unavailable for that
+service.
+
+Each server can override these top-level `ssh:` defaults:
+
+| Field | Resolution order |
+| --- | --- |
+| `user` | server, top-level `ssh.user`, matching OpenSSH `User` |
+| `port` | server, non-default `ssh.port`, matching OpenSSH `Port`, `22` |
+| `keys` | server `keys`, top-level `ssh.keys`, matching OpenSSH `IdentityFile` |
+| `key_passphrase` | server, top-level `ssh.key_passphrase` |
+
+`keys` is always a list, including when only one identity is configured. The
+former singular `key_path` field has been removed. Other SSH options, including
+timeouts, proxy settings,
+`keys_only`, DNS retries, and pool limits, are global. `key_passphrase` is
+a literal value, it is not resolved from `.env` or
+the host environment.
 
 ## Services
 
+Each service is a deployable unit - a containerized application, either
+from a pre-built image or built from source.
+
 ```yaml
 services:
-  api:
-    # Image source (one of image or build)
+  web:
+    image: nginx:latest    # pre-built image
+    servers:
+      - server1              # required: target servers
+      - server2
+    ports:                   # optional
+      - "80"
+      - "443"
+```
+
+Image names are normalized before Docker or Podman operations. `nginx:latest` becomes `docker.io/library/nginx:latest`, and `owner/image:tag` becomes `docker.io/owner/image:tag`. Already-qualified registries such as `ghcr.io/owner/image`, `localhost:5000/image`, and private registry hostnames remain unchanged.
+
+### Replicas and placement
+
+```yaml
+services:
+  web:
     image: nginx:latest
-    # OR
+    servers: [server1, server2, server3]   # eligible placement set
+    replicas: 2                             # optional, default: 1
+    placement: spread                       # optional, default: spread
+```
+
+`servers:` is the eligible placement set, not "one copy per server."
+`replicas:` is the desired total count across that whole set. `placement:
+spread` (the default) prefers distinct hosts; `placement: packed` fills
+hosts in deterministic order first. Change the runtime count without
+editing config with `jiji service scale -S web --replicas N` (or `--reset`
+to return to the configured value).
+
+### Build configuration
+
+Use `build:` instead of `image:` to build from source (only one of the two
+is allowed per service):
+
+```yaml
+services:
+  web:
     build:
       context: .
-      dockerfile: Dockerfile
-      target: production          # Multi-stage build target
+      dockerfile: Dockerfile   # optional, default: Dockerfile
+      target: production       # optional, build target for multi-stage Dockerfiles
       args:
         NODE_ENV: production
-        API_VERSION: "2.1.0"
-
-    # Deployment targets
-    hosts:
-      - web1
-      - web2
-
-    # Port mappings
-    ports:
-      - "3000"                    # Container port only
-      - "8080:3000"               # host:container
-      - "127.0.0.1:8080:80"       # host_ip:host_port:container_port
-      - "53:53/udp"               # UDP protocol
-
-    # Volume mounts
-    volumes:
-      - /data:/app/data
-      - /config:/app/config:ro    # Read-only
-      - web_storage:/opt/uploads  # Named volume
-
-> **Note:** Named volumes (those not starting with `/` or `./`) are automatically prefixed with the service name to prevent conflicts between services. For example, if a service named `web` defines `web_storage:/opt/uploads`, the actual volume created will be `web-web_storage`. Host path mounts are not modified.
-
-    # File transfers (simple format)
-    files:
-      - ./config.json:/app/config.json
-      - ./secrets.env:/app/.env:600  # With permissions
-
-    # File transfers (detailed format)
-    files:
-      - local: config/secret.key
-        remote: /etc/app/secret.key
-        mode: "0600"
-        owner: "nginx:nginx"
-        options: "ro"
-
-    # Directory transfers (simple format)
-    directories:
-      - ./templates:/app/templates
-      - ./html:/usr/share/nginx/html:ro
-
-    # Directory transfers (detailed format)
-    directories:
-      - local: logs
-        remote: /var/log/nginx
-        mode: "0755"
-        owner: "nginx:nginx"
-        options: "z"              # SELinux context
-
-    # Environment variables
-    environment:
-      clear:
-        NODE_ENV: production
-        LOG_LEVEL: info
-      secrets:
-        - DATABASE_URL
-        - API_KEY
-
-    # Container command override
-    command:
-      - node
-      - dist/server.js
-
-    # Network mode
-    network_mode: bridge          # bridge | host | none | container:<name>
-
-    # Resource limits
-    cpus: 2                       # CPU limit (can be fractional: 0.5, 1.5)
-    memory: "1g"                  # Memory limit (units: b|k|m|g|kb|mb|gb)
-
-    # GPU access
-    gpus: "all"                   # all | 0 | 0,1 | device=0
-
-    # Device mapping
-    devices:
-      - "/dev/video0"
-      - "/dev/snd:/dev/snd:rwm"   # With permissions
-
-    # Privileged mode and capabilities
-    privileged: false             # Privileged mode (default: false)
-    cap_add:                      # Linux capabilities
-      - NET_ADMIN
-      - SYS_MODULE
-
-    # Deployment behavior
-    stop_first: false             # Stop old container before new (default: false)
-    retain: 3                     # Images to retain after prune (default: 3)
-
-    # Proxy configuration
-    proxy:
-      app_port: 3000
-      host: api.example.com
-      ssl: true
-      healthcheck:
-        path: /health
-        interval: 10s
-        timeout: 5s
-        deploy_timeout: 60s
+        VERSION: 1.2.3
+    servers:
+      - server1
 ```
 
-### Build Configuration
+`args:` is a mapping of build-arg names to values, not a list of
+`KEY=value` strings.
 
-```yaml
-services:
-  api:
-    build:
-      context: .                  # Build context path
-      dockerfile: Dockerfile      # Dockerfile path (relative to context)
-      target: production          # Multi-stage target
-      args:
-        NODE_ENV: production
-        BUILD_VERSION: "1.2.3"
-```
+`dockerfile:` is resolved relative to **`context:`**, matching Docker
+Compose - if `context: ./web`, `dockerfile: Dockerfile` (the default)
+already means `web/Dockerfile`; there's no need to repeat the `web/`
+prefix. A `dockerfile:` value can still climb out of the context with
+`../` for local builds (the local engine reads the filesystem directly),
+but a remote builder can only stage what's inside the configured context,
+so that combination is rejected there.
 
-### Port Mappings
+### Port mappings
+
+For services behind the proxy, specify only the container port - this lets
+the old and new container coexist during a deploy, since neither binds a
+host port:
 
 ```yaml
 ports:
-  - "3000"                        # Container port, random host port
-  - "8080:3000"                   # host:container
-  - "127.0.0.1:8080:80"           # Bind to specific interface
-  - "53:53/udp"                   # UDP protocol
-  - "443:443/tcp"                 # TCP protocol (default)
+  - "80"
+  - "3000"
 ```
 
-### Resource Limits
+Binding a host port (`host:container`) means only one container can hold
+that port at a time, which rules out zero-downtime deploys for that
+service. Use this form only for services that need direct host port access
+without the proxy (databases, non-HTTP services):
+
+```yaml
+ports:
+  - "80:80"
+  - "53/udp"        # container port with protocol
+  - "53:53/udp"      # host:container with protocol
+  - "127.0.0.1:8080:80"   # bind to localhost only
+```
+
+### Volume mounts
+
+```yaml
+volumes:
+  - "/data/web/logs:/var/log/nginx"
+  - "web_storage:/opt/uploads"
+  - "./data:/opt/extra_data:ro"
+```
+
+> **Note:** Named volumes (those not starting with `/` or `./`) are
+> automatically prefixed with the service name to prevent conflicts between
+> services. For example, if a service named `web` defines
+> `web_storage:/opt/uploads`, the actual volume created is
+> `web-web_storage`. Host path mounts are not modified.
+
+### File and directory mounts
+
+```yaml
+# String format: local:remote[:options], options can be ro, z, or Z
+files:
+  - "nginx.conf:/etc/nginx/nginx.conf:ro"
+
+directories:
+  - "html:/usr/share/nginx/html:ro"
+```
+
+Or the hash format, for custom permissions and ownership:
+
+```yaml
+files:
+  - local: config/secret.key
+    remote: /etc/app/secret.key
+    mode: "0600"
+    owner: "nginx:nginx"
+    options: "ro"
+```
+
+### Environment variables
+
+Shared variables (project-level, applied to every service):
+
+```yaml
+environment:
+  clear:
+    APP_ENV: production
+    LOG_LEVEL: info
+  secrets:
+    - API_KEY
+    - DATABASE_PASSWORD
+```
+
+Service-specific variables, merged with the shared set:
+
+```yaml
+services:
+  web:
+    environment:
+      clear:
+        NODE_ENV: production
+        PORT: 3000
+      secrets:
+        - API_KEY
+```
+
+`secrets` entries are ALL_CAPS names resolved from `.env` files (or host
+environment variables with `--host-env`), never written literally into
+config. Numbers and booleans under `clear` are converted to strings for
+container compatibility (`DEBUG: true` becomes `"true"`).
+
+### Proxy
+
+Enables jiji-proxy routing for a service.
+
+```yaml
+proxy:
+  port: 3000
+  hosts: [myapp.example.com]
+  ssl: false
+```
+
+```yaml
+# Multiple hostnames
+proxy:
+  port: 3000
+  hosts:
+    - myapp.example.com
+    - www.myapp.example.com
+  ssl: true
+```
+
+**Wildcard subdomains** - a `hosts` entry may be a single-label wildcard, so
+one service can catch every direct subdomain of a domain
+(`foo.example.com` and `bar.example.com` both match; the nested
+`deep.foo.example.com` doesn't, since `*` only covers one label; neither
+does the bare `example.com`):
+
+```yaml
+proxy:
+  port: 3000
+  hosts: ["*.example.com"]
+```
+
+A wildcard host cannot use `ssl: true` (jiji-proxy's automatic certificate
+provisioning can't issue a wildcard certificate); provide your own
+certificate via `ssl: { certificate_pem, private_key_pem }` instead, or
+skip TLS for that host. See the [Proxy Reference](/docs/reference/proxy)
+for details.
+
+**HTTP health check:**
+
+```yaml
+proxy:
+  port: 3000
+  hosts: [myapp.example.com]
+  healthcheck:
+    path: /health
+    interval: 10s
+    timeout: 5s
+    deploy_timeout: 60s
+```
+
+**Command health check** (mutually exclusive with `path`):
+
+```yaml
+proxy:
+  port: 3000
+  hosts: [myapp.example.com]
+  healthcheck:
+    cmd: "test -f /app/ready"   # exit 0 = healthy
+    cmd_runtime: docker           # optional, defaults to builder.engine
+    interval: 10s
+    timeout: 5s
+    deploy_timeout: 60s
+```
+
+Other command examples: `pgrep -f myapp`, `/app/healthcheck.sh`,
+`curl -f http://localhost:3000/health`.
+
+**Path prefix routing:**
+
+```yaml
+proxy:
+  port: 3000
+  hosts: [myapp.example.com]
+  path_prefix: /api
+```
+
+**Multiple targets** (multiple ports on one service):
+
+```yaml
+proxy:
+  targets:
+    - port: 3900
+      hosts: [s3.example.com]
+      healthcheck:
+        path: /health
+    - port: 3903
+      hosts: [admin.example.com]
+      ssl: true
+      healthcheck:
+        cmd: "test -f /ready"
+```
+
+### Container Runtime options
+
+```yaml
+services:
+  worker:
+    image: myapp:latest
+    servers: [server1]
+    command: ["./run-worker.sh", "--queue", "high"]
+    # or as a string: command: "./run-worker.sh --queue high"
+```
+
+```yaml
+services:
+  monitoring:
+    image: prometheus:latest
+    servers: [server1]
+    network_mode: bridge   # bridge (default) or service:<other-service-name>
+```
+
+`"host"` and `"none"` are accepted by the schema but aren't currently
+implemented -- setting either one is silently ignored and the service still
+gets normal bridge networking. Docker's native `container:<id>` syntax is
+rejected outright by validation.
+
+**Container namespace sharing** (`network_mode: service:<name>`) -- shares
+another ("upstream") service's container network namespace instead of
+getting its own dynamically-leased address. This is the standard "VPN
+killswitch" pattern: a torrent client sharing a VPN gateway container's
+network stack, so all its traffic is forced through the tunnel.
+
+```yaml
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    servers: [server1]
+    proxy:
+      port: 8080
+      hosts: [torrents.example.com]
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    servers: [server1]
+    network_mode: service:gluetun
+```
+
+Naming the upstream via `network_mode` is itself the dependency declaration
+-- there's no separate `depends_on` field. Redeploying `gluetun` (via
+`jiji deploy`, `jiji service restart`, or `jiji service rollback`)
+automatically redeploys `qbittorrent` too, sequenced strictly after
+`gluetun`'s own deploy finishes. A dependent can't set `replicas` above 1 or
+configure its own `proxy:` block: traffic reaches it through the upstream's
+own route, at the upstream's address. The upstream itself must use
+`network_mode: bridge` (chained sharing isn't supported), and the
+dependent's `servers` must be a subset of the upstream's.
 
 ```yaml
 services:
   api:
-    cpus: 2                       # CPU cores (fractional: 0.5, 1.5, 2.5)
-    memory: "1g"                  # Memory limit
+    image: myapp:latest
+    servers: [server1]
+    cpus: 2               # or a string: "1.5"
+    memory: "512m"         # "512m", "1g", "2gb"
 ```
-
-Memory units: `b`, `k`, `m`, `g`, `kb`, `mb`, `gb`
-
-### GPU Access
 
 ```yaml
 services:
   ml-worker:
-    gpus: "all"                   # All GPUs
-    # OR
-    gpus: "0"                     # GPU 0 only
-    # OR
-    gpus: "0,1"                   # GPUs 0 and 1
-    # OR
-    gpus: "device=0"              # By device ID
+    image: pytorch:latest
+    servers: [gpu-server]
+    gpus: "all"   # or "0", "0,1", "device=0"
 ```
-
-### Device Mapping
 
 ```yaml
 services:
   video-processor:
+    image: ffmpeg:latest
+    servers: [server1]
     devices:
-      - "/dev/video0"                     # Simple mapping
-      - "/dev/snd:/dev/snd:rwm"           # With permissions (r=read, w=write, m=mknod)
+      - "/dev/video0"
+      - "/dev/snd"
 ```
-
-### Linux Capabilities
 
 ```yaml
 services:
-  vpn-client:
+  system-tool:
+    image: debug-tools:latest
+    servers: [server1]
+    privileged: true   # use with caution
+```
+
+```yaml
+services:
+  network-tool:
+    image: nettools:latest
+    servers: [server1]
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
-    # OR for full access
-    privileged: true
+      - SYS_PTRACE
 ```
 
-Common capabilities:
-- `NET_ADMIN` - Network administration
-- `SYS_MODULE` - Load kernel modules
-- `SYS_PTRACE` - Process tracing
-- `SYS_ADMIN` - System administration
-
-### Stateful Services
-
-For services that can't run multiple instances (databases, etc.):
+### Stateful services (`stop_first`)
 
 ```yaml
 services:
-  postgres:
-    stop_first: true              # Stop old container before starting new
-    volumes:
-      - /data/postgres:/var/lib/postgresql/data
+  database:
+    image: postgres:15
+    servers: [db-server]
+    stop_first: true
 ```
 
-### Proxy Configuration
+Use `stop_first: true` for services that can't run two instances at once -
+file-based locks (LevelDB, SQLite), or coordinator registration by a unique
+ID. This trades zero downtime for a brief stop-then-start window during
+deploy. Default is `false`.
 
-**Single Host**
-```yaml
-proxy:
-  app_port: 3000
-  host: api.example.com
-  ssl: true
-  healthcheck:
-    path: /health
-```
-
-**Multiple Hosts**
-```yaml
-proxy:
-  app_port: 3000
-  hosts:
-    - api.example.com
-    - www.api.example.com
-  ssl: true
-  healthcheck:
-    path: /health
-```
-
-**Path-Based Routing**
-```yaml
-proxy:
-  app_port: 3000
-  host: example.com
-  path_prefix: /api
-  ssl: true
-  healthcheck:
-    path: /api/health
-```
-
-**Multi-Target Proxy** (multiple ports/endpoints)
-```yaml
-proxy:
-  targets:
-    - app_port: 3900
-      host: s3.garage.example.com
-      ssl: false
-      healthcheck:
-        path: /health
-    - app_port: 3903
-      host: admin.garage.example.com
-      ssl: true
-      healthcheck:
-        path: /health
-```
-
-### Health Checks
-
-**HTTP Health Check**
-```yaml
-healthcheck:
-  path: /health                   # Must return 2xx status
-  interval: 10s                   # Time between checks (default: 10s)
-  timeout: 5s                     # Request timeout (default: 5s)
-  deploy_timeout: 60s             # Max time to wait for healthy (default: 60s)
-```
-
-**Command Health Check**
-```yaml
-healthcheck:
-  cmd: "test -f /app/ready"       # Exit code 0 = healthy
-  cmd_runtime: docker             # docker or podman
-  interval: 10s
-  timeout: 5s
-  deploy_timeout: 60s
-```
-
-## Secrets Configuration
-
-Secrets are loaded from `.env` files in your project root.
-
-### File Loading Priority
-
-1. `.env.{environment}` - When using `-e/--environment` flag (e.g., `.env.staging`)
-2. `.env` - Fallback when no environment-specific file exists
-
-### Secret References
-
-Use ALL_CAPS names to reference secrets:
+### Restart policy
 
 ```yaml
-builder:
-  registry:
-    password: GITHUB_TOKEN  # Resolved from .env file
-
 services:
-  api:
-    environment:
-      secrets:
-        - DATABASE_URL    # Must be defined in .env file
-        - API_KEY
+  worker:
+    image: myapp/worker:latest
+    servers: [server1]
+    restart: on-failure # unless-stopped (default), always, on-failure, no
 ```
 
-### Example .env File
+Passed straight through to the container engine's `--restart` flag.
 
-```bash
-# .env.production
-GITHUB_TOKEN=ghp_xxxxxxxxxxxx
-DATABASE_URL=postgres://user:pass@host:5432/db
-API_KEY=secret123
-```
-
-### Host Environment Fallback
-
-By default, Jiji only reads from `.env` files. Use `--host-env` flag to allow fallback to host environment variables:
-
-```bash
-jiji --host-env deploy
-```
-
-### Custom Secrets Path
+### Image retention (`retain`)
 
 ```yaml
-secrets_path: .secrets  # Load from .secrets instead of .env
-```
-
-## Multi-Environment Setup
-
-**Base configuration** (`.jiji/deploy.yml`):
-```yaml
-project: myapp
-
-builder:
-  engine: docker
-  registry:
-    type: remote
-    server: ghcr.io
-    username: myuser
-    password: GITHUB_TOKEN
-
 services:
-  api:
+  web:
     build:
       context: .
-    proxy:
-      app_port: 3000
-      healthcheck:
-        path: /health
+    servers: [server1]
+    retain: 5   # optional, default: 3
 ```
 
-**Staging** (`.jiji/deploy.staging.yml`):
-```yaml
-servers:
-  staging:
-    host: staging.example.com
+Only relevant for build-configured services (a static `image:` service is
+never pruned). Sets how many recent image tags `jiji service prune` keeps
+per server before removing the rest, as long as they aren't still
+referenced by a running container. Pruning is a separate, manually-invoked
+step - `jiji deploy` never prunes images itself. Run `jiji service prune`
+(or `jiji service prune --retain N` to override this value for one run).
 
-services:
-  api:
-    hosts:
-      - staging
-    proxy:
-      host: staging.myapp.com
-    environment:
-      clear:
-        NODE_ENV: staging
-```
-
-**Production** (`.jiji/deploy.production.yml`):
-```yaml
-servers:
-  prod1:
-    host: prod1.example.com
-  prod2:
-    host: prod2.example.com
-
-services:
-  api:
-    hosts:
-      - prod1
-      - prod2
-    cpus: 4
-    memory: "2g"
-    proxy:
-      host: myapp.com
-      ssl: true
-    environment:
-      clear:
-        NODE_ENV: production
-```
-
-Deploy with:
-```bash
-jiji deploy -e staging
-jiji deploy -e production
-```
-
-## Complete Example
+## Complete example
 
 ```yaml
-project: myapp
-
-ssh:
-  user: deploy
-  keys:
-    - ~/.ssh/id_ed25519
-    - ~/.ssh/deploy_key
-  connect_timeout: 30
-  command_timeout: 300
+project: myapp-production
 
 builder:
   engine: docker
   local: true
-  cache: true
+  cache: false
   registry:
     type: remote
     server: ghcr.io
-    username: myuser
+    username: myorg
     password: GITHUB_TOKEN
+
+ssh:
+  user: deploy
+  keys:
+    - ~/.ssh/production_key
+  proxy: bastion.example.com
 
 network:
   enabled: true
-  cluster_cidr: "10.210.0.0/16"
+  management_cidr: "198.18.0.0/16"
+  container_cidr: "100.64.0.0/10"
+
+environment:
+  clear:
+    APP_ENV: production
+    LOG_LEVEL: warn
 
 servers:
   web1:
     host: web1.example.com
-    arch: amd64
   web2:
     host: web2.example.com
-    arch: amd64
-  worker:
-    host: worker.example.com
-    arch: arm64
+  api1:
+    host: api1.example.com
+  db1:
+    host: db1.example.com
 
 services:
-  api:
+  web:
     build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-      args:
-        NODE_ENV: production
-    hosts:
-      - web1
-      - web2
-    cpus: 2
-    memory: "1g"
-    environment:
-      clear:
-        NODE_ENV: production
-        LOG_LEVEL: info
-      secrets:
-        - DATABASE_URL
-        - API_KEY
+      context: ./web
+      dockerfile: Dockerfile.production
+    servers: [web1, web2]
+    ports: ["3000"]
     proxy:
-      app_port: 3000
-      host: api.myapp.com
+      port: 3000
+      hosts:
+        - app.example.com
+        - www.app.example.com
       ssl: true
       healthcheck:
         path: /health
         interval: 10s
-        timeout: 5s
-        deploy_timeout: 60s
-    retain: 5
 
-  worker:
+  api:
     build:
-      context: .
-      dockerfile: Dockerfile.worker
-    hosts:
-      - worker
-    cpus: 4
-    memory: "4g"
-    gpus: "all"
+      context: ./api
+    servers: [api1]
+    ports: ["4000"]
     environment:
-      clear:
-        WORKER_THREADS: "8"
       secrets:
-        - DATABASE_URL
+        - DB_PASSWORD
     proxy:
-      app_port: 8080
+      port: 4000
+      hosts: [api.example.com]
+      ssl: true
+      path_prefix: /api
       healthcheck:
-        cmd: "test -f /tmp/worker.ready"
+        path: /api/health
 
-  postgres:
-    image: postgres:16
-    hosts:
-      - web1
-    stop_first: true
+  database:
+    image: postgres:15
+    servers: [db1]
     volumes:
-      - /data/postgres:/var/lib/postgresql/data
+      - "/data/postgres:/var/lib/postgresql/data"
     environment:
       clear:
-        POSTGRES_DB: myapp
-      secrets:
-        - POSTGRES_PASSWORD
-    ports:
-      - "5432:5432"
+        POSTGRES_PASSWORD: DB_PASSWORD
+```
+
+## Validation
+
+Jiji validates configuration on load and reports every problem it finds,
+not just the first one. Common errors:
+
+```
+Error: Missing required field 'project'
+Error: builder.engine must be 'docker' or 'podman'
+Error: Cannot specify both 'image' and 'build' for service 'web'
+```
+
+Run with `-v`/`--verbose` for more detailed validation output:
+
+```bash
+jiji -v deploy
 ```

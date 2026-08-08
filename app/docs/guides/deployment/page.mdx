@@ -1,35 +1,42 @@
+export const metadata = {
+  description: 'Deploy, update, inspect, and roll back containerized applications safely with Jiji.',
+  alternates: { canonical: '/docs/guides/deployment' },
+  openGraph: { url: '/docs/guides/deployment', images: ['/docs/opengraph-image.png'] }
+}
+
 # Deployment Guide
 
 ## Zero-Downtime Deployment
 
-Jiji ensures zero downtime during deployments through a rolling update process:
+Every logical replica has a stable replica ID. Each replacement gets a unique
+deployment ID and a durable address lease. The candidate starts beside the
+current Active deployment, so the running container is not interrupted:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Zero-Downtime Flow                           │
-│                                                                 │
-│  1. Old Container Running    ──▶  Traffic served               │
-│                                                                 │
-│  2. Rename Old Container     ──▶  Keep running as backup       │
-│                                                                 │
-│  3. New Container Starts     ──▶  Old still serving            │
-│                                                                 │
-│  4. Health Checks Pass       ──▶  New marked healthy           │
-│                                                                 │
-│  5. Proxy Routes to New      ──▶  Traffic switches             │
-│                                                                 │
-│  6. Old Container Stops      ──▶  Cleanup complete             │
-│                                                                 │
-│  If health checks fail:                                         │
-│  ──▶ Old container continues serving, new container removed    │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  accTitle: Zero-downtime deployment decision flow
+  accDescr: Jiji starts a candidate beside the active container. A healthy candidate receives traffic before the old container is removed, while a failed candidate is rolled back without affecting the active container.
+  active["Active deployment<br/>keeps serving"]
+  candidate["Candidate deployment<br/>gets an address lease"]
+  health{"Healthy?"}
+  catalog["Publish Active<br/>in replicated catalog"]
+  routes["Reconcile DNS<br/>and proxy targets"]
+  cleanup["Drain old deployment<br/>and release its lease"]
+  rollback["Remove candidate<br/>Active deployment is untouched"]
+
+  active --> candidate --> health
+  health -->|"yes"| catalog --> routes --> cleanup
+  health -->|"no"| rollback
+
+  classDef success fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
+  classDef failure fill:#b45309,color:#fff,stroke:#92400e,stroke-width:2px
+  class catalog success
+  class rollback failure
 ```
 
 ## Health Checks
 
-Health checks are critical for zero-downtime deployments.
-
-### HTTP Health Check
+### HTTP health check
 
 ```yaml
 services:
@@ -46,193 +53,170 @@ services:
 |--------|-------------|
 | `path` | HTTP endpoint to check (must return 2xx) |
 | `interval` | Time between checks |
-| `timeout` | Max time to wait for response |
-| `deploy_timeout` | Max time to wait for container to become healthy |
+| `timeout` | Max time to wait for a response |
+| `deploy_timeout` | Max time to wait for the container to become healthy |
 
-### Command Health Check
+### Command health check
 
-For non-HTTP services:
+For non-HTTP services, `path` and `cmd` are mutually exclusive:
 
 ```yaml
 services:
   worker:
     proxy:
       healthcheck:
-        cmd: "test -f /tmp/ready"
-        cmd_runtime: docker      # docker or podman
+        cmd: "test -f /tmp/ready"   # exit 0 = healthy
+        cmd_runtime: docker          # optional, defaults to builder.engine
         interval: 10s
         timeout: 5s
         deploy_timeout: 60s
 ```
 
-### Health Status Values
-
-Containers can have these health statuses:
-- `healthy` - Passing health checks
-- `degraded` - Intermittent failures
-- `unhealthy` - Consistently failing
-- `unknown` - No check run yet
+The health check always runs directly against the candidate's leased
+address, never through DNS or jiji-proxy, so a healthy result really
+means the new container is ready, not just that routing happens to work.
 
 ## Deployment Strategies
 
-### Full Deploy
-
-Deploy all services to all hosts:
+**Full deploy:**
 
 ```bash
 jiji deploy --build
 ```
 
-### Targeted Deploy
-
-Deploy specific services:
+**Targeted deploy:**
 
 ```bash
 jiji deploy -S api
 jiji deploy -S "api,worker"
-jiji deploy -S "web*"         # Wildcard matching
-```
-
-Deploy to specific hosts:
-
-```bash
+jiji deploy -S "web*"
 jiji deploy -H web1
-jiji deploy -H "prod*"        # Wildcard matching
-```
-
-Combine both:
-
-```bash
+jiji deploy -H "prod*"
 jiji deploy -S api -H "prod*"
 ```
 
-### Version Pinning
-
-Deploy a specific version:
-
-```bash
-jiji deploy --version v1.2.3
-```
-
-Build with version tag:
+**Version pinning:**
 
 ```bash
 jiji build --version v1.2.3
 jiji deploy --version v1.2.3
 ```
 
-### Skip Confirmation
-
-For CI/CD pipelines:
+`jiji deploy` prints the deployment plan (project, environment, target
+servers/endpoints, build/version/proxy flags) and asks for confirmation
+before touching anything - before build, before network reconciliation,
+before any SSH connection. Pass `-y`/`--yes` to confirm automatically:
 
 ```bash
-jiji deploy -y               # Skip confirmation prompt
-jiji deploy --yes --build
+jiji deploy --build -y
 ```
+
+`-y`/`--yes` is required when running non-interactively (CI/CD, scripts) -
+without a terminal attached to answer the prompt, `jiji deploy` refuses to
+hang and exits with an actionable error instead.
 
 ## Rollback
 
-If something goes wrong, deploy a previous version:
+The previous container keeps serving traffic until a new one passes its
+health check, so a failed deploy on its own doesn't cause an outage. To go
+back to an already-built version on purpose:
 
 ```bash
-# Check available versions
-jiji server exec "docker images | grep myapp"
-
-# Deploy previous version
-jiji deploy --version v1.2.2
+jiji service rollback --version v1.2.2
+jiji service rollback --version v1.2.2 -S api
+jiji service rollback --version v1.2.2 -S api -H server1.example.com
 ```
+
+This runs the same catalog-driven replacement as `jiji deploy`: candidate
+lease, health check, catalog admission, proxy reconciliation, and old
+deployment cleanup. It targets the image tag you pass
+instead of building a new one. For a `build:`-configured service it
+resolves that tag from `builder.registry` directly (no rebuild, trusting a
+prior `jiji build`/`jiji deploy --build` already pushed it); for a static
+`image:` service, `--version` is applied the same way `jiji deploy
+--version` applies it.
 
 ## Deployment Locks
 
-Prevent concurrent deployments with locking:
+`jiji deploy`, `jiji service restart`, and `jiji service rollback`
+automatically lock only the replica and ingress owners they mutate. They
+release their own locks after success or failure. An unrelated offline host
+does not block a targeted service deployment.
 
-### Acquire Lock
-
-```bash
-jiji lock acquire "Deploying v1.2.3"
-jiji lock acquire "Deploying v1.2.3" --timeout 300   # Timeout in seconds
-```
-
-### Release Lock
-
-```bash
-jiji lock release
-```
-
-### Check Lock Status
+`jiji lock acquire`/`release` are a separate, whole-project lock used
+around network-layer maintenance (`jiji network setup`/`backup`/`restore`/
+`import`/`compact`) - acquiring it does **not** block a deploy, restart, or
+rollback, since those use the finer-grained per-replica lock above instead:
 
 ```bash
+jiji lock acquire "Network maintenance window"
+jiji lock acquire "Network maintenance window" --timeout 300   # seconds to wait (default 300)
+jiji lock acquire "Taking over stuck network maintenance" --force
+
 jiji lock status
 jiji lock status --json
-jiji lock show                # Detailed info
+jiji lock show
+
+jiji lock release                          # release the project lock
+jiji lock release --replica <replica-id>   # release one stuck replica lock instead
 ```
 
-### Force Acquire
+## Scaling
 
-If a lock is stuck (e.g., from a failed deployment):
+Set the configured total replica count with `replicas:` and choose
+`placement: spread` or `packed`. `servers:` is the eligible placement set:
 
-```bash
-jiji lock acquire "Taking over stuck deployment" --force
+```yaml
+services:
+  web:
+    image: nginx:alpine
+    servers: [app1, app2, app3]
+    replicas: 3
+    placement: spread
 ```
 
-### Recommended Workflow
+Change the replicated runtime desired count without editing configuration:
 
 ```bash
-# Acquire lock before deploy
-jiji lock acquire "Deploying v1.2.3"
+jiji service scale -S web --replicas 5
+jiji service scale -S web --replicas 0
+jiji service scale -S web --reset
+jiji service scale -S web --replicas 3 --dry-run
+```
 
-# Deploy
-jiji deploy --build
+Scale commits desired placement first, then adds or retires replicas.
+If an owner is offline, retry the same command after it returns. Healthy
+catalog records keep serving throughout partial progress.
 
-# Release lock
-jiji lock release
+The explicit commands above are for maintenance windows or intentionally
+blocking deployments. Normal CI usage does not need manual lock management:
+
+```bash
+jiji deploy --build -e production -y
 ```
 
 ## Resource Management
 
-### CPU Limits
-
 ```yaml
 services:
   api:
-    cpus: 2           # 2 CPU cores
-    cpus: 0.5         # Half a CPU core
-    cpus: 1.5         # 1.5 CPU cores
+    cpus: 1.5              # or "1.5"
+    memory: "512m"          # b, k, m, g, kb, mb, gb
 ```
-
-### Memory Limits
-
-```yaml
-services:
-  api:
-    memory: "512m"    # 512 MB
-    memory: "1g"      # 1 GB
-    memory: "2gb"     # 2 GB
-```
-
-Supported units: `b`, `k`, `m`, `g`, `kb`, `mb`, `gb`
-
-### GPU Access
 
 ```yaml
 services:
   ml-worker:
-    gpus: "all"       # All available GPUs
-    gpus: "0"         # GPU 0 only
-    gpus: "0,1"       # GPUs 0 and 1
+    gpus: "all"             # or "0", "0,1", "device=0"
 ```
-
-### Device Mapping
 
 ```yaml
 services:
   video-processor:
     devices:
       - "/dev/video0"
-      - "/dev/snd:/dev/snd:rwm"
+      - "/dev/snd"
 ```
-
-### Linux Capabilities
 
 ```yaml
 services:
@@ -242,25 +226,49 @@ services:
       - SYS_MODULE
 ```
 
-Or for full privileged access:
-
 ```yaml
 services:
   system-tool:
     privileged: true
 ```
 
+## VPN Killswitch (Container Namespace Sharing)
+
+`network_mode: service:<name>` shares another ("upstream") service's
+container network namespace instead of giving the dependent its own
+address -- the standard way to force one container's traffic through
+another's tunnel, with no leak path if the upstream isn't running.
+
+```yaml
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    cap_add:
+      - NET_ADMIN
+    proxy:
+      port: 8080
+      hosts: [torrents.example.com]
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    network_mode: service:gluetun
+```
+
+Naming `gluetun` in `qbittorrent`'s `network_mode` is itself the dependency
+declaration -- redeploying `gluetun` automatically redeploys `qbittorrent`
+too, sequenced after `gluetun`'s own deploy finishes. See the
+[Configuration Reference](/docs/reference/configuration#container-runtime-options)
+for the full behavior and constraints.
+
 ## Multi-Architecture Support
 
-Jiji supports deploying to mixed architecture clusters (amd64 and arm64).
-
-### Configuration
+Jiji builds and deploys mixed-architecture clusters (amd64 and arm64):
 
 ```yaml
 servers:
   x86-server:
     host: amd64.example.com
-    arch: amd64
+    arch: amd64   # optional, defaults to amd64
 
   arm-server:
     host: arm64.example.com
@@ -268,48 +276,43 @@ servers:
 
 services:
   api:
-    hosts:
+    servers:
       - x86-server
       - arm-server
     build:
       context: .
 ```
 
-Jiji automatically:
-- Builds the correct architecture for each server
-- Pulls architecture-specific images
-- Handles multi-arch deployments transparently
+Each server gets an image built for its own architecture; pulling and
+deployment happen transparently per host.
 
 ## Stateful Services
 
-For services that can't run multiple instances simultaneously (databases, etc.):
+Services that can't run two instances at once - most databases - need
+`stop_first`, which trades zero downtime for a brief stop-then-start
+window:
 
 ```yaml
 services:
   postgres:
-    stop_first: true              # Stop old before starting new
+    stop_first: true
     volumes:
       - /data/postgres:/var/lib/postgresql/data
 ```
 
-With `stop_first: true`:
-1. Old container stops first
-2. New container starts
-3. Brief downtime during transition
-
 ## File and Directory Transfers
-
-### Transfer Files (Simple)
 
 ```yaml
 services:
   api:
     files:
       - ./config.json:/app/config.json
-      - ./secrets.env:/app/.env:600  # With permissions
+      - ./secrets.env:/app/.env:600
+    directories:
+      - ./templates:/app/templates
 ```
 
-### Transfer Files (Detailed)
+Or the hash format for custom ownership/permissions:
 
 ```yaml
 services:
@@ -319,42 +322,25 @@ services:
         remote: /etc/app/secret.key
         mode: "0600"
         owner: "nginx:nginx"
-        options: "ro"
-```
-
-### Transfer Directories
-
-```yaml
-services:
-  api:
-    directories:
-      - ./templates:/app/templates
-      - local: logs
-        remote: /var/log/app
-        mode: "0755"
-        owner: "app:app"
 ```
 
 ## Volume Mounts
-
-Persist data across deployments:
 
 ```yaml
 services:
   db:
     volumes:
       - /data/postgres:/var/lib/postgresql/data
-      - /config:/app/config:ro  # Read-only
-      - app_storage:/app/data   # Named volume
+      - /config:/app/config:ro
+      - app_storage:/app/data   # named volume
 ```
 
-> **Note:** Named volumes (those not starting with `/` or `./`) are automatically prefixed with the service name to prevent conflicts between services. For example, `app_storage` becomes `db-app_storage` when used by the `db` service.
+> **Note:** Named volumes (those not starting with `/` or `./`) are
+> automatically prefixed with the service name to prevent conflicts. For
+> example, `app_storage` becomes `db-app_storage` when used by the `db`
+> service.
 
 ## Environment Variables
-
-### Clear Variables
-
-Non-sensitive configuration:
 
 ```yaml
 services:
@@ -363,140 +349,113 @@ services:
       clear:
         NODE_ENV: production
         LOG_LEVEL: info
-        PORT: "3000"
-```
-
-### Secret Variables
-
-Sensitive values loaded from `.env` files:
-
-```yaml
-services:
-  api:
-    environment:
       secrets:
         - DATABASE_URL
         - API_KEY
-        - JWT_SECRET
 ```
 
-Create a `.env` file in your project root:
+Secrets are ALL_CAPS names resolved from a `.env` file in your project
+root (`.env.production` takes precedence over `.env` when
+`-e production` is used):
 
 ```bash
-# .env (or .env.production for environment-specific)
+# .env
 DATABASE_URL=postgres://user:pass@host:5432/db
 API_KEY=secret123
-JWT_SECRET=your-jwt-secret
 ```
-
-Deploy (secrets are automatically loaded from `.env`):
 
 ```bash
 jiji deploy
-jiji deploy -e production  # Uses .env.production
-```
-
-### View Configured Secrets
-
-```bash
-jiji secrets print
-jiji secrets print -e production
-jiji secrets print --show-values  # Reveal actual values
-```
-
-### Host Environment Fallback
-
-To use host environment variables when not found in `.env`:
-
-```bash
-jiji --host-env deploy
+jiji deploy -e production        # uses .env.production
+jiji secrets print                # check what's resolved before deploying
+jiji secrets print --show-values
+jiji --host-env deploy            # fall back to host env vars, not just .env
 ```
 
 ## Image Retention
 
-Configure how many old images to keep per service:
-
 ```yaml
 services:
   api:
-    retain: 5    # Keep 5 versions (default: 3)
+    retain: 5   # keep 5 versions, default is 3
 ```
-
-Manual cleanup:
 
 ```bash
-jiji services prune
-jiji services prune -S api --retain 3
+jiji service prune
+jiji service prune -S api --retain 3
 ```
+
+Only build-configured services (`build:`, not a static `image:`) are ever
+pruned.
+
+## Best Practices
+
+**Tag every release.** Deploy with an explicit version instead of a moving
+tag, so `jiji service rollback` always has something concrete to go back to:
+
+```bash
+git tag v1.2.3 && git push --tags
+jiji deploy --build --version v1.2.3
+```
+
+**Watch it happen.** Follow logs in a second terminal while a deploy runs,
+rather than only checking after the fact:
+
+```bash
+# Terminal 1
+jiji deploy --build
+
+# Terminal 2
+jiji service logs -S api --follow
+```
+
+**Back up stateful data before major changes**, especially for services
+using `stop_first` where there's no zero-downtime safety net:
+
+```bash
+jiji server exec "tar -czf /backup/data-$(date +%Y%m%d).tar.gz /data" -H server1
+jiji deploy
+```
+
+**Review the audit trail regularly**, not just when something's already
+broken - see [Logs Reference](/docs/reference/logs#audit-trail).
 
 ## Pre-Deployment Checklist
 
-Before deploying to production:
-
-1. **Test locally** - Run your containers locally first
-2. **Check configuration** - Review your deploy.yml
-3. **Review changes** - Know what you're deploying
-4. **Check server connectivity** - `jiji server exec "echo ok"`
-5. **Verify registry access** - `jiji registry login`
-6. **Check secrets** - `jiji secrets print`
-7. **Acquire lock** - `jiji lock acquire "Deploying vX.Y.Z"`
+1. Test containers locally first
+2. Review `deploy.yml` for the change you're about to ship
+3. Confirm server connectivity: `jiji server exec "echo ok" -H server1`
+4. Confirm registry access: `jiji registry login`
+5. Confirm secrets resolve: `jiji secrets print`
+6. Confirm there is no maintenance lock: `jiji lock status`
 
 ## Post-Deployment Verification
 
-After deploying:
-
 ```bash
-# Check service logs
-jiji services logs -S api --since 5m
-
-# Verify containers running
+jiji service logs -S api --since 5m
 jiji server exec "docker ps"
-
-# Check health endpoints
 jiji server exec "curl localhost:3000/health"
-
-# Monitor proxy logs
 jiji proxy logs --since 5m
-
-# Check network status
-jiji network status
-
-# View DNS records
-jiji network dns
+jiji network plan
+jiji audit --lines 10
 ```
 
 ## Cleanup
 
-Remove old images to free disk space:
-
 ```bash
-jiji services prune
-jiji services prune --retain 3  # Keep 3 versions
-jiji services prune -S api      # Specific service
-```
-
-Clean up stale DNS records:
-
-```bash
-jiji network gc --force
+jiji service prune
+jiji service prune --retain 3
+jiji service prune -S api
 ```
 
 ## CI/CD Integration
-
-For automated deployments, use the `-y` flag and proper locking:
 
 ```bash
 #!/bin/bash
 set -e
 
-# Acquire lock
-jiji lock acquire "CI Deploy: $CI_COMMIT_SHA"
-
-# Deploy
-jiji deploy --build -y -e production
-
-# Release lock
-jiji lock release
+jiji deploy --build -e production -y
 ```
 
-See the [CI/CD Integration](/docs/guides/ci-cd) guide for detailed examples.
+See the [CI/CD Integration](/docs/guides/ci-cd) guide for full pipeline
+examples.

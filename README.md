@@ -5,8 +5,8 @@ Documentation and landing page for [Jiji](https://github.com/acidtib/jiji), the 
 ## Development
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the site.
@@ -14,7 +14,7 @@ Open [http://localhost:3000](http://localhost:3000) to view the site.
 ## Build
 
 ```bash
-npm run build
+bun run build
 ```
 
 Outputs static site to `./out` directory.
@@ -33,4 +33,3 @@ Automatically deployed to GitHub Pages on push to `main` via GitHub Actions.
 ## Related
 
 - [Jiji](https://github.com/acidtib/jiji) - Container orchestration CLI
-- [Jiji-dns](https://github.com/acidtib/jiji-dns) - DNS server for service discovery

@@ -5,8 +5,14 @@ export default {
   commands: {
     title: 'Commands'
   },
+  features: {
+    title: 'Features'
+  },
   network: {
     title: 'Network'
+  },
+  proxy: {
+    title: 'Jiji Proxy'
   },
   registry: {
     title: 'Registry'

@@ -32,8 +32,8 @@ export function Navbar() {
             <Image
               src="/jiji_logo.svg"
               alt="Jiji"
-              width={80}
-              height={32}
+              width={981}
+              height={295}
               className="h-8 w-auto transition-transform group-hover:scale-105"
             />
           </div>

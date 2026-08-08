@@ -1,0 +1,82 @@
+export const metadata = {
+  description: 'Give coding assistants and language models reliable Jiji context using llms.txt and llms-full.txt.',
+  alternates: { canonical: '/docs/guides/llms' },
+  openGraph: { url: '/docs/guides/llms', images: ['/docs/opengraph-image.png'] }
+}
+
+# Hello, LLMs
+
+Jiji publishes its documentation as plain-text context files that language
+models and coding agents can read without navigating the rendered website.
+
+## Available Files
+
+| File | Contents | Best for |
+|------|----------|----------|
+| [`llms.txt`](https://jiji.run/llms.txt) | A compact documentation index with page summaries and links | Finding the relevant page or giving an agent a lightweight overview |
+| [`llms-full.txt`](https://jiji.run/llms-full.txt) | The full documentation combined into one file | Answering detailed questions or working without repeated page requests |
+
+Start with `llms.txt` when the model can open links itself. Use
+`llms-full.txt` when you want to provide all Jiji documentation in one
+request or attachment.
+
+## Download the Context
+
+```bash
+curl -fsSL https://jiji.run/llms.txt -o jiji-llms.txt
+```
+
+To download the complete documentation:
+
+```bash
+curl -fsSL https://jiji.run/llms-full.txt -o jiji-llms-full.txt
+```
+
+You can attach the downloaded file to a chat, place it in an agent's
+workspace, or make its URL available to a tool that can fetch web content.
+
+## Prompt an LLM
+
+For a model with web access, use a prompt like this:
+
+```text
+Read https://jiji.run/llms.txt first. Follow the relevant documentation links
+before answering my question about Jiji. Prefer the Jiji documentation over
+general container deployment assumptions.
+
+Question: How should I configure a two-server deployment with a private
+network?
+```
+
+When attaching `jiji-llms-full.txt`, tell the model how to treat it:
+
+```text
+The attached file contains the current Jiji documentation. Use it as the
+primary source for this task. If the documentation does not answer something,
+say what information is missing instead of inventing Jiji behavior.
+
+Task: Review my deploy.yml and identify configuration errors.
+```
+
+For coding agents, add a short instruction to the repository's agent guidance:
+
+```text
+For Jiji configuration or command behavior, read
+https://jiji.run/llms.txt and open the linked page relevant to the task.
+Use https://jiji.run/llms-full.txt when complete offline context is needed.
+```
+
+## Keep the Context Current
+
+The files are generated from the same MDX sources as this website during every
+production build. Use the canonical URLs instead of keeping a long-lived copy
+when current behavior matters.
+
+The context files describe Jiji itself, but they do not contain your project
+configuration, deployment state, or command output. Provide those separately
+when asking for project-specific help. Remove passwords, tokens, private keys,
+and other secrets before sharing configuration or logs with any external
+service.
+
+For the behavior of an installed Jiji CLI, `jiji --help` and
+`jiji <command> --help` show the commands supported by that exact version.

@@ -1,10 +1,14 @@
+export const metadata = {
+  description: 'Deploy your first containerized application with Jiji using a deploy.yml file and servers reachable over SSH.',
+  alternates: { canonical: '/docs/getting-started/quick-start' },
+  openGraph: { url: '/docs/getting-started/quick-start', images: ['/docs/opengraph-image.png'] }
+}
+
 # Quick Start
 
 This guide walks you through deploying your first application with Jiji.
 
 ## 1. Create Configuration
-
-Initialize Jiji in your project:
 
 ```bash
 jiji init
@@ -33,11 +37,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    hosts:
+    servers:
       - web1
     proxy:
-      app_port: 3000
-      host: myapp.example.com
+      port: 3000
+      hosts: [myapp.example.com]
       ssl: true
       healthcheck:
         path: /health
@@ -45,70 +49,62 @@ services:
         timeout: 5s
 ```
 
-## 2. Initialize Servers
-
-Set up your servers with the required components:
+## 2. Set Up Servers
 
 ```bash
-jiji server init
+jiji server setup
 ```
 
-## 3. Setup Registry
+Installs the container engine and the complete private network (WireGuard,
+bridge and project agent) for this project on each server.
 
-Configure your container registry:
+## 3. Authenticate the Registry
+
+Only needed for a remote registry (GHCR, Docker Hub, custom) - a local
+registry needs no credentials:
 
 ```bash
-jiji registry setup
+jiji registry login
 ```
 
 ## 4. Build and Deploy
 
-Deploy your application:
-
 ```bash
-# Build and deploy in one command
 jiji deploy --build
 
-# Or separately
+# Or as two steps
 jiji build
 jiji deploy
 ```
 
 ## 5. Verify Deployment
 
-Check your services:
-
 ```bash
-# View logs
-jiji services logs
-
-# Check service status on servers
-jiji server exec "docker ps"
+jiji service logs -S web
+jiji server exec "docker ps" -H web1
 ```
 
 ## What Happens During Deployment
 
-1. **Build Phase** - Container image is built locally or remotely
-2. **Push Phase** - Image is pushed to the configured registry
-3. **Deploy Phase**:
-   - Old container keeps running
-   - New container starts alongside
-   - Health checks run until ready
-   - Proxy routes traffic to new container
-   - Old container is stopped and removed
-4. **Cleanup** - Old images are pruned (keeping recent versions)
+1. **Build** - the image is built locally or on a remote builder
+2. **Push** - pushed to the configured registry
+3. **Deploy** - the new container starts at a freshly leased address, the
+   old one keeps serving traffic until the new one passes its health check,
+   then the catalog and proxy routes admit it and the old deployment drains
+
+Old images aren't pruned automatically as part of this flow - run
+`jiji service prune` yourself (or on a schedule) to remove old image tags
+beyond each service's configured `retain` count.
 
 ## Environment-Specific Deployments
 
-Create environment-specific configs:
+Create environment-specific config files alongside `.jiji/deploy.yml`:
 
 ```bash
-# .jiji/deploy.yml        - base config
-# .jiji/deploy.staging.yml - staging overrides
-# .jiji/deploy.production.yml - production overrides
+# .jiji/deploy.yml     - base config
+# jiji.staging.yml      - staging overrides
+# jiji.production.yml   - production overrides
 ```
-
-Deploy to a specific environment:
 
 ```bash
 jiji deploy -e staging
@@ -117,6 +113,9 @@ jiji deploy -e production
 
 ## Next Steps
 
-- [Configuration Reference](/docs/reference/configuration) - Full configuration options
-- [Deployment Guide](/docs/guides/deployment) - Advanced deployment strategies
-- [Network Reference](/docs/reference/network) - Private networking setup
+- [Configuration Reference](/docs/reference/configuration) - full
+  configuration options
+- [Deployment Guide](/docs/guides/deployment) - health checks, rollbacks,
+  and locking
+- [Network Reference](/docs/reference/network) - how the private network
+  works

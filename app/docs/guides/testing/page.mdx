@@ -1,0 +1,184 @@
+export const metadata = {
+  description: 'Test Jiji applications, network connectivity, service discovery, registries, and deployment health.',
+  alternates: { canonical: '/docs/guides/testing' },
+  openGraph: { url: '/docs/guides/testing', images: ['/docs/opengraph-image.png'] }
+}
+
+# Testing Your Deployment
+
+How to verify a deployment actually works, before and after you rely on it.
+
+## Testing Without DNS
+
+Before pointing real DNS at a server, route requests with a `Host` header:
+
+```bash
+# From your local machine
+curl -H "Host: myapp.example.com" http://192.168.1.87
+
+# From the remote host itself
+curl -H "Host: myapp.example.com" http://localhost
+```
+
+Or add an entry to your hosts file for browser testing:
+
+```bash
+# /etc/hosts (Linux/Mac) or C:\Windows\System32\drivers\etc\hosts (Windows, as Administrator)
+192.168.1.87  myapp.example.com
+```
+
+```bash
+curl http://myapp.example.com
+```
+
+## Bypassing the Proxy
+
+Test a container directly through its host port mapping, skipping
+jiji-proxy entirely:
+
+```yaml
+services:
+  api:
+    ports:
+      - "3000:3000"
+```
+
+```bash
+curl http://192.168.1.87:3000
+```
+
+## Verifying Proxy Routing
+
+```bash
+jiji server exec "docker ps" -H server1
+jiji proxy logs -H server1
+jiji server exec "docker inspect <container> --format '{{.NetworkSettings.Networks}}'" -H server1
+```
+
+`<container>` is the currently running deployment's container name from
+`docker ps` output above (`{project}-{service}-{first 12 hex chars of a
+deployment ID}`, a fresh name every deploy - there's no fixed `-a`/`-b`
+slot name to hardcode).
+
+## Testing SSH and the Container Engine
+
+```bash
+ssh -o ConnectTimeout=10 user@server1.example.com "echo ok"
+echo $SSH_AUTH_SOCK
+ssh-add -l
+
+jiji server exec "docker version" -H server1
+jiji server exec "docker pull nginx:latest" -H server1
+```
+
+## Quiet Mode
+
+`-q`/`--quiet` drops host headers and lowers verbosity, useful for piping
+into other tools:
+
+```bash
+jiji service logs -S web --quiet | grep -i warning | wc -l
+```
+
+## Testing Partial Service Removal
+
+```bash
+# Deploy multiple services
+jiji deploy -S "web,api,worker"
+
+# Confirm all three are running
+jiji server exec "docker ps | grep myproject" -H server1
+
+# Remove just one
+jiji service remove -S worker
+
+# Confirm worker is gone, web and api are untouched
+jiji server exec "docker ps | grep myproject" -H server1
+
+# The project's staging directory (audit log, etc.) is unaffected
+jiji server exec "ls -la .jiji/" -H server1
+```
+
+`jiji service remove` prompts for confirmation by default; pass `-y`/`--yes`
+to skip it in scripts.
+
+## Testing the Local Registry and Port Forwarding
+
+```bash
+# Confirm the registry responds
+curl http://localhost:31270/v2/
+# Expected: {}
+```
+
+`jiji deploy --build` with `builder.registry.type: local` opens an SSH
+reverse tunnel to each deployment server automatically - you don't need to
+forward the port by hand. To sanity-check the mechanism directly:
+
+```bash
+# Manually open the same kind of tunnel jiji opens automatically
+ssh -R 31270:localhost:31270 user@server1.example.com
+
+# On the remote server, in another session, confirm it's reachable
+curl http://localhost:31270/v2/
+```
+
+If the remote side can't reach it, check `sshd_config` on that server:
+
+```bash
+grep -E "(AllowTcpForwarding|GatewayPorts)" /etc/ssh/sshd_config
+# Should show:
+# AllowTcpForwarding yes
+# GatewayPorts yes (or clientspecified)
+```
+
+## Testing Multiple Environments
+
+```bash
+jiji -e staging deploy --build
+jiji -e staging server exec "docker ps" -H staging-server
+
+jiji -e production deploy --build
+```
+
+## A Minimal Smoke Test Script
+
+```bash
+#!/bin/bash
+set -e
+
+jiji init
+# ... edit .jiji/deploy.yml ...
+
+jiji server exec "whoami" -H test-server
+jiji deploy
+jiji server exec "docker ps | grep test-web" -H test-server
+jiji service logs -S test-web --lines 10
+jiji service remove -S test-web -y
+! jiji server exec "docker ps | grep test-web" -H test-server
+
+echo "All checks passed"
+```
+
+## Measuring Deployment Time and Resource Usage
+
+```bash
+time jiji deploy --build
+time jiji deploy --build --no-cache
+
+jiji server exec "top -bn1 | head -20" -H server1
+jiji server exec "free -h" -H server1
+jiji server exec "df -h" -H server1
+```
+
+## Common Issues
+
+**"Permission denied" on port 80:** rootless Podman runs jiji-proxy on high
+ports internally (8080/8443) and maps them to host 80/443 - check that
+mapping is actually in place rather than trying to bind 80/443 directly.
+
+**Proxy health check timeouts:** confirm the service container is on the
+project's bridge network, the `healthcheck` path/command is correct, and the
+app is actually listening and responding.
+
+**"No such object" errors:** the container hasn't been deployed yet - run
+`jiji deploy -S <service>` first.

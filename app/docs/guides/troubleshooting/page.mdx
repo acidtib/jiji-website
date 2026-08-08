@@ -1,3 +1,9 @@
+export const metadata = {
+  description: 'Diagnose common Jiji deployment, SSH, container runtime, registry, networking, and health-check problems.',
+  alternates: { canonical: '/docs/guides/troubleshooting' },
+  openGraph: { url: '/docs/guides/troubleshooting', images: ['/docs/opengraph-image.png'] }
+}
+
 # Troubleshooting
 
 ## SSH Issues
@@ -5,24 +11,16 @@
 ### Connection Timeout
 
 ```
-Error: Connection timeout
+Error: Connection timed out after 30000ms
 ```
 
-**Causes:**
-- Server unreachable
-- Firewall blocking port 22
-- Wrong hostname
+Usually the server is unreachable, a firewall is blocking port 22, or the
+hostname is wrong.
 
-**Solutions:**
 ```bash
-# Test connectivity
 ping server.example.com
-
-# Test SSH manually
 ssh -v user@server.example.com
-
-# Check firewall
-ssh user@server "iptables -L -n | grep 22"
+ssh user@server "sudo iptables -L -n | grep 22"
 ```
 
 ### Authentication Failed
@@ -31,35 +29,60 @@ ssh user@server "iptables -L -n | grep 22"
 Error: All configured authentication methods failed
 ```
 
-**Solutions:**
 ```bash
-# Check SSH key permissions
 chmod 600 ~/.ssh/id_ed25519
-
-# Test with specific key
 ssh -i ~/.ssh/id_ed25519 user@server
-
-# Check authorized_keys on server
-cat ~/.ssh/authorized_keys
-
-# Try with verbose output
-jiji --verbose server exec "echo ok"
+cat ~/.ssh/authorized_keys       # on the server
+jiji --verbose server exec "echo ok" -H server1
 ```
 
 ### ProxyJump Issues
 
 ```
-Error: Could not resolve hostname bastion
+Error: Could not establish proxy connection through bastion.example.com
 ```
 
-**Solutions:**
 ```bash
-# Test ProxyJump manually
 ssh -J bastion.example.com user@internal-server
-
-# Check SSH config
 cat ~/.ssh/config
 ```
+
+```yaml
+ssh:
+  user: deploy
+  proxy: deploy@bastion.example.com
+```
+
+### Too Many Authentication Failures
+
+```
+Error: Received too many authentication failures
+```
+
+SSH gives up after too many offered keys, usually because your agent is
+holding more keys than the server will tolerate. Limit what's offered:
+
+```yaml
+ssh:
+  user: deploy
+  keys_only: true
+  keys:
+    - ~/.ssh/deploy_key
+```
+
+```bash
+ssh-add -D                  # clear every key from the agent
+ssh-add ~/.ssh/deploy_key   # load only the one jiji should use
+```
+
+### About `jiji server exec`
+
+A plain command runs on every host `-H`/`--hosts` matches, concurrently by
+default (`--sequential` for one at a time). An interactive session - no
+command given, or `--interactive` - is bound to one local terminal, so it
+requires `-H` to resolve to exactly one server. `-S`/`--services` isn't
+accepted. Interactive sessions automatically downgrade to non-interactive
+with a warning when stdin/stdout isn't a real terminal.
 
 ## Registry Issues
 
@@ -69,19 +92,11 @@ cat ~/.ssh/config
 Error: unauthorized: authentication required
 ```
 
-**Solutions:**
 ```bash
-# Check secrets are configured
 jiji secrets print
-
-# Verify .env file exists and contains the token
 cat .env | grep GITHUB_TOKEN
-
-# Re-authenticate servers
 jiji registry login
-
-# Or with host env fallback
-jiji --host-env registry login
+jiji --host-env registry login   # if the token is a host env var, not in .env
 ```
 
 ### 403 Forbidden
@@ -90,169 +105,186 @@ jiji --host-env registry login
 Error: denied: permission denied
 ```
 
-**Causes:**
-- Token lacks required scopes
-- Repository is private
-- Wrong username
-
-**Solutions:**
-- For GHCR: Ensure token has `write:packages` scope
-- Verify username matches token owner
-- Check repository visibility settings
+Usually the token is missing a scope, the repository is private, or the
+username doesn't match the token owner. For GHCR, confirm the token has
+`write:packages`.
 
 ### Push Failed
 
-```
-Error: failed to push image
-```
-
-**Solutions:**
 ```bash
-# Check local registry is running (for local type)
-docker ps | grep registry
-
-# Check disk space
+docker ps | grep jiji-registry   # for a local registry
 df -h
-
-# Try manual push
-docker push ghcr.io/user/project-service:latest
-
-# Check network
 curl -I https://ghcr.io
 ```
+
+### Local Registry Not Accessible
+
+```
+Error: Failed to connect to localhost:31270
+```
+
+```bash
+curl http://localhost:31270/v2/          # {} means it's up
+
+# On the remote server during deployment
+netstat -tlnp | grep 31270
+```
+
+If the remote side can't reach the tunnel, check `sshd_config` on that
+server for `AllowTcpForwarding yes` and `GatewayPorts yes`.
 
 ## Deployment Issues
 
 ### Health Check Timeout
 
 ```
-Error: Container failed to become healthy within timeout
+Error: Health check failed after 60s
 ```
 
-**Causes:**
-- Application not starting
-- Wrong health check path
-- Port mismatch
+The health check runs directly against the candidate container's own
+backend address, so a timeout here means the application itself isn't
+answering yet, not a routing problem.
 
-**Solutions:**
 ```bash
-# Check container logs
-jiji services logs -S api --since 5m
-
-# Check if container is running
-jiji server exec "docker ps -a"
-
-# Test health endpoint manually
-jiji server exec "docker exec <container> curl localhost:3000/health"
-
-# Increase timeout in config
+jiji service logs -S api --since 5m
+jiji server exec "docker ps -a" -H server1
+jiji server exec "docker exec <container> curl localhost:3000/health" -H server1
 ```
 
 ```yaml
 proxy:
   healthcheck:
     path: /health
-    deploy_timeout: 120s  # Increase timeout
+    deploy_timeout: 120s
 ```
 
 ### Container Crashes
 
-```
-Error: Container exited with code 1
-```
-
-**Solutions:**
 ```bash
-# View exit logs
-jiji server exec "docker logs <container>"
-
-# Check for OOM
-jiji server exec "dmesg | grep -i oom"
-
-# Verify environment variables
-jiji server exec "docker inspect <container> | grep -A20 Env"
+jiji server exec "docker logs <container>" -H server1
+jiji server exec "dmesg | grep -i oom" -H server1
+jiji server exec "docker inspect <container> | grep -A20 Env" -H server1
 ```
 
 ### Deployment Hangs
 
-**Causes:**
-- Lock held by another process
-- Network issues
-- Large image download
-
-**Solutions:**
 ```bash
-# Check lock status
 jiji lock status
-
-# Force release lock (if stuck)
-jiji lock release --force
-
-# Check what's happening
+jiji lock release          # if a stale lock is the cause
 jiji --verbose deploy
+```
+
+## Container Issues
+
+### Volume Mount Permission Denied
+
+```
+Error: Permission denied: /data/app
+```
+
+```bash
+jiji server exec "ls -la /data/app" -H server1
+jiji server exec "docker exec <container> id" -H server1        # container's uid/gid
+jiji server exec "sudo chown -R 1000:1000 /data/app" -H server1
+```
+
+### Port Already in Use
+
+```
+Error: Bind for 0.0.0.0:3000 failed: port is already allocated
+```
+
+```bash
+jiji server exec "sudo lsof -i :3000" -H server1
+jiji server exec "docker ps | grep 3000" -H server1
+jiji server exec "docker stop <container-id>" -H server1
+```
+
+Or map to a different host port in `deploy.yml`:
+
+```yaml
+services:
+  api:
+    ports:
+      - "3001:3000"
 ```
 
 ## Network Issues
 
+Interface, systemd unit, and path names are all derived per project - run
+`jiji network plan` to get the exact values for your config, and
+substitute them for `<wireguard_interface>`/`<slug>` below. See
+[Network Reference](/docs/reference/network) for the full mapping.
+
 ### WireGuard Not Connecting
 
+`jiji-agent` brings up the WireGuard interface itself at startup and
+repairs it if torn down externally - there is no separate `wg-quick@`
+systemd unit to check.
+
 ```bash
-# Check WireGuard status
-jiji server exec "wg show jiji"
-
-# Check service status
-jiji server exec "systemctl status wg-quick@jiji"
-
-# Check firewall (UDP 51820)
-jiji server exec "iptables -L -n | grep 51820"
-
-# View WireGuard logs
-jiji server exec "journalctl -u wg-quick@jiji -n 50"
+jiji server exec "sudo wg show <wireguard_interface>" -H server1
+jiji server exec "sudo systemctl status jiji-agent-<slug>" -H server1
+jiji server exec "sudo journalctl -u jiji-agent-<slug> -n 50" -H server1
+jiji network plan
+jiji network setup
 ```
 
 ### DNS Not Resolving
 
 ```bash
-# Check jiji-dns status
-jiji server exec "systemctl status jiji-dns"
-
-# Test DNS directly
-jiji server exec "dig @10.210.0.1 myapp-api.jiji"
-
-# Check Corrosion connection
-jiji server exec "curl http://127.0.0.1:9220/v1/queries"
-
-# View jiji-dns logs
-jiji server exec "journalctl -u jiji-dns -n 50"
+jiji server exec "sudo systemctl status jiji-agent-<slug>" -H server1
+jiji server exec "docker exec <container> getent hosts myapp-api.jiji" -H server1
+jiji server exec "sudo journalctl -u jiji-agent-<slug> -n 50" -H server1
+jiji network catalog
 ```
+
+DNS is answered from the replicated catalog and returns only reachable,
+healthy Active deployment addresses.
+
+### Container Can't Resolve External Hostnames
+
+A service that calls a normal internet API (or does anything else that
+needs a public hostname to resolve) fails with something like `Name or
+service not known` or `getaddrinfo failed`, even though `.jiji` names
+resolve fine:
+
+```bash
+jiji server exec "docker exec <container> getent hosts myapp-api.jiji" -H server1  # works
+jiji server exec "docker exec <container> getent hosts api.example.com" -H server1  # fails
+```
+
+A service container's `resolv.conf` only ever has the project's own DNS
+address as its nameserver; anything outside the `.jiji` zone is forwarded to
+`network.dns_forwarders` (default `1.1.1.1`/`8.8.8.8`, see the
+[Configuration Reference](/docs/reference/configuration#network)). If
+external lookups still fail, check that the configured forwarders are
+actually reachable from the server (not just from your workstation):
+
+```bash
+jiji server exec "sudo journalctl -u jiji-agent-<slug> -n 50" -H server1
+jiji server exec "dig @1.1.1.1 api.example.com" -H server1
+```
+
+If your network blocks outbound DNS to public resolvers, set
+`network.dns_forwarders` to a resolver the server can actually reach (a
+home router, internal DNS server, Pi-hole, etc.).
 
 ### Containers Can't Communicate
 
 ```bash
-# Verify container DNS setting
-jiji server exec "docker inspect <container> | grep -A5 Dns"
-
-# Test from inside container
-jiji server exec "docker exec <container> nslookup myapp-api.jiji"
-
-# Test connectivity
-jiji server exec "docker exec <container> ping 10.210.1.1"
+jiji server exec "ip route show dev <wireguard_interface>" -H server1
+jiji server exec "docker exec <container> getent hosts myapp-api.jiji" -H server1
+jiji server exec "docker exec <container> ping <leased-address>" -H server1
 ```
 
 ## Build Issues
 
 ### Build Context Too Large
 
-```
-Error: context size exceeds limit
-```
-
-**Solutions:**
-- Add `.dockerignore` file
-- Exclude `node_modules`, `.git`, etc.
+Add a `.dockerignore`:
 
 ```
-# .dockerignore
 node_modules
 .git
 *.log
@@ -261,17 +293,12 @@ node_modules
 
 ### Dockerfile Not Found
 
-```
-Error: Cannot find Dockerfile
-```
-
-**Solutions:**
 ```yaml
 services:
   api:
     build:
       context: .
-      dockerfile: docker/Dockerfile  # Specify path
+      dockerfile: docker/Dockerfile
 ```
 
 ### Build Arguments Not Working
@@ -282,86 +309,134 @@ services:
     build:
       context: .
       args:
-        NODE_ENV: production
-        BUILD_DATE: BUILD_DATE  # Resolved from .env file
+        - NODE_ENV=production
+        - VERSION=1.2.3
 ```
 
 ## Proxy Issues
 
-### SSL Certificate Errors
-
-```bash
-# Check proxy logs
-jiji proxy logs --grep "ssl\|cert\|tls"
-
-# Verify SSL is enabled
-jiji server exec "docker exec kamal-proxy cat /config"
-```
-
 ### 502 Bad Gateway
 
-**Causes:**
-- Container not running
-- Wrong `app_port`
-- Container not healthy
+Usually the container isn't running, `port` doesn't match what the
+container actually listens on, or the container hasn't passed its health
+check yet.
 
-**Solutions:**
 ```bash
-# Check container is running
-jiji server exec "docker ps"
-
-# Check proxy config
+jiji server exec "docker ps" -H server1
 jiji proxy logs --since 5m
-
-# Verify port mapping
-jiji server exec "docker port <container>"
+jiji server exec "docker port <container>" -H server1
 ```
 
 ### Routing Not Working
 
 ```bash
-# Check proxy configuration
 jiji proxy logs --grep "route"
-
-# Verify host configuration
-jiji server exec "curl -H 'Host: myapp.example.com' localhost:80"
+jiji server exec "curl -H 'Host: myapp.example.com' localhost:80" -H server1
 ```
+
+### SSL Certificate Errors
+
+```bash
+jiji proxy logs --grep "ssl\|cert\|tls" --grep-options "-E"
+```
+
+Confirm `ssl: true` is actually set on the service's `proxy:` config, and
+that DNS for the hostname points at the server.
 
 ## Performance Issues
 
 ### Slow Deployments
 
-**Solutions:**
-- Enable build caching: `builder.cache: true`
-- Use remote builder for slow connections
-- Optimize Docker layers
-- Use smaller base images
+Enable build caching (`builder.cache: true`), keep `.dockerignore` tight,
+order Dockerfile layers so dependencies install before source is copied,
+or offload builds with `builder.local: false` + `builder.remote:`.
 
 ### High Memory Usage
 
 ```bash
-# Check container memory
-jiji server exec "docker stats --no-stream"
-
-# Check system memory
-jiji server exec "free -h"
+jiji server exec "docker stats --no-stream" -H server1
+jiji server exec "free -h" -H server1
+jiji service prune
 ```
 
 ## Debugging Commands
 
 ```bash
-# Verbose output for any command
 jiji --verbose deploy
-
-# Check server status
-jiji server exec "systemctl list-units 'jiji*'"
-
-# View all jiji services
-jiji server exec "docker ps --filter 'label=jiji'"
-
-# Full container inspection
-jiji server exec "docker inspect <container>"
-
-# View audit trail
+jiji server exec "systemctl list-units 'jiji-*'" -H server1
+jiji server exec "docker ps --filter 'label=jiji.managed=true'" -H server1
+jiji server exec "docker inspect <container>" -H server1
 jiji audit --lines 20
+jiji audit --status failed
 ```
+
+## Agent Version Mismatches
+
+### "Agent rejected request ... incompatible protocol or schema"
+
+A node is running a different jiji-agent version than the rest of the
+project's mesh. Mixed versions are rejected outright rather than partially
+joining - upgrade every host's agent (reinstall via `jiji server setup`) to
+the same version before retrying.
+
+## Common Error Messages
+
+### "Configuration already exists at ..."
+
+`jiji init` found a config file already at that path. It prompts to
+overwrite; answer no and edit the existing file instead if that's what you
+meant to do.
+
+### "Configuration validation failed with N error(s)"
+
+The listed errors are specific (missing field, invalid CIDR, duplicate host,
+etc.) - run with `--verbose` for more detail, or lint the YAML directly:
+
+```bash
+yamllint .jiji/deploy.yml
+```
+
+### "Could not acquire the deployment lock"
+
+Another deploy, service restart, service rollback, or an explicit
+maintenance lock is active. A process interrupted before cleanup may also
+leave a stale lock.
+
+```bash
+jiji lock status
+jiji lock release          # once you've confirmed it's safe
+```
+
+### Registry push/pull fails with "denied" or "unauthorized"
+
+The image wasn't pushed, or the wrong registry/tag is configured.
+
+```bash
+docker images | grep myproject
+jiji build
+jiji registry login
+```
+
+### "Container ... already exists but is not Jiji's registry"
+
+Something else is using the local registry's container name or port. Remove
+or rename that container, or change `builder.registry.port`.
+
+## Getting Help
+
+Still stuck? Include the following when asking for help or filing an issue:
+
+- `jiji version`
+- Operating system (yours and the target server's)
+- The exact error message
+- Your `deploy.yml`, with secrets redacted
+- Steps to reproduce
+
+```bash
+jiji --verbose <command>    # re-run with full detail
+jiji audit --status failed  # recent failures, per server
+```
+
+- [GitHub Issues](https://github.com/acidtib/jiji/issues) - search first,
+  then [open a new one](https://github.com/acidtib/jiji/issues/new)
+- [Discord](https://discord.gg/BMdKJzkknE) - for questions and discussion

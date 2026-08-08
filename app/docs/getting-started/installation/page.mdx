@@ -1,72 +1,74 @@
+export const metadata = {
+  description: 'Install the Jiji CLI on Linux or macOS and prepare the container tooling required for deployments.',
+  alternates: { canonical: '/docs/getting-started/installation' },
+  openGraph: { url: '/docs/getting-started/installation', images: ['/docs/opengraph-image.png'] }
+}
+
 # Installation
 
 ## Prerequisites
 
-- **SSH access** to your target servers
-- **Docker or Podman** installed on host machine
-- **sudo privileges** on target servers
+- SSH access to your target servers
+- Docker or Podman on your local machine (for building images)
+- sudo privileges on target servers
 
 ## Install Jiji
-
-### Linux/macOS
-
-Use the install script for a quick one-liner installation:
 
 ```bash
 curl -fsSL https://get.jiji.run/install.sh | sh
 ```
 
-### From JSR
-
-The easiest way to install Jiji is via [JSR](https://jsr.io/@jiji/cli), the JavaScript Registry:
+Installs the latest release to `~/.local/bin/jiji` for Linux or macOS,
+x86_64 or arm64 (auto-detected). Pin a specific version:
 
 ```bash
-deno install --allow-all --name jiji jsr:@jiji/cli
+curl -fsSL https://get.jiji.run/install.sh | VERSION=v1.2.3 sh
 ```
 
-### From Source
+On Windows, use WSL2 and the Linux instructions above.
 
-For development or to run the latest unreleased version:
+### Build from source
+
+For development, or to run an unreleased commit:
 
 ```bash
 git clone https://github.com/acidtib/jiji.git
 cd jiji
-deno task install
+mise install         # cargo build --release --bin jiji -> ~/.local/bin/jiji
 ```
 
-### Windows
+If you don't use [mise](https://mise.jdx.dev/), build directly and put the
+binary on your `PATH` yourself:
 
-1. Download `jiji-windows-x86_64.exe` from [releases](https://github.com/acidtib/jiji/releases)
-2. Rename it to `jiji.exe` and move it to a folder in your PATH (e.g., `C:\Program Files\jiji\`)
-3. Add the folder to your PATH if needed:
-   - Open **Settings** → **System** → **About** → **Advanced system settings**
-   - Click **Environment Variables**
-   - Under **User variables**, select **Path** and click **Edit**
-   - Click **New** and add the folder containing `jiji.exe`
-   - Click **OK** to save
-
-Or using PowerShell (run as Administrator):
-
-```powershell
-# Download to Program Files
-New-Item -ItemType Directory -Force -Path "$env:ProgramFiles\jiji"
-Invoke-WebRequest -Uri "https://github.com/acidtib/jiji/releases/latest/download/jiji-windows-x86_64.exe" -OutFile "$env:ProgramFiles\jiji\jiji.exe"
-
-# Add to PATH
-[Environment]::SetEnvironmentVariable("Path", $env:Path + ";$env:ProgramFiles\jiji", "User")
+```bash
+cargo build --release --bin jiji
+# binary is at target/release/jiji
 ```
 
 ## Server Requirements
 
-Your target servers need:
+Target Servers need:
 
-- Linux (tested on Ubuntu 24.04, other distributions may work)
-- SSH server running
-- Open ports:
-  - **22** - SSH
-  - **80/443** - HTTP/HTTPS (if using proxy)
-  - **51820/udp** - WireGuard (for private networking)
-  - **9280/tcp** - Corrosion (for service discovery)
+- Linux (developed and tested on Ubuntu 24.04; other distributions may
+  work)
+- An SSH server
+- Docker or Podman (with root access, jiji installs a missing engine and
+  upgrades Podman when the installed version is older than 5.8.4)
+- These ports reachable:
+
+On Debian and Ubuntu, jiji installs a pinned
+[`mgoltzsche/podman-static`](https://github.com/mgoltzsche/podman-static)
+5.8.4 bundle for Podman. This is an unofficial, single-maintainer
+distribution. Jiji verifies the pinned archive checksum before installing it.
+
+| Port | Protocol | Purpose |
+|---|---|---|
+| 22 | TCP | SSH |
+| 80/443 | TCP | HTTP/HTTPS, if a service uses `proxy:` |
+| 51820-55819 | UDP | WireGuard - one port per project, derived deterministically, not always 51820 |
+
+There's no separate database or gossip port to open; run `jiji network
+plan` to see the exact WireGuard port your project will use.
 
 ## Verify Installation
 
@@ -81,19 +83,17 @@ cd your-project
 jiji init
 ```
 
-This creates a `.jiji/deploy.yml` configuration file.
+Creates `.jiji/deploy.yml`.
 
 ## Initialize Servers
 
-Before your first deployment, initialize your servers:
+Before your first deployment:
 
 ```bash
-jiji server init
+jiji server setup
 ```
 
-This installs:
-- Container runtime (if root user)
-- WireGuard for private networking
-- Corrosion for service discovery
-- jiji-dns for DNS resolution (resolves `{project}-{service}.jiji` and `{project}-{service}-{server}.jiji`)
-- kamal-proxy for HTTP routing
+This installs the container engine (if needed), the complete private
+network for this project (WireGuard, a routed container bridge, and the
+distributed agent for `.jiji` DNS, catalog, membership, and leases), and provisions the shared
+jiji-proxy container for HTTP/HTTPS routing.
