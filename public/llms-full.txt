@@ -3131,7 +3131,11 @@ jiji network compact
 
 ##### `jiji network backup`
 
-Export an encrypted, operator-controlled control-plane backup: project identity, membership, address claims, and catalog operations. Never includes host WireGuard private keys or deployed secrets.
+Export an encrypted, operator-controlled backup of project identity, recovery
+epoch, catalog and desired-state operations, and address claims. Membership is
+not included: `jiji server setup` derives it again from the current
+configuration before restore or recovery. The backup never includes host
+WireGuard private keys or deployed secrets.
 
 ```bash
 jiji network backup --output backup.enc --passphrase-file passphrase.txt
