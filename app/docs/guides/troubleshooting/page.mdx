@@ -131,7 +131,8 @@ netstat -tlnp | grep 31270
 ```
 
 If the remote side can't reach the tunnel, check `sshd_config` on that
-server for `AllowTcpForwarding yes` and `GatewayPorts yes`.
+server for `AllowTcpForwarding yes`. `GatewayPorts` is not required because
+Jiji binds the forwarded listener to the server's `127.0.0.1` address.
 
 ## Deployment Issues
 

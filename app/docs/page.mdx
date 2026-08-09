@@ -7,13 +7,14 @@ export const metadata = {
 # Introduction
 
 Jiji deploys containerized applications across multiple servers with
-zero-downtime, private networking, and simple YAML configuration.
+health-gated rolling updates, private networking, and simple YAML
+configuration.
 
 ## Why Jiji?
 
-- **Zero-downtime deployments** - health checks and automatic rollback keep
-  your services available
-- **Multi server support** - deploy across servers with parallel SSH
+- **Fail-safe rolling deployments** - a failed candidate is removed before it
+  receives traffic, while the healthy version keeps serving
+- **Multi-server support** - deploy across servers with parallel SSH
   execution
 - **Container engine agnostic** - works with Docker or Podman
 - **Private networking** - a per-project WireGuard mesh with automatic
@@ -24,11 +25,12 @@ zero-downtime, private networking, and simple YAML configuration.
 
 ## How It's Built
 
-Jiji ships as two small Rust binaries. The `jiji` CLI you run locally reads
-`deploy.yml`, works out network topology and container placement, and
-drives your servers over SSH. `jiji-agent`, installed on each server by
-`jiji server setup`, then owns membership, DNS, the service catalog,
-desired placement, and address leases continuously on that host.
+The core deployment system uses the `jiji` CLI locally and a per-project
+`jiji-agent` on each server. The CLI reads `deploy.yml`, works out network
+topology and container placement, and drives selected servers over SSH.
+The agent, installed by `jiji server setup`, continuously owns membership,
+DNS, the service catalog, desired placement, and address leases on its host.
+Public ingress is handled by the separately packaged `jiji-proxy` container.
 
 Private networking is a WireGuard mesh between your servers, with each
 project's agents serving replicated `.jiji` DNS records. Containers receive
@@ -77,7 +79,7 @@ jiji server setup
 ```
 
 ```bash
-# Build and deploy with zero downtime
+# Build and deploy with a health-gated rolling update
 jiji deploy --build
 ```
 

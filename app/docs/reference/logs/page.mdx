@@ -55,8 +55,8 @@ jiji service logs -S web -q | grep -i warning | wc -l
 
 ## Proxy Logs
 
-`jiji proxy logs` reads from the jiji-proxy container that handles
-HTTP/HTTPS routing.
+`jiji proxy logs` reads from the jiji-proxy container that handles HTTP,
+HTTPS, and raw TCP routing.
 
 ```bash
 jiji proxy logs

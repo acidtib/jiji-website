@@ -1,17 +1,18 @@
 # Jiji
 
-> Jiji deploys containerized applications across multiple servers with zero-downtime, private networking, and simple YAML configuration.
+> Jiji deploys containerized applications across multiple servers with health-gated rolling updates, private networking, and simple YAML configuration.
 
 ## Introduction
 
 Jiji deploys containerized applications across multiple servers with
-zero-downtime, private networking, and simple YAML configuration.
+health-gated rolling updates, private networking, and simple YAML
+configuration.
 
 ### Why Jiji?
 
-- **Zero-downtime deployments** - health checks and automatic rollback keep
-  your services available
-- **Multi server support** - deploy across servers with parallel SSH
+- **Fail-safe rolling deployments** - a failed candidate is removed before it
+  receives traffic, while the healthy version keeps serving
+- **Multi-server support** - deploy across servers with parallel SSH
   execution
 - **Container engine agnostic** - works with Docker or Podman
 - **Private networking** - a per-project WireGuard mesh with automatic
@@ -22,11 +23,12 @@ zero-downtime, private networking, and simple YAML configuration.
 
 ### How It's Built
 
-Jiji ships as two small Rust binaries. The `jiji` CLI you run locally reads
-`deploy.yml`, works out network topology and container placement, and
-drives your servers over SSH. `jiji-agent`, installed on each server by
-`jiji server setup`, then owns membership, DNS, the service catalog,
-desired placement, and address leases continuously on that host.
+The core deployment system uses the `jiji` CLI locally and a per-project
+`jiji-agent` on each server. The CLI reads `deploy.yml`, works out network
+topology and container placement, and drives selected servers over SSH.
+The agent, installed by `jiji server setup`, continuously owns membership,
+DNS, the service catalog, desired placement, and address leases on its host.
+Public ingress is handled by the separately packaged `jiji-proxy` container.
 
 Private networking is a WireGuard mesh between your servers, with each
 project's agents serving replicated `.jiji` DNS records. Containers receive
@@ -75,7 +77,7 @@ jiji server setup
 ```
 
 ```bash
-# Build and deploy with zero downtime
+# Build and deploy with a health-gated rolling update
 jiji deploy --build
 ```
 
@@ -96,7 +98,8 @@ Source: https://jiji.run/docs/getting-started/installation
 #### Prerequisites
 
 - SSH access to your target servers
-- Docker or Podman on your local machine (for building images)
+- Docker or Podman on the machine that builds images (your local machine by
+  default, or the configured remote builder)
 - sudo privileges on target servers
 
 #### Install Jiji
@@ -151,7 +154,8 @@ distribution. Jiji verifies the pinned archive checksum before installing it.
 | Port | Protocol | Purpose |
 |---|---|---|
 | 22 | TCP | SSH |
-| 80/443 | TCP | HTTP/HTTPS, if a service uses `proxy:` |
+| 80/443 | TCP | HTTP/HTTPS, if a service uses an HTTP `proxy:` target |
+| Configured `listen_port` values | TCP | Raw TCP ingress, if a service uses a TCP `proxy:` target |
 | 51820-55819 | UDP | WireGuard - one port per project, derived deterministically, not always 51820 |
 
 There's no separate database or gossip port to open; run `jiji network
@@ -182,8 +186,9 @@ jiji server setup
 
 This installs the container engine (if needed), the complete private
 network for this project (WireGuard, a routed container bridge, and the
-distributed agent for `.jiji` DNS, catalog, membership, and leases), and provisions the shared
-jiji-proxy container for HTTP/HTTPS routing.
+distributed agent for `.jiji` DNS, catalog, membership, and leases), and
+provisions the shared jiji-proxy container for HTTP, HTTPS, and configured
+raw TCP routing.
 
 ### Quick Start
 
@@ -473,6 +478,7 @@ commands do not require every mesh member to be reachable.
 |---|---|---|
 | 22 | TCP | SSH |
 | 80/443 | TCP | Public HTTP/HTTPS |
+| Configured `listen_port` values | TCP | Public raw TCP proxy routes |
 | 51820-55819 | UDP | Project-specific WireGuard |
 | Project-derived | TCP | Catalog and desired-state replication over the mesh (membership has no port of its own; it's pushed over SSH) |
 
@@ -1062,11 +1068,13 @@ curl http://localhost:31270/v2/
 If the remote side can't reach it, check `sshd_config` on that server:
 
 ```bash
-grep -E "(AllowTcpForwarding|GatewayPorts)" /etc/ssh/sshd_config
+grep -E "AllowTcpForwarding" /etc/ssh/sshd_config
 # Should show:
 # AllowTcpForwarding yes
-# GatewayPorts yes (or clientspecified)
 ```
+
+`GatewayPorts` is not required. Jiji binds the remote end of each tunnel to
+`127.0.0.1`, so the registry is not exposed on the server's public interfaces.
 
 #### Testing Multiple Environments
 
@@ -1556,7 +1564,8 @@ netstat -tlnp | grep 31270
 ```
 
 If the remote side can't reach the tunnel, check `sshd_config` on that
-server for `AllowTcpForwarding yes` and `GatewayPorts yes`.
+server for `AllowTcpForwarding yes`. `GatewayPorts` is not required because
+Jiji binds the forwarded listener to the server's `127.0.0.1` address.
 
 #### Deployment Issues
 
@@ -2570,6 +2579,30 @@ proxy:
         cmd: "test -f /ready"
 ```
 
+**Raw TCP proxying** publishes a non-HTTP service on a dedicated public TCP
+port. `port` is the backend container port and `listen_port` is the public
+port accepted by jiji-proxy:
+
+```yaml
+services:
+  postgres:
+    image: postgres:18
+    servers: [db1, db2]
+    proxy:
+      port: 5432
+      listen_port: 15432
+      healthcheck:
+        cmd: "pg_isready -U appuser -d app"
+```
+
+Setting `listen_port` selects raw TCP mode. It cannot be combined with
+HTTP-only `path_prefix` or `ssl`. Ports `0`, `80`, and `443` are reserved,
+and every TCP route on a shared host needs a unique public port. `hosts` is
+optional metadata for a TCP target, not a routing key. Open the configured
+`listen_port` in the server firewall and point clients at any ingress server
+that owns the route. See the [Proxy Reference](/docs/reference/proxy#raw-tcp-proxying)
+for routing and multi-project details.
+
 ##### Container Runtime options
 
 ```yaml
@@ -2888,7 +2921,10 @@ jiji build --no-push           # Build without pushing (single-architecture only
 
 ##### `jiji deploy`
 
-Deploy configured services across their target servers with zero downtime.
+Deploy configured services across their target servers. Rolling services keep
+the healthy version serving until its replacement passes health checks;
+`stop_first` services and direct host-port bindings cannot guarantee zero
+downtime.
 
 ```bash
 jiji deploy
@@ -3250,8 +3286,9 @@ jiji service restart -H web1
 
 ##### `jiji service rollback`
 
-Roll back services to a previously built image through the catalog-driven
-zero-downtime replacement. Requires `--version`.
+Roll back services to a previously built image through the same
+catalog-driven replacement strategy configured for a normal deploy. Requires
+`--version`.
 
 ```bash
 jiji service rollback --version 1.2.2
@@ -3781,19 +3818,20 @@ Every built-in feature, organized by area.
 
 - **Private Mesh Network** - WireGuard VPN between all servers. Encrypted by default.
 - **Automatic DNS** - Built-in `.jiji` DNS resolution. Access services by name.
-- **Zero-Downtime** - Old version keeps serving until the new one passes its health check.
+- **Health-Gated Rollouts** - For rolling services, the old version keeps serving until the new one passes its health check. Host-port bindings and `stop_first` services use a brief stop-then-start window.
 - **Runtime Agnostic** - Docker or Podman. Same config, your choice.
-- **Multi Server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
-- **Multi Project** - Run multiple apps on one server. Perfect for small teams and hobby projects.
+- **Multi-server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
+- **Multi-project** - Run multiple apps on one server with isolated project networks and a shared per-host ingress proxy.
 - **Scheduled Jobs** - Run service commands on cron schedules in isolated one-off containers.
 
 #### Proxy & SSL
 
-- **Auto SSL/TLS** - Automatic HTTPS certificates via jiji-proxy. Zero config.
+- **Auto SSL/TLS** - Issue and renew HTTPS certificates for configured domains through jiji-proxy.
 - **Path-based Routing** - Route traffic based on URL path prefix to different services.
 - **Cross-host Load Balancing** - jiji-proxy discovers every healthy replica of a service across the whole server mesh, not just ones on the same host.
 - **Wildcard Domains** - Support for single-level wildcard domain matching like `*.example.com`.
 - **Multi-port Services** - Route multiple ports on a single service to different domains.
+- **Raw TCP Proxying** - Publish non-HTTP services on dedicated TCP ports with mesh-wide backend discovery.
 - **HTTP Health Checks** - Health checking via HTTP endpoints with configurable paths.
 - **Command Health Checks** - Custom shell commands for health verification.
 - **Health Check Timing** - Configurable intervals, timeouts, and deploy timeouts.
@@ -3813,7 +3851,7 @@ Every built-in feature, organized by area.
 - **Linux Capabilities** - Add specific capabilities like `SYS_ADMIN`, `NET_ADMIN`.
 - **Device Mappings** - Mount host devices into containers (`/dev/video0`, `/dev/snd`).
 - **Named Volumes** - Use Docker named volumes instead of host paths.
-- **File & Directory Mounts** - Mount files/directories with fine grained permissions.
+- **File & Directory Mounts** - Mount files and directories with fine-grained permissions.
 - **Custom Commands** - Override container ENTRYPOINT/CMD as needed.
 - **Restart Policy** - Configure restart behavior: unless-stopped, always, on-failure, no.
 - **Network Mode** - `bridge` (default, dynamically-leased address) is the
@@ -3825,11 +3863,11 @@ Every built-in feature, organized by area.
 
 #### Deployment
 
-- **Rolling Deployments** - Zero-downtime deployments with old container cleanup.
+- **Rolling Deployments** - Replace compatible services without downtime, then clean up the old container.
 - **Stop-First Mode** - For stateful services like SQLite - stop old before starting new.
 - **Fail-Safe Health Checks** - A failed candidate is discarded; the previous version is never touched.
 - **Image Retention** - Control how many images to keep per service.
-- **Deployment Locks** - Prevent concurrent deploys. Team safe operations.
+- **Deployment Locks** - Prevent conflicting concurrent mutations with scoped, team-safe locks.
 - **Service Filtering** - Deploy specific services by name patterns.
 
 #### SSH & Connections
@@ -3839,7 +3877,7 @@ Every built-in feature, organized by area.
 - **Key Passphrase** - Support encrypted SSH keys with passphrases.
 - **SSH Config Support** - Use system SSH config (`~/.ssh/config`).
 - **Bounded Concurrency** - Run SSH operations across many hosts without overwhelming any one connection limit.
-- **Interactive SSH** - Shell access to servers via `jiji server exec`.
+- **Interactive Remote Execution** - Run a command with a PTY on one selected server via `jiji server exec`.
 
 #### Environment & Secrets
 
@@ -3855,7 +3893,7 @@ Every built-in feature, organized by area.
 - **Per-Replica DNS Records** - Resolve every replica together, or reach one server directly.
 - **External DNS Forwarding** - Service containers resolve normal internet hostnames too, forwarded to configurable resolvers (default public DNS).
 - **Clean Teardown** - Remove a project's network, containers, and routes in one command.
-- **Multi-Project Isolation** - Independent projects share a host with zero shared network state.
+- **Multi-Project Isolation** - Each project has its own mesh, bridge, DNS, catalog, and agent state; jiji-proxy is shared per host.
 
 #### Registry
 
@@ -3865,11 +3903,11 @@ Every built-in feature, organized by area.
 
 #### Logging & Monitoring
 
-- **Centralized Logs** - Fetch logs from services with filtering.
+- **Multi-host Log Access** - Fetch and filter service logs across selected hosts from one command.
 - **Log Grep** - Filter logs by pattern with grep options.
 - **Time-based Filtering** - Show logs since timestamp or relative time.
 - **Log Follow Mode** - Stream logs in real-time like `tail -f`.
-- **Audit Trail** - Complete deployment history with filtering.
+- **Audit Trail** - Best-effort, per-server operation history with filtering.
 - **Deployment Timing** - Every audit entry records how long the operation took.
 
 #### Operations
@@ -3880,7 +3918,7 @@ Every built-in feature, organized by area.
 - **Remote Execution** - Run commands across servers in parallel or sequential, or drop into an interactive shell.
 - **Service Restart** - Restart services without full redeployment.
 - **Service Removal** - Clean removal with network unregistration.
-- **Image Pruning** - Automatic cleanup of old service images.
+- **Image Pruning** - Explicitly remove old build-produced images with configurable per-service retention.
 - **Server Teardown** - Clean server removal from cluster.
 - **Auto-install Engine** - Install Docker/Podman automatically on servers.
 - **Architecture Support** - Explicitly set server architecture (amd64/arm64).
@@ -4081,10 +4119,11 @@ dig +short @<dns-address> myproject-web.jiji
 Source: https://jiji.run/docs/reference/proxy
 
 Jiji uses **jiji-proxy**, its own Pingora-based (Rust) reverse proxy, as the
-public HTTP and HTTPS entry point for proxied services. Jiji installs and
-manages the proxy container, translates each service's `proxy:` configuration
-into a route definition, and jiji-proxy itself continuously discovers that
-route's backends over DNS rather than being told an address on every deploy.
+public HTTP, HTTPS, and raw TCP entry point for proxied services. Jiji installs
+and manages the proxy container, translates each service's `proxy:`
+configuration into a route definition, and jiji-proxy continuously discovers
+that route's backends over DNS rather than being told an address on every
+deploy.
 
 ```mermaid
 flowchart TB
@@ -4176,6 +4215,7 @@ services:
 | `hosts` | Hostnames accepted by the route |
 | `ssl` | `false` or omitted for HTTP, `true` for TLS, or a custom certificate object |
 | `path_prefix` | Optional path prefix used to select the route |
+| `listen_port` | Public port for raw TCP mode; cannot be combined with `path_prefix` or `ssl` |
 | `healthcheck` | Active health-check settings jiji-proxy runs continuously against this route's backends |
 
 ##### Multiple targets
@@ -4201,16 +4241,71 @@ services:
             path: /health
 ```
 
-Each target supports `port`, `hosts`, `ssl`, `path_prefix`, and
-`healthcheck`. When `targets` is present, it takes precedence over the flat
-single-target fields.
+Each target supports `port`, `hosts`, `ssl`, `path_prefix`, `listen_port`,
+and `healthcheck`. When `targets` is present, it takes precedence over the
+flat single-target fields.
+
+#### Raw TCP Proxying
+
+Set `listen_port` to expose a non-HTTP service through jiji-proxy. The proxy
+accepts TCP connections on that public port and relays bytes to healthy
+backends discovered through the service's aggregate `.jiji` DNS record.
+
+```yaml
+services:
+  postgres:
+    image: postgres:18
+    servers: [db1, db2]
+    proxy:
+      port: 5432
+      listen_port: 15432
+      healthcheck:
+        cmd: "pg_isready -U appuser -d app"
+        interval: 10s
+        deploy_timeout: 60s
+```
+
+`port` is the backend container port. `listen_port` is the public port on
+every ingress server that owns the route, and the two values may differ.
+Open `listen_port` in each server's firewall before connecting clients.
+
+Raw TCP routes have no HTTP Host header, path, or TLS handling:
+
+- `path_prefix` and `ssl` cannot be combined with `listen_port`.
+- `hosts` is optional metadata and does not select a route.
+- Ports `0`, `80`, and `443` cannot be used as `listen_port` values.
+- Every TCP route needs a unique `listen_port` within a project.
+- Because jiji-proxy is shared, projects on the same host must also use
+  different public TCP ports. A cross-project conflict is rejected when the
+  route is applied.
+
+Use `targets` to combine HTTP and raw TCP endpoints or publish several TCP
+ports from one service:
+
+```yaml
+services:
+  gateway:
+    image: example/gateway:latest
+    servers: [edge1, edge2]
+    proxy:
+      targets:
+        - port: 8080
+          hosts: [gateway.example.com]
+          ssl: true
+        - port: 9000
+          listen_port: 19000
+```
+
+Deployments verify that the new backend appears healthy on the TCP route
+before retiring the previous deployment, using the same catalog-driven
+rollout model as HTTP routes.
 
 #### Route Identity and Backend Discovery
 
-A jiji-proxy route is identified by the `hosts`/`path_prefix` you configure,
-not a generated name. jiji-proxy pushes no explicit backend address into the
-route at all: instead it continuously resolves the service's **aggregate**
-DNS name,
+An HTTP route is identified by the `hosts`/`path_prefix` you configure, while
+a raw TCP route is identified by `listen_port`. jiji-proxy pushes no explicit
+backend address into either route: instead it continuously resolves the
+service's **aggregate** DNS name,
 
 ```text
 {project}-{service}.jiji
@@ -4486,17 +4581,21 @@ jiji server exec "docker inspect jiji-proxy"
 jiji server exec "docker logs --tail 100 jiji-proxy"
 jiji server exec "docker exec jiji-proxy jiji-proxy route list"
 jiji server exec "docker exec jiji-proxy jiji-proxy route status --host example.com"
+jiji server exec "docker exec jiji-proxy jiji-proxy tcp-route list"
+jiji server exec "docker exec jiji-proxy jiji-proxy tcp-route status --listen-port 15432"
 ```
 
 Use `podman` in the remote commands when Podman is configured. `route list`
-shows every route currently configured on that host's jiji-proxy; `route
-status --host <host>` shows the backend addresses it has actually discovered
-for that route and whether each one currently passes its health check.
+shows every HTTP route currently configured on that host's jiji-proxy;
+`route status --host <host>` shows the backend addresses it has discovered
+for that route and whether each one passes its health check. Use the
+corresponding `tcp-route` commands for raw TCP routes.
 
 If a route does not receive traffic:
 
 1. Confirm public DNS points to a server running jiji-proxy for the project.
-2. Confirm TCP ports 80 and 443 are open.
+2. Confirm TCP ports 80 and 443 are open for HTTP routes, or that the
+   configured `listen_port` is open for a raw TCP route.
 3. Check `jiji proxy logs` for routing or certificate errors.
 4. Run `route status --host <host>` (above) to see whether jiji-proxy has
    discovered any healthy backend for the route at all.
@@ -4847,8 +4946,8 @@ jiji service logs -S web -q | grep -i warning | wc -l
 
 #### Proxy Logs
 
-`jiji proxy logs` reads from the jiji-proxy container that handles
-HTTP/HTTPS routing.
+`jiji proxy logs` reads from the jiji-proxy container that handles HTTP,
+HTTPS, and raw TCP routing.
 
 ```bash
 jiji proxy logs

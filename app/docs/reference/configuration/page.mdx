@@ -704,6 +704,30 @@ proxy:
         cmd: "test -f /ready"
 ```
 
+**Raw TCP proxying** publishes a non-HTTP service on a dedicated public TCP
+port. `port` is the backend container port and `listen_port` is the public
+port accepted by jiji-proxy:
+
+```yaml
+services:
+  postgres:
+    image: postgres:18
+    servers: [db1, db2]
+    proxy:
+      port: 5432
+      listen_port: 15432
+      healthcheck:
+        cmd: "pg_isready -U appuser -d app"
+```
+
+Setting `listen_port` selects raw TCP mode. It cannot be combined with
+HTTP-only `path_prefix` or `ssl`. Ports `0`, `80`, and `443` are reserved,
+and every TCP route on a shared host needs a unique public port. `hosts` is
+optional metadata for a TCP target, not a routing key. Open the configured
+`listen_port` in the server firewall and point clients at any ingress server
+that owns the route. See the [Proxy Reference](/docs/reference/proxy#raw-tcp-proxying)
+for routing and multi-project details.
+
 ### Container Runtime options
 
 ```yaml

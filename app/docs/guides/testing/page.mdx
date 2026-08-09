@@ -125,11 +125,13 @@ curl http://localhost:31270/v2/
 If the remote side can't reach it, check `sshd_config` on that server:
 
 ```bash
-grep -E "(AllowTcpForwarding|GatewayPorts)" /etc/ssh/sshd_config
+grep -E "AllowTcpForwarding" /etc/ssh/sshd_config
 # Should show:
 # AllowTcpForwarding yes
-# GatewayPorts yes (or clientspecified)
 ```
+
+`GatewayPorts` is not required. Jiji binds the remote end of each tunnel to
+`127.0.0.1`, so the registry is not exposed on the server's public interfaces.
 
 ## Testing Multiple Environments
 

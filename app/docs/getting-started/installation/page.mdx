@@ -9,7 +9,8 @@ export const metadata = {
 ## Prerequisites
 
 - SSH access to your target servers
-- Docker or Podman on your local machine (for building images)
+- Docker or Podman on the machine that builds images (your local machine by
+  default, or the configured remote builder)
 - sudo privileges on target servers
 
 ## Install Jiji
@@ -64,7 +65,8 @@ distribution. Jiji verifies the pinned archive checksum before installing it.
 | Port | Protocol | Purpose |
 |---|---|---|
 | 22 | TCP | SSH |
-| 80/443 | TCP | HTTP/HTTPS, if a service uses `proxy:` |
+| 80/443 | TCP | HTTP/HTTPS, if a service uses an HTTP `proxy:` target |
+| Configured `listen_port` values | TCP | Raw TCP ingress, if a service uses a TCP `proxy:` target |
 | 51820-55819 | UDP | WireGuard - one port per project, derived deterministically, not always 51820 |
 
 There's no separate database or gossip port to open; run `jiji network
@@ -95,5 +97,6 @@ jiji server setup
 
 This installs the container engine (if needed), the complete private
 network for this project (WireGuard, a routed container bridge, and the
-distributed agent for `.jiji` DNS, catalog, membership, and leases), and provisions the shared
-jiji-proxy container for HTTP/HTTPS routing.
+distributed agent for `.jiji` DNS, catalog, membership, and leases), and
+provisions the shared jiji-proxy container for HTTP, HTTPS, and configured
+raw TCP routing.

@@ -177,16 +177,10 @@ export default function LandingPage() {
         <section className="pb-10 pt-12 md:pb-14 md:pt-16 lg:pt-20">
           <div className="mx-auto grid max-w-7xl gap-10 px-4 md:px-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-center lg:gap-14">
             <div>
-              <div className="mb-5 flex flex-wrap items-center gap-2">
-                <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-                  Linux · Docker · Podman
-                </span>
-              </div>
-
               <h1 className="max-w-4xl text-balance font-display text-5xl font-bold uppercase leading-[0.88] tracking-tight sm:text-6xl md:text-7xl">
-                Deploy containers
+                Deploy across Linux
                 <br />
-                <span className="text-primary">anywhere.</span>
+                <span className="text-primary">servers you control.</span>
               </h1>
 
               <p className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-xl">
@@ -216,8 +210,8 @@ export default function LandingPage() {
               </div>
 
               <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Any Linux Server</span>
-                <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> DevOps Friendly</span>
+                <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Cross-provider</span>
+                <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> SSH-driven</span>
                 <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> MIT Licensed</span>
               </div>
             </div>
@@ -238,7 +232,7 @@ export default function LandingPage() {
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <SectionHeading
               kicker="01 / WHY JIJI"
-              title="Deploy anywhere. Roll out safely."
+              title="Deploy on your servers. Roll out safely."
               description="Turn ordinary Linux servers into a repeatable deployment target with health checks, automatic HTTPS, private networking, and service discovery built in."
             />
 
@@ -246,8 +240,8 @@ export default function LandingPage() {
               <BenefitModule
                 number="01"
                 icon={Server}
-                title="Bring any server"
-                description="Deploy to cloud VMs, bare metal, home labs, or across providers. If it runs Linux and you can reach it over SSH, Jiji can deploy to it."
+                title="Bring your Linux servers"
+                description="Deploy to supported Linux cloud VMs, bare metal, home labs, or across providers using SSH and root or sudo access."
                 proof="AWS · Hetzner · DigitalOcean · OVHcloud"
               />
               <BenefitModule
@@ -255,13 +249,13 @@ export default function LandingPage() {
                 icon={Zap}
                 title="Keep costs predictable"
                 description="Pay infrastructure providers directly and scale on your terms. Your deployment workflow stays the same as servers and traffic grow."
-                proof="Direct billing · Open source · Flexible scale"
+                proof="Direct billing · Open source · Same workflow"
               />
               <BenefitModule
                 number="03"
                 icon={Lock}
                 title="Private by default"
-                description="Jiji connects servers with an encrypted WireGuard network and private DNS. Application traffic stays on the mesh while jiji-proxy handles public ingress."
+                description="Jiji connects servers with an encrypted WireGuard network and private DNS. Service-to-service and proxy-to-backend traffic uses the mesh."
                 proof="Encrypted mesh · Private DNS · Minimal exposure"
               />
             </div>
@@ -305,7 +299,7 @@ export default function LandingPage() {
                     <Line>    <YamlKey>servers</YamlKey>: <Val>[web1, web2]</Val></Line>
                     <Line>    <YamlKey>proxy</YamlKey>:</Line>
                     <Line>      <YamlKey>port</YamlKey>: <Val>3000</Val></Line>
-                    <Line>      <YamlKey>host</YamlKey>: <Val>api.example.com</Val></Line>
+                    <Line>      <YamlKey>hosts</YamlKey>: <Val>[api.example.com]</Val></Line>
                     <Line>      <YamlKey>ssl</YamlKey>: <Val>true</Val></Line>
                   </code>
                 </pre>
@@ -449,7 +443,7 @@ export default function LandingPage() {
                   number="01"
                   category="ARCHITECTURE"
                   question="Where does Jiji run?"
-                  answer="The Jiji CLI runs on your laptop or CI runner. It connects to each server over SSH, applies the deployment, and exits when the command finishes. Your servers continue running standard infrastructure services and containers."
+                  answer="The Jiji CLI runs on your machine or CI runner. It connects over SSH to the selected servers and any hosts that own affected state, applies the deployment, and exits. A per-project jiji-agent remains on each server to maintain networking, DNS, and service state, while jiji-proxy handles configured ingress."
                   defaultOpen
                 />
                 <FaqItem
@@ -486,7 +480,7 @@ export default function LandingPage() {
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                   <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Linux server</span>
                   <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> SSH access</span>
-                  <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Five minutes</span>
+                  <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> One config file</span>
                 </div>
               </div>
 
@@ -530,7 +524,7 @@ export default function LandingPage() {
                     <StartStep
                       number="01"
                       title="Install the CLI"
-                      detail="One binary on your laptop or CI runner."
+                      detail="One binary on your machine or CI runner."
                       command="curl -fsSL get.jiji.run/install.sh | sh"
                     />
                     <StartStep
@@ -621,13 +615,13 @@ export default function LandingPage() {
           </div>
 
           <div className="flex flex-col items-center gap-3 border-t border-border py-5 text-center font-mono text-[10px] text-muted-foreground sm:flex-row sm:justify-between sm:text-left">
-            <span>Jiji container orchestration</span>
+            <span>Jiji Container Orchestration</span>
             <div className="flex items-center gap-4">
-              <Link href="/llms.txt" className="transition-colors hover:text-primary">llms.txt</Link>
+              <a href="/llms.txt" className="transition-colors hover:text-primary">llms.txt</a>
               <Link href="/docs" className="transition-colors hover:text-primary">Documentation</Link>
             </div>
             <span>
-              Built in Colorado with love
+              Built in Colorado with Love
             </span>
           </div>
         </div>
@@ -697,7 +691,7 @@ function FooterColumn({ title, links, className = "", compact = false }) {
 function HeroDeployBrief() {
   const steps = [
     { icon: FileCode, label: "CONFIGURE", title: "Describe the app", detail: "Services, servers, domains, and health checks" },
-    { icon: KeyRound, label: "CONNECT", title: "Reach every host", detail: "Parallel execution over standard SSH" },
+    { icon: KeyRound, label: "CONNECT", title: "Reach selected hosts", detail: "Bounded parallel execution over SSH" },
     { icon: RefreshCw, label: "ROLLOUT", title: "Start candidates", detail: "Verify health before changing traffic" },
     { icon: Globe, label: "ROUTE", title: "Serve HTTPS", detail: "Switch traffic through jiji-proxy" },
   ];
@@ -1302,7 +1296,7 @@ function DeploymentOutput() {
   const phases = [
     { label: "Build image", detail: "myapp-api:8f31c2a", duration: "8.4s" },
     { label: "Push image", detail: "registry.example.com/myapp", duration: "3.1s" },
-    { label: "Start candidates", detail: "2 servers in parallel", duration: "1.7s" },
+    { label: "Start candidates", detail: "Rolling across 2 servers", duration: "1.7s" },
   ];
 
   const servers = [

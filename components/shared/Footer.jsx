@@ -69,7 +69,7 @@ export function Footer() {
           >
             MIT License
           </Link>
-          <span className="font-mono text-xs">Built in Colorado with love</span>
+          <span className="font-mono text-xs">Built in Colorado with Love</span>
         </div>
       </div>
     </footer>

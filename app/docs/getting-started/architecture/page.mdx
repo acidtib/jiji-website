@@ -172,6 +172,7 @@ commands do not require every mesh member to be reachable.
 |---|---|---|
 | 22 | TCP | SSH |
 | 80/443 | TCP | Public HTTP/HTTPS |
+| Configured `listen_port` values | TCP | Public raw TCP proxy routes |
 | 51820-55819 | UDP | Project-specific WireGuard |
 | Project-derived | TCP | Catalog and desired-state replication over the mesh (membership has no port of its own; it's pushed over SSH) |
 

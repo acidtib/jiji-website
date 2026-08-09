@@ -74,7 +74,10 @@ jiji build --no-push           # Build without pushing (single-architecture only
 
 ### `jiji deploy`
 
-Deploy configured services across their target servers with zero downtime.
+Deploy configured services across their target servers. Rolling services keep
+the healthy version serving until its replacement passes health checks;
+`stop_first` services and direct host-port bindings cannot guarantee zero
+downtime.
 
 ```bash
 jiji deploy
@@ -281,7 +284,11 @@ jiji network compact
 
 ### `jiji network backup`
 
-Export an encrypted, operator-controlled control-plane backup: project identity, membership, address claims, and catalog operations. Never includes host WireGuard private keys or deployed secrets.
+Export an encrypted, operator-controlled backup of project identity, recovery
+epoch, catalog and desired-state operations, and address claims. Membership is
+not included: `jiji server setup` derives it again from the current
+configuration before restore or recovery. The backup never includes host
+WireGuard private keys or deployed secrets.
 
 ```bash
 jiji network backup --output backup.enc --passphrase-file passphrase.txt
@@ -436,8 +443,9 @@ jiji service restart -H web1
 
 ### `jiji service rollback`
 
-Roll back services to a previously built image through the catalog-driven
-zero-downtime replacement. Requires `--version`.
+Roll back services to a previously built image through the same
+catalog-driven replacement strategy configured for a normal deploy. Requires
+`--version`.
 
 ```bash
 jiji service rollback --version 1.2.2

@@ -1,5 +1,5 @@
 export const metadata = {
-  description: 'Configure jiji-proxy routing, domains, TLS certificates, health checks, and zero-downtime traffic switching with Jiji.',
+  description: 'Configure jiji-proxy HTTP, HTTPS, and raw TCP routing, TLS certificates, health checks, and zero-downtime traffic switching with Jiji.',
   alternates: { canonical: '/docs/reference/proxy' },
   openGraph: { url: '/docs/reference/proxy', images: ['/docs/opengraph-image.png'] }
 }
@@ -7,10 +7,11 @@ export const metadata = {
 # Jiji Proxy Reference
 
 Jiji uses **jiji-proxy**, its own Pingora-based (Rust) reverse proxy, as the
-public HTTP and HTTPS entry point for proxied services. Jiji installs and
-manages the proxy container, translates each service's `proxy:` configuration
-into a route definition, and jiji-proxy itself continuously discovers that
-route's backends over DNS rather than being told an address on every deploy.
+public HTTP, HTTPS, and raw TCP entry point for proxied services. Jiji installs
+and manages the proxy container, translates each service's `proxy:`
+configuration into a route definition, and jiji-proxy continuously discovers
+that route's backends over DNS rather than being told an address on every
+deploy.
 
 ```mermaid
 flowchart TB
@@ -102,6 +103,7 @@ services:
 | `hosts` | Hostnames accepted by the route |
 | `ssl` | `false` or omitted for HTTP, `true` for TLS, or a custom certificate object |
 | `path_prefix` | Optional path prefix used to select the route |
+| `listen_port` | Public port for raw TCP mode; cannot be combined with `path_prefix` or `ssl` |
 | `healthcheck` | Active health-check settings jiji-proxy runs continuously against this route's backends |
 
 ### Multiple targets
@@ -127,16 +129,71 @@ services:
             path: /health
 ```
 
-Each target supports `port`, `hosts`, `ssl`, `path_prefix`, and
-`healthcheck`. When `targets` is present, it takes precedence over the flat
-single-target fields.
+Each target supports `port`, `hosts`, `ssl`, `path_prefix`, `listen_port`,
+and `healthcheck`. When `targets` is present, it takes precedence over the
+flat single-target fields.
+
+## Raw TCP Proxying
+
+Set `listen_port` to expose a non-HTTP service through jiji-proxy. The proxy
+accepts TCP connections on that public port and relays bytes to healthy
+backends discovered through the service's aggregate `.jiji` DNS record.
+
+```yaml
+services:
+  postgres:
+    image: postgres:18
+    servers: [db1, db2]
+    proxy:
+      port: 5432
+      listen_port: 15432
+      healthcheck:
+        cmd: "pg_isready -U appuser -d app"
+        interval: 10s
+        deploy_timeout: 60s
+```
+
+`port` is the backend container port. `listen_port` is the public port on
+every ingress server that owns the route, and the two values may differ.
+Open `listen_port` in each server's firewall before connecting clients.
+
+Raw TCP routes have no HTTP Host header, path, or TLS handling:
+
+- `path_prefix` and `ssl` cannot be combined with `listen_port`.
+- `hosts` is optional metadata and does not select a route.
+- Ports `0`, `80`, and `443` cannot be used as `listen_port` values.
+- Every TCP route needs a unique `listen_port` within a project.
+- Because jiji-proxy is shared, projects on the same host must also use
+  different public TCP ports. A cross-project conflict is rejected when the
+  route is applied.
+
+Use `targets` to combine HTTP and raw TCP endpoints or publish several TCP
+ports from one service:
+
+```yaml
+services:
+  gateway:
+    image: example/gateway:latest
+    servers: [edge1, edge2]
+    proxy:
+      targets:
+        - port: 8080
+          hosts: [gateway.example.com]
+          ssl: true
+        - port: 9000
+          listen_port: 19000
+```
+
+Deployments verify that the new backend appears healthy on the TCP route
+before retiring the previous deployment, using the same catalog-driven
+rollout model as HTTP routes.
 
 ## Route Identity and Backend Discovery
 
-A jiji-proxy route is identified by the `hosts`/`path_prefix` you configure,
-not a generated name. jiji-proxy pushes no explicit backend address into the
-route at all: instead it continuously resolves the service's **aggregate**
-DNS name,
+An HTTP route is identified by the `hosts`/`path_prefix` you configure, while
+a raw TCP route is identified by `listen_port`. jiji-proxy pushes no explicit
+backend address into either route: instead it continuously resolves the
+service's **aggregate** DNS name,
 
 ```text
 {project}-{service}.jiji
@@ -412,17 +469,21 @@ jiji server exec "docker inspect jiji-proxy"
 jiji server exec "docker logs --tail 100 jiji-proxy"
 jiji server exec "docker exec jiji-proxy jiji-proxy route list"
 jiji server exec "docker exec jiji-proxy jiji-proxy route status --host example.com"
+jiji server exec "docker exec jiji-proxy jiji-proxy tcp-route list"
+jiji server exec "docker exec jiji-proxy jiji-proxy tcp-route status --listen-port 15432"
 ```
 
 Use `podman` in the remote commands when Podman is configured. `route list`
-shows every route currently configured on that host's jiji-proxy; `route
-status --host <host>` shows the backend addresses it has actually discovered
-for that route and whether each one currently passes its health check.
+shows every HTTP route currently configured on that host's jiji-proxy;
+`route status --host <host>` shows the backend addresses it has discovered
+for that route and whether each one passes its health check. Use the
+corresponding `tcp-route` commands for raw TCP routes.
 
 If a route does not receive traffic:
 
 1. Confirm public DNS points to a server running jiji-proxy for the project.
-2. Confirm TCP ports 80 and 443 are open.
+2. Confirm TCP ports 80 and 443 are open for HTTP routes, or that the
+   configured `listen_port` is open for a raw TCP route.
 3. Check `jiji proxy logs` for routing or certificate errors.
 4. Run `route status --host <host>` (above) to see whether jiji-proxy has
    discovered any healthy backend for the route at all.

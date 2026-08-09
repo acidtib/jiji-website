@@ -113,7 +113,7 @@ export default async function DocsLayout({ children }) {
                   <h2>Project</h2>
                   <Link href="https://github.com/acidtib/jiji" target="_blank">GitHub</Link>
                   <Link href="https://discord.gg/BMdKJzkknE" target="_blank">Discord</Link>
-                  <Link href="/llms.txt">llms.txt</Link>
+                  <a href="/llms.txt">llms.txt</a>
                 </div>
               </div>
             </div>
@@ -121,7 +121,7 @@ export default async function DocsLayout({ children }) {
             <div className="docs-footer-bottom">
               <div>
                 <Link href="https://github.com/acidtib/jiji/blob/main/LICENSE" target="_blank">MIT License</Link>
-                <span>Built in Colorado with love</span>
+                <span>Built in Colorado with Love</span>
               </div>
               <div className="docs-footer-social">
                 <Link href="https://discord.gg/BMdKJzkknE" target="_blank" aria-label="Jiji Discord community">

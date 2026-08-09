@@ -12,19 +12,20 @@ Every built-in feature, organized by area.
 
 - **Private Mesh Network** - WireGuard VPN between all servers. Encrypted by default.
 - **Automatic DNS** - Built-in `.jiji` DNS resolution. Access services by name.
-- **Zero-Downtime** - Old version keeps serving until the new one passes its health check.
+- **Health-Gated Rollouts** - For rolling services, the old version keeps serving until the new one passes its health check. Host-port bindings and `stop_first` services use a brief stop-then-start window.
 - **Runtime Agnostic** - Docker or Podman. Same config, your choice.
-- **Multi Server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
-- **Multi Project** - Run multiple apps on one server. Perfect for small teams and hobby projects.
+- **Multi-server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
+- **Multi-project** - Run multiple apps on one server with isolated project networks and a shared per-host ingress proxy.
 - **Scheduled Jobs** - Run service commands on cron schedules in isolated one-off containers.
 
 ## Proxy & SSL
 
-- **Auto SSL/TLS** - Automatic HTTPS certificates via jiji-proxy. Zero config.
+- **Auto SSL/TLS** - Issue and renew HTTPS certificates for configured domains through jiji-proxy.
 - **Path-based Routing** - Route traffic based on URL path prefix to different services.
 - **Cross-host Load Balancing** - jiji-proxy discovers every healthy replica of a service across the whole server mesh, not just ones on the same host.
 - **Wildcard Domains** - Support for single-level wildcard domain matching like `*.example.com`.
 - **Multi-port Services** - Route multiple ports on a single service to different domains.
+- **Raw TCP Proxying** - Publish non-HTTP services on dedicated TCP ports with mesh-wide backend discovery.
 - **HTTP Health Checks** - Health checking via HTTP endpoints with configurable paths.
 - **Command Health Checks** - Custom shell commands for health verification.
 - **Health Check Timing** - Configurable intervals, timeouts, and deploy timeouts.
@@ -44,7 +45,7 @@ Every built-in feature, organized by area.
 - **Linux Capabilities** - Add specific capabilities like `SYS_ADMIN`, `NET_ADMIN`.
 - **Device Mappings** - Mount host devices into containers (`/dev/video0`, `/dev/snd`).
 - **Named Volumes** - Use Docker named volumes instead of host paths.
-- **File & Directory Mounts** - Mount files/directories with fine grained permissions.
+- **File & Directory Mounts** - Mount files and directories with fine-grained permissions.
 - **Custom Commands** - Override container ENTRYPOINT/CMD as needed.
 - **Restart Policy** - Configure restart behavior: unless-stopped, always, on-failure, no.
 - **Network Mode** - `bridge` (default, dynamically-leased address) is the
@@ -56,11 +57,11 @@ Every built-in feature, organized by area.
 
 ## Deployment
 
-- **Rolling Deployments** - Zero-downtime deployments with old container cleanup.
+- **Rolling Deployments** - Replace compatible services without downtime, then clean up the old container.
 - **Stop-First Mode** - For stateful services like SQLite - stop old before starting new.
 - **Fail-Safe Health Checks** - A failed candidate is discarded; the previous version is never touched.
 - **Image Retention** - Control how many images to keep per service.
-- **Deployment Locks** - Prevent concurrent deploys. Team safe operations.
+- **Deployment Locks** - Prevent conflicting concurrent mutations with scoped, team-safe locks.
 - **Service Filtering** - Deploy specific services by name patterns.
 
 ## SSH & Connections
@@ -70,7 +71,7 @@ Every built-in feature, organized by area.
 - **Key Passphrase** - Support encrypted SSH keys with passphrases.
 - **SSH Config Support** - Use system SSH config (`~/.ssh/config`).
 - **Bounded Concurrency** - Run SSH operations across many hosts without overwhelming any one connection limit.
-- **Interactive SSH** - Shell access to servers via `jiji server exec`.
+- **Interactive Remote Execution** - Run a command with a PTY on one selected server via `jiji server exec`.
 
 ## Environment & Secrets
 
@@ -86,7 +87,7 @@ Every built-in feature, organized by area.
 - **Per-Replica DNS Records** - Resolve every replica together, or reach one server directly.
 - **External DNS Forwarding** - Service containers resolve normal internet hostnames too, forwarded to configurable resolvers (default public DNS).
 - **Clean Teardown** - Remove a project's network, containers, and routes in one command.
-- **Multi-Project Isolation** - Independent projects share a host with zero shared network state.
+- **Multi-Project Isolation** - Each project has its own mesh, bridge, DNS, catalog, and agent state; jiji-proxy is shared per host.
 
 ## Registry
 
@@ -96,11 +97,11 @@ Every built-in feature, organized by area.
 
 ## Logging & Monitoring
 
-- **Centralized Logs** - Fetch logs from services with filtering.
+- **Multi-host Log Access** - Fetch and filter service logs across selected hosts from one command.
 - **Log Grep** - Filter logs by pattern with grep options.
 - **Time-based Filtering** - Show logs since timestamp or relative time.
 - **Log Follow Mode** - Stream logs in real-time like `tail -f`.
-- **Audit Trail** - Complete deployment history with filtering.
+- **Audit Trail** - Best-effort, per-server operation history with filtering.
 - **Deployment Timing** - Every audit entry records how long the operation took.
 
 ## Operations
@@ -111,7 +112,7 @@ Every built-in feature, organized by area.
 - **Remote Execution** - Run commands across servers in parallel or sequential, or drop into an interactive shell.
 - **Service Restart** - Restart services without full redeployment.
 - **Service Removal** - Clean removal with network unregistration.
-- **Image Pruning** - Automatic cleanup of old service images.
+- **Image Pruning** - Explicitly remove old build-produced images with configurable per-service retention.
 - **Server Teardown** - Clean server removal from cluster.
 - **Auto-install Engine** - Install Docker/Podman automatically on servers.
 - **Architecture Support** - Explicitly set server architecture (amd64/arm64).

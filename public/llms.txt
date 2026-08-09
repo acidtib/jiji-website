@@ -1,13 +1,13 @@
 # Jiji
 
-> Jiji deploys containerized applications across multiple servers with zero-downtime, private networking, and simple YAML configuration.
+> Jiji deploys containerized applications across multiple servers with health-gated rolling updates, private networking, and simple YAML configuration.
 
 ## Documentation
 
-- [Introduction](https://jiji.run/docs): Jiji deploys containerized applications across multiple servers with zero-downtime, private networking, and simple YAML configuration.
+- [Introduction](https://jiji.run/docs): Jiji deploys containerized applications across multiple servers with health-gated rolling updates, private networking, and simple YAML configuration.
 
 ## Getting Started
-- [Installation](https://jiji.run/docs/getting-started/installation): SSH access to your target servers Docker or Podman on your local machine (for building images) sudo privileges on target servers
+- [Installation](https://jiji.run/docs/getting-started/installation): SSH access to your target servers Docker or Podman on the machine that builds images (your local machine by default, or the configured remote builder) sudo privileges on target servers
 - [Quick Start](https://jiji.run/docs/getting-started/quick-start): This guide walks you through deploying your first application with Jiji.
 - [Architecture](https://jiji.run/docs/getting-started/architecture): You run the Rust jiji CLI from a laptop or CI. It loads deploy.yml, validates intent, selects the owners affected by a command, and connects over SSH. Each server runs a small per-project jiji-agent that maintains durab…
 
@@ -24,6 +24,6 @@
 - [Scheduled Jobs](https://jiji.run/docs/reference/cron): Jiji runs scheduled service commands without a separate worker host or a host crontab. Each run starts in a new one-off container.
 - [Features Reference](https://jiji.run/docs/reference/features): Every built-in feature, organized by area.
 - [Network Reference](https://jiji.run/docs/reference/network): Jiji creates a project-isolated WireGuard mesh. Each server owns a routed container subnet and runs a per-project agent. Agents replicate desired placement, the service catalog, and DNS data directly over the mesh (memb…
-- [Jiji Proxy Reference](https://jiji.run/docs/reference/proxy): Jiji uses jiji-proxy, its own Pingora-based (Rust) reverse proxy, as the public HTTP and HTTPS entry point for proxied services. Jiji installs and manages the proxy container, translates each service's proxy: configurat…
+- [Jiji Proxy Reference](https://jiji.run/docs/reference/proxy): Jiji uses jiji-proxy, its own Pingora-based (Rust) reverse proxy, as the public HTTP, HTTPS, and raw TCP entry point for proxied services. Jiji installs and manages the proxy container, translates each service's proxy:…
 - [Registry Reference](https://jiji.run/docs/reference/registry): Jiji auto-detects namespace requirements for the registries below, so configuration stays minimal.
 - [Logs Reference](https://jiji.run/docs/reference/logs): Jiji has two logging commands - jiji service logs for your deployed services, and jiji proxy logs for jiji-proxy - plus jiji audit for the deployment audit trail. All three support filtering and following logs across mu…
