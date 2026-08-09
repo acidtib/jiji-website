@@ -122,10 +122,10 @@ Timestamps come from Docker/Podman in ISO 8601:
 ## Audit Trail
 
 `jiji audit` reads the append-only JSONL trail at
-`.jiji/{project}/audit.log` on each selected server. Every state-changing
-command writes to it: `deploy`, `service restart/rollback/remove/prune/scale`,
-`lock acquire/release`, `network backup/restore/compact/import`, and
-`server setup/teardown`.
+`.jiji/{project}/audit.log` on each selected server. Current writers are
+`deploy`, `service restart/rollback/remove/prune/scale`, `lock
+acquire/release`, and `server setup/teardown`. Some other state-changing
+commands do not write audit entries yet.
 
 ```bash
 jiji audit

@@ -14,7 +14,7 @@ Every built-in feature, organized by area.
 - **Automatic DNS** - Built-in `.jiji` DNS resolution. Access services by name.
 - **Health-Gated Rollouts** - For rolling services, the old version keeps serving until the new one passes its health check. Host-port bindings and `stop_first` services use a brief stop-then-start window.
 - **Runtime Agnostic** - Docker or Podman. Same config, your choice.
-- **Multi-server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
+- **Multi-server** - Independent services deploy concurrently. A service replaces its selected replicas in sequence, with a health gate for each replacement.
 - **Multi-project** - Run multiple apps on one server with isolated project networks and a shared per-host ingress proxy.
 - **Scheduled Jobs** - Run service commands on cron schedules in isolated one-off containers.
 
@@ -48,11 +48,8 @@ Every built-in feature, organized by area.
 - **File & Directory Mounts** - Mount files and directories with fine-grained permissions.
 - **Custom Commands** - Override container ENTRYPOINT/CMD as needed.
 - **Restart Policy** - Configure restart behavior: unless-stopped, always, on-failure, no.
-- **Network Mode** - `bridge` (default, dynamically-leased address) is the
-  only mode that changes container networking today, alongside namespace
-  sharing below. `host`/`none` are accepted by the config schema but not
-  yet implemented - a service configured with either still gets normal
-  bridge networking.
+- **Project Bridge Networking** - Give each deployment a dynamic address on
+  the project bridge.
 - **Container Namespace Sharing** - Share another service's network stack (`network_mode: service:<name>`) for VPN killswitch patterns. Redeploying the upstream automatically redeploys its dependents.
 
 ## Deployment
@@ -102,7 +99,7 @@ Every built-in feature, organized by area.
 - **Time-based Filtering** - Show logs since timestamp or relative time.
 - **Log Follow Mode** - Stream logs in real-time like `tail -f`.
 - **Audit Trail** - Best-effort, per-server operation history with filtering.
-- **Deployment Timing** - Every audit entry records how long the operation took.
+- **Deployment Timing** - Timed audit entries record how long the operation took. Older or manually created entries can omit timing.
 
 ## Operations
 

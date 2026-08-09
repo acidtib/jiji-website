@@ -110,7 +110,7 @@ curl http://localhost:31270/v2/
 # Expected: {}
 ```
 
-`jiji deploy --build` with `builder.registry.type: local` opens an SSH
+`jiji deploy --build` with no `builder.registry.server` opens an SSH
 reverse tunnel to each deployment server automatically - you don't need to
 forward the port by hand. To sanity-check the mechanism directly:
 

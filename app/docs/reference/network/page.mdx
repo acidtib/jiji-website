@@ -46,10 +46,16 @@ unit, state directory, Unix socket, DNS address, and replication ports from
 one host-global component and is attached to each project bridge that owns
 routes on that host.
 
-Default address pools are shared across projects. Project hashing makes normal
-collisions unlikely, but it is not a global allocator. Configure explicit
-non-overlapping CIDRs when independent projects must share hosts with a hard
-guarantee.
+Jiji derives a `/24` management range and `/16` container range from
+`project:`. Sixty-four default range slots exist, so this is not a global
+allocator. Before a network change, Jiji checks host routes and active range
+markers from other projects on the host. Configure explicit non-overlapping
+CIDRs for a LAN, VPN, cloud VPC, or reported project collision.
+
+The current control-plane limit is 32 servers per project. Configuration
+validation also limits a project to 500 services and 2,000 logical replicas.
+These are product limits, not limits implied by the number of generated CIDR
+slots.
 
 ## Addressing
 

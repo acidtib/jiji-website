@@ -148,7 +148,7 @@ does not block a targeted service deployment.
 
 `jiji lock acquire`/`release` are a separate, whole-project lock used
 around network-layer maintenance (`jiji network setup`/`backup`/`restore`/
-`import`/`compact`) - acquiring it does **not** block a deploy, restart, or
+`recover`/`compact`) - acquiring it does **not** block a deploy, restart, or
 rollback, since those use the finer-grained per-replica lock above instead:
 
 ```bash

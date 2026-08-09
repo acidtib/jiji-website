@@ -33,8 +33,8 @@ DNS, the service catalog, desired placement, and address leases on its host.
 Public ingress is handled by the separately packaged `jiji-proxy` container.
 
 Private networking is a WireGuard mesh between your servers, with each
-project's agents serving replicated `.jiji` DNS records. Containers receive
-durable dynamic addresses, and proxy routes follow the healthy Active records
+project's agents serving replicated `.jiji` DNS records. Deployments receive
+fresh leased addresses, and proxy routes follow the healthy Active records
 in the replicated catalog. See
 [Architecture](/docs/getting-started/architecture) for the full picture.
 
@@ -46,8 +46,6 @@ project: myapp
 
 builder:
   engine: docker
-  registry:
-    type: local
 
 servers:
   web1:

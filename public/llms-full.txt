@@ -31,8 +31,8 @@ DNS, the service catalog, desired placement, and address leases on its host.
 Public ingress is handled by the separately packaged `jiji-proxy` container.
 
 Private networking is a WireGuard mesh between your servers, with each
-project's agents serving replicated `.jiji` DNS records. Containers receive
-durable dynamic addresses, and proxy routes follow the healthy Active records
+project's agents serving replicated `.jiji` DNS records. Deployments receive
+fresh leased addresses, and proxy routes follow the healthy Active records
 in the replicated catalog. See
 [Architecture](/docs/getting-started/architecture) for the full picture.
 
@@ -44,8 +44,6 @@ project: myapp
 
 builder:
   engine: docker
-  registry:
-    type: local
 
 servers:
   web1:
@@ -209,9 +207,6 @@ project: myapp
 
 builder:
   engine: docker
-  local: true
-  registry:
-    type: local
 
 ssh:
   user: deploy
@@ -637,7 +632,7 @@ does not block a targeted service deployment.
 
 `jiji lock acquire`/`release` are a separate, whole-project lock used
 around network-layer maintenance (`jiji network setup`/`backup`/`restore`/
-`import`/`compact`) - acquiring it does **not** block a deploy, restart, or
+`recover`/`compact`) - acquiring it does **not** block a deploy, restart, or
 rollback, since those use the finer-grained per-replica lock above instead:
 
 ```bash
@@ -1060,7 +1055,7 @@ curl http://localhost:31270/v2/
 # Expected: {}
 ```
 
-`jiji deploy --build` with `builder.registry.type: local` opens an SSH
+`jiji deploy --build` with no `builder.registry.server` opens an SSH
 reverse tunnel to each deployment server automatically - you don't need to
 forward the port by hand. To sanity-check the mechanism directly:
 
@@ -1305,7 +1300,7 @@ failure path. A normal pipeline only needs the deploy step:
 ```
 
 `jiji lock acquire` is a separate, whole-project maintenance lock used
-by `jiji network setup`/`backup`/`restore`/`import`/`compact`. It does
+by `jiji network setup`/`backup`/`restore`/`recover`/`compact`. It does
 **not** block `jiji deploy`, `service restart`, or `service rollback` -
 those use a different, per-replica lock scope entirely. Use `jiji lock
 acquire` to reserve a window around network-layer maintenance, not to gate
@@ -1790,7 +1785,7 @@ that DNS for the hostname points at the server.
 
 Enable build caching (`builder.cache: true`), keep `.dockerignore` tight,
 order Dockerfile layers so dependencies install before source is copied,
-or offload builds with `builder.local: false` + `builder.remote:`.
+or set `builder.remote` to offload builds to a dedicated host.
 
 ##### High Memory Usage
 
@@ -1921,9 +1916,7 @@ project: myapp
 
 builder:
   engine: docker
-  local: true
   registry:
-    type: local
     port: 31270
 
 ssh:
@@ -1962,14 +1955,11 @@ builder:
   # Container engine (required): docker or podman
   engine: docker
 
-  # Build location (required)
-  # true = build on the local machine, false = build on a remote builder
-  local: true
-
   # Enable build cache (optional, default: true)
   cache: true
 
-  # Remote builder SSH connection (required when local: false)
+  # Remote builder SSH connection (optional)
+  # Omit this field to build on the local machine.
   remote: ssh://builder@192.168.1.50:22
 ```
 
@@ -1978,7 +1968,6 @@ builder:
 ```yaml
 builder:
   engine: docker
-  local: true
   cache: true
 ```
 
@@ -1987,7 +1976,6 @@ builder:
 ```yaml
 builder:
   engine: docker
-  local: false
   remote: ssh://builder@build-server.example.com
   cache: true
 ```
@@ -2012,14 +2000,13 @@ and reports whether it's there. The build context is streamed over SSH
 into a staging directory on the builder, which is always cleaned up
 afterward, including when the build fails.
 
-With `builder.registry.type: remote`, credentials are used to log in on
-the builder itself (the machine that actually runs `push`), not on your
-local machine. With `type: local`, jiji opens a reverse SSH tunnel from
-the builder's own `127.0.0.1:<registry.port>` back to your local
-registry - the same fixed-port design `jiji deploy` already uses when
-tunneling a local registry to a deployment host (see
+When `builder.registry.server` is set, Jiji uses a remote registry. Jiji logs
+in on the builder itself because that machine runs the push. When `server` is
+absent, Jiji opens a reverse SSH tunnel from the builder's
+`127.0.0.1:<registry.port>` to the local registry. This is the same fixed-port
+design that `jiji deploy` uses for a deployment host. See
 [Local Registry Details](/docs/reference/registry#local-registry-details)
-below). Two concurrent `jiji build` runs for the same project against the
+for details. Two concurrent `jiji build` runs for the same project against the
 same builder will race for that port; the loser fails with an actionable
 message. `jiji build` has no deployment lock, so either serialize
 concurrent builds against one builder, or give each run its own
@@ -2030,7 +2017,6 @@ concurrent builds against one builder, or give each run its own
 ```yaml
 builder:
   engine: docker
-  local: true
   cache: false
 ```
 
@@ -2047,7 +2033,6 @@ deploy, and tears the tunnel down afterward.
 ```yaml
 builder:
   registry:
-    type: local
     port: 31270 # optional, defaults to 31270
 ```
 
@@ -2056,7 +2041,6 @@ builder:
 ```yaml
 builder:
   registry:
-    type: remote
     server: ghcr.io
     username: myuser
     password: GITHUB_TOKEN
@@ -2173,21 +2157,14 @@ Enables the private, encrypted WireGuard mesh with automatic `.jiji`
 service discovery. See [Network Reference](/docs/reference/network) for the
 full design.
 
-```yaml
-network:
-  enabled: true
-  management_cidr: "198.18.0.0/16"
-  container_cidr: "100.64.0.0/10"
-  dns_forwarders:
-    - "1.1.1.1"
-    - "8.8.8.8"
-```
+Most projects must omit `network:`. Jiji derives stable project-specific
+ranges from `project:`.
 
 | Setting | Default | Description |
 | --- | --- | --- |
 | `enabled` | `true` | Enable the private network |
-| `management_cidr` | `198.18.0.0/16` | WireGuard host-address pool |
-| `container_cidr` | `100.64.0.0/10` | Routed container-address pool |
+| `management_cidr` | Project-derived `/24` | WireGuard host-address pool override |
+| `container_cidr` | Project-derived `/16` | Routed container-address pool override |
 | `dns_forwarders` | `1.1.1.1`, `8.8.8.8` | Resolvers used for any query outside this project's own `.jiji` zone |
 
 The `.jiji` domain is internal-only and not customizable - service
@@ -2200,14 +2177,16 @@ query to `dns_forwarders` rather than by the container also getting the
 host's own DNS servers. Override this list to point at a home router,
 Pi-hole, or other local resolver instead of the public default.
 
-`jiji init` writes smaller project-directory-derived ranges into new configurations. The table above describes the fallback values for configurations that omit these fields. Generated ranges are stable for a project directory, but should still be reviewed for overlap and rare slot collisions (see [Network Reference](/docs/reference/network)).
+The derived ranges depend only on `project:`, not the checkout directory.
+Jiji checks the host routes and the range markers of other projects before it
+changes the network. Use overrides for a LAN, VPN, cloud VPC, or rare project
+slot collision. See [Network Reference](/docs/reference/network).
 
 ```yaml
 # Avoid CIDR conflicts with an existing network
 network:
-  enabled: true
-  management_cidr: "198.19.0.0/16"
-  container_cidr: "172.16.0.0/12"
+  management_cidr: "172.20.0.0/24"
+  container_cidr: "172.21.0.0/16"
 ```
 
 ```yaml
@@ -2215,6 +2194,10 @@ network:
 network:
   enabled: false
 ```
+
+`jiji deploy`, `jiji service restart`, and `jiji service rollback` require
+the private network. Use `enabled: false` only when the configuration will not
+run these service operations.
 
 ##### Service discovery example
 
@@ -2661,9 +2644,9 @@ Naming the upstream via `network_mode` is itself the dependency declaration
 automatically redeploys `qbittorrent` too, sequenced strictly after
 `gluetun`'s own deploy finishes. A dependent can't set `replicas` above 1 or
 configure its own `proxy:` block: traffic reaches it through the upstream's
-own route, at the upstream's address. The upstream itself must use
-`network_mode: bridge` (chained sharing isn't supported), and the
-dependent's `servers` must be a subset of the upstream's.
+own route, at the upstream's address. The upstream cannot itself be a
+`network_mode: service:<name>` dependent because chained sharing is not
+supported. The dependent's `servers` must be a subset of the upstream's.
 
 ```yaml
 services:
@@ -2755,6 +2738,31 @@ referenced by a running container. Pruning is a separate, manually-invoked
 step - `jiji deploy` never prunes images itself. Run `jiji service prune`
 (or `jiji service prune --retain N` to override this value for one run).
 
+#### Project limits and validation
+
+Jiji rejects a configuration that exceeds these project limits:
+
+| Resource | Maximum |
+|---|---:|
+| Servers | 32 |
+| Services | 500 |
+| Logical replicas, across all services | 2,000 |
+| Cron jobs on one service | 32 |
+| Cron jobs across the project | 1,000 |
+
+Scaled services must use project bridge networking. A service with more than
+one replica cannot use local volumes, managed files or directories, privileged
+mode, devices, or GPUs. A `stop_first` service must remain a singleton.
+
+For `network_mode: service:<name>`, the dependent must remain a singleton. Its
+server list must be a subset of the upstream server list. Chained namespace
+sharing is not supported.
+
+Raw TCP proxy ports must be unique within one project. Ports 80 and 443 are
+reserved for HTTP ingress. A raw TCP target cannot set `path_prefix` or `ssl`.
+Jiji-proxy also rejects conflicts with routes from other projects on the same
+host when it applies the route.
+
 #### Complete example
 
 ```yaml
@@ -2762,10 +2770,8 @@ project: myapp-production
 
 builder:
   engine: docker
-  local: true
   cache: false
   registry:
-    type: remote
     server: ghcr.io
     username: myorg
     password: GITHUB_TOKEN
@@ -2775,11 +2781,6 @@ ssh:
   keys:
     - ~/.ssh/production_key
   proxy: bastion.example.com
-
-network:
-  enabled: true
-  management_cidr: "198.18.0.0/16"
-  container_cidr: "100.64.0.0/10"
 
 environment:
   clear:
@@ -2841,13 +2842,15 @@ services:
 
 #### Validation
 
-Jiji validates configuration on load and reports every problem it finds,
-not just the first one. Common errors:
+Jiji validates configuration before it runs a command. It collects applicable
+validation errors after YAML deserialization succeeds. A YAML or type error can
+stop deserialization before those checks run. Common validation failures
+include:
 
 ```
-Error: Missing required field 'project'
-Error: builder.engine must be 'docker' or 'podman'
-Error: Cannot specify both 'image' and 'build' for service 'web'
+Error: A project supports at most 32 servers
+Error: Registry credentials require builder.registry.server
+Error: A service with stop_first must remain a singleton
 ```
 
 Run with `-v`/`--verbose` for more detailed validation output:
@@ -2890,7 +2893,9 @@ jiji deploy -S "api,worker"     # Multiple services
 
 ##### `jiji init`
 
-Create a config stub at `.jiji/deploy.yml`. The generated file persists a project-directory-derived `/24` management range and `/16` container range. Review them for overlap with LAN, VPN, cloud VPC, and other Jiji project ranges before setup.
+Create a configuration stub at `.jiji/deploy.yml`. Jiji derives a stable `/24`
+management range and `/16` container range from `project:`. The generated file
+omits `network:` because most projects do not need an override.
 
 ```bash
 jiji init
@@ -3280,9 +3285,10 @@ jiji service logs -H web1 -S api
 
 ##### `jiji service restart`
 
-Restart running services with the same lease, Candidate, health, Active,
-proxy reconciliation, and draining transaction as `jiji deploy`, while
-reusing the currently running image.
+Restart running services with the same Candidate, health, Active, proxy
+reconciliation, and draining transaction as `jiji deploy`. The logical replica
+ID stays stable, but the replacement gets a fresh deployment ID and address
+lease. Jiji reuses the currently running image.
 
 ```bash
 jiji service restart
@@ -3461,15 +3467,16 @@ scale` each lock only the specific logical replicas they touch (plus a
 shared proxy lock when a route on an ingress host is involved) - an
 unrelated offline host or a different replica never blocks a targeted
 operation. `server setup`/`teardown` lock the whole targeted host.
-`network setup`/`backup`/`restore`/`import`/`compact` lock the whole
-project. Every lock is released on both the success and failure path of the
-command that took it.
+`network setup`/`backup`/`restore`/`recover`/`compact` use the
+project-maintenance lock. `server setup --import` stays within the targeted
+host-runtime locks that `server setup` already holds. Every automatic lock is
+released on both the success and failure path of the command that took it.
 
 `jiji lock acquire`/`release` default to that same whole-project scope -
 **not** the per-replica scope a normal deploy uses, so acquiring the
 project lock does not block an unrelated `jiji deploy`, `service restart`,
 or `service rollback`; it only blocks other project-scoped commands
-(`network setup`/`backup`/`restore`/`import`/`compact`, and any other
+(`network setup`/`backup`/`restore`/`recover`/`compact`, and any other
 `jiji lock acquire`). Use it to reserve a maintenance window around those
 operations, or use `jiji lock release --replica/--service/--scope` to clear
 a specific stuck finer-grained lock (see below) instead.
@@ -3551,9 +3558,10 @@ visible. `--stats` cannot be combined with `--lines` or `--follow`. With
 `by_action`, and `by_server` aggregates.
 
 `-S`/`--services` is rejected - the trail is host-scoped, not
-service-scoped. Every state-changing command writes to it: `deploy`,
-`service restart/rollback/remove/prune/scale`, `lock acquire/release`,
-`network backup/restore/compact/import`, and `server setup/teardown`.
+service-scoped. Current writers are `deploy`, `service
+restart/rollback/remove/prune/scale`, `lock acquire/release`, and `server
+setup/teardown`. Some other state-changing commands do not write audit entries
+yet.
 
 #### Examples
 
@@ -3831,7 +3839,7 @@ Every built-in feature, organized by area.
 - **Automatic DNS** - Built-in `.jiji` DNS resolution. Access services by name.
 - **Health-Gated Rollouts** - For rolling services, the old version keeps serving until the new one passes its health check. Host-port bindings and `stop_first` services use a brief stop-then-start window.
 - **Runtime Agnostic** - Docker or Podman. Same config, your choice.
-- **Multi-server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
+- **Multi-server** - Independent services deploy concurrently. A service replaces its selected replicas in sequence, with a health gate for each replacement.
 - **Multi-project** - Run multiple apps on one server with isolated project networks and a shared per-host ingress proxy.
 - **Scheduled Jobs** - Run service commands on cron schedules in isolated one-off containers.
 
@@ -3865,11 +3873,8 @@ Every built-in feature, organized by area.
 - **File & Directory Mounts** - Mount files and directories with fine-grained permissions.
 - **Custom Commands** - Override container ENTRYPOINT/CMD as needed.
 - **Restart Policy** - Configure restart behavior: unless-stopped, always, on-failure, no.
-- **Network Mode** - `bridge` (default, dynamically-leased address) is the
-  only mode that changes container networking today, alongside namespace
-  sharing below. `host`/`none` are accepted by the config schema but not
-  yet implemented - a service configured with either still gets normal
-  bridge networking.
+- **Project Bridge Networking** - Give each deployment a dynamic address on
+  the project bridge.
 - **Container Namespace Sharing** - Share another service's network stack (`network_mode: service:<name>`) for VPN killswitch patterns. Redeploying the upstream automatically redeploys its dependents.
 
 #### Deployment
@@ -3919,7 +3924,7 @@ Every built-in feature, organized by area.
 - **Time-based Filtering** - Show logs since timestamp or relative time.
 - **Log Follow Mode** - Stream logs in real-time like `tail -f`.
 - **Audit Trail** - Best-effort, per-server operation history with filtering.
-- **Deployment Timing** - Every audit entry records how long the operation took.
+- **Deployment Timing** - Timed audit entries record how long the operation took. Older or manually created entries can omit timing.
 
 #### Operations
 
@@ -3978,10 +3983,16 @@ unit, state directory, Unix socket, DNS address, and replication ports from
 one host-global component and is attached to each project bridge that owns
 routes on that host.
 
-Default address pools are shared across projects. Project hashing makes normal
-collisions unlikely, but it is not a global allocator. Configure explicit
-non-overlapping CIDRs when independent projects must share hosts with a hard
-guarantee.
+Jiji derives a `/24` management range and `/16` container range from
+`project:`. Sixty-four default range slots exist, so this is not a global
+allocator. Before a network change, Jiji checks host routes and active range
+markers from other projects on the host. Configure explicit non-overlapping
+CIDRs for a LAN, VPN, cloud VPC, or reported project collision.
+
+The current control-plane limit is 32 servers per project. Configuration
+validation also limits a project to 500 services and 2,000 logical replicas.
+These are product limits, not limits implied by the number of generated CIDR
+slots.
 
 #### Addressing
 
@@ -4634,7 +4645,6 @@ configuration stays minimal.
 ```yaml
 builder:
   registry:
-    type: remote
     server: ghcr.io
     username: your-github-username
     password: GITHUB_TOKEN
@@ -4653,7 +4663,6 @@ GITHUB_TOKEN=ghp_...` (or point `password` at that name and put it in your
 ```yaml
 builder:
   registry:
-    type: remote
     server: docker.io
     username: your-dockerhub-username
     password: DOCKER_PASSWORD
@@ -4667,7 +4676,6 @@ Auto namespace: `username`. Images push to
 ```yaml
 builder:
   registry:
-    type: remote
     server: registry.example.com:5000
     username: myuser
     password: REGISTRY_PASSWORD
@@ -4678,8 +4686,8 @@ No auto namespace. Images push to
 
 ##### AWS ECR / GCP Artifact Registry
 
-Same shape as any custom registry - `type: remote` with an explicit
-`server:`. Both providers issue short-lived credentials, so `password:`
+Set an explicit `server`, as with any custom registry. Both providers issue
+short-lived credentials, so `password:`
 uses the `$(...)` command-value syntax to fetch a fresh one on every run
 (runs locally through a shell, uses the trimmed stdout, 30 second timeout)
 instead of a stale value going into `.env`:
@@ -4687,7 +4695,6 @@ instead of a stale value going into `.env`:
 ```yaml
 builder:
   registry:
-    type: remote
     server: <account-id>.dkr.ecr.<region>.amazonaws.com
     username: AWS
     password: "$(aws ecr get-login-password --region <region>)"
@@ -4696,7 +4703,6 @@ builder:
 ```yaml
 builder:
   registry:
-    type: remote
     server: <region>-docker.pkg.dev
     username: _json_key_base64
     password: "$(base64 -w0 service-account-key.json)"
@@ -4707,7 +4713,6 @@ builder:
 ```yaml
 builder:
   registry:
-    type: local
     port: 31270 # optional, defaults to 31270
 ```
 
@@ -4799,7 +4804,7 @@ For a local build and deploy:
 5. Tunnels are torn down after the deploy; the registry container itself
    keeps running for the next build
 
-With `builder.local: false`, there are two independent tunnel phases:
+When `builder.remote` is set, there are two independent tunnel phases:
 
 1. Jiji binds `127.0.0.1:<registry.port>` on the remote builder through
    SSH. Build and push commands on the builder use that loopback address to
@@ -4865,7 +4870,6 @@ it would expose the forwarded registry on non-loopback interfaces.
 # jiji.staging.yml
 builder:
   registry:
-    type: remote
     server: ghcr.io
     username: myorg
     password: STAGING_GITHUB_TOKEN
@@ -4875,7 +4879,6 @@ builder:
 # jiji.production.yml
 builder:
   registry:
-    type: remote
     server: ghcr.io
     username: myorg
     password: PRODUCTION_GITHUB_TOKEN
@@ -5024,10 +5027,10 @@ Timestamps come from Docker/Podman in ISO 8601:
 #### Audit Trail
 
 `jiji audit` reads the append-only JSONL trail at
-`.jiji/{project}/audit.log` on each selected server. Every state-changing
-command writes to it: `deploy`, `service restart/rollback/remove/prune/scale`,
-`lock acquire/release`, `network backup/restore/compact/import`, and
-`server setup/teardown`.
+`.jiji/{project}/audit.log` on each selected server. Current writers are
+`deploy`, `service restart/rollback/remove/prune/scale`, `lock
+acquire/release`, and `server setup/teardown`. Some other state-changing
+commands do not write audit entries yet.
 
 ```bash
 jiji audit

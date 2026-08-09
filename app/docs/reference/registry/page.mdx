@@ -16,7 +16,6 @@ configuration stays minimal.
 ```yaml
 builder:
   registry:
-    type: remote
     server: ghcr.io
     username: your-github-username
     password: GITHUB_TOKEN
@@ -35,7 +34,6 @@ GITHUB_TOKEN=ghp_...` (or point `password` at that name and put it in your
 ```yaml
 builder:
   registry:
-    type: remote
     server: docker.io
     username: your-dockerhub-username
     password: DOCKER_PASSWORD
@@ -49,7 +47,6 @@ Auto namespace: `username`. Images push to
 ```yaml
 builder:
   registry:
-    type: remote
     server: registry.example.com:5000
     username: myuser
     password: REGISTRY_PASSWORD
@@ -60,8 +57,8 @@ No auto namespace. Images push to
 
 ### AWS ECR / GCP Artifact Registry
 
-Same shape as any custom registry - `type: remote` with an explicit
-`server:`. Both providers issue short-lived credentials, so `password:`
+Set an explicit `server`, as with any custom registry. Both providers issue
+short-lived credentials, so `password:`
 uses the `$(...)` command-value syntax to fetch a fresh one on every run
 (runs locally through a shell, uses the trimmed stdout, 30 second timeout)
 instead of a stale value going into `.env`:
@@ -69,7 +66,6 @@ instead of a stale value going into `.env`:
 ```yaml
 builder:
   registry:
-    type: remote
     server: <account-id>.dkr.ecr.<region>.amazonaws.com
     username: AWS
     password: "$(aws ecr get-login-password --region <region>)"
@@ -78,7 +74,6 @@ builder:
 ```yaml
 builder:
   registry:
-    type: remote
     server: <region>-docker.pkg.dev
     username: _json_key_base64
     password: "$(base64 -w0 service-account-key.json)"
@@ -89,7 +84,6 @@ builder:
 ```yaml
 builder:
   registry:
-    type: local
     port: 31270 # optional, defaults to 31270
 ```
 
@@ -181,7 +175,7 @@ For a local build and deploy:
 5. Tunnels are torn down after the deploy; the registry container itself
    keeps running for the next build
 
-With `builder.local: false`, there are two independent tunnel phases:
+When `builder.remote` is set, there are two independent tunnel phases:
 
 1. Jiji binds `127.0.0.1:<registry.port>` on the remote builder through
    SSH. Build and push commands on the builder use that loopback address to
@@ -247,7 +241,6 @@ it would expose the forwarded registry on non-loopback interfaces.
 # jiji.staging.yml
 builder:
   registry:
-    type: remote
     server: ghcr.io
     username: myorg
     password: STAGING_GITHUB_TOKEN
@@ -257,7 +250,6 @@ builder:
 # jiji.production.yml
 builder:
   registry:
-    type: remote
     server: ghcr.io
     username: myorg
     password: PRODUCTION_GITHUB_TOKEN

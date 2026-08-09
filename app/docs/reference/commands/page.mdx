@@ -36,7 +36,9 @@ jiji deploy -S "api,worker"     # Multiple services
 
 ### `jiji init`
 
-Create a config stub at `.jiji/deploy.yml`. The generated file persists a project-directory-derived `/24` management range and `/16` container range. Review them for overlap with LAN, VPN, cloud VPC, and other Jiji project ranges before setup.
+Create a configuration stub at `.jiji/deploy.yml`. Jiji derives a stable `/24`
+management range and `/16` container range from `project:`. The generated file
+omits `network:` because most projects do not need an override.
 
 ```bash
 jiji init
@@ -426,9 +428,10 @@ jiji service logs -H web1 -S api
 
 ### `jiji service restart`
 
-Restart running services with the same lease, Candidate, health, Active,
-proxy reconciliation, and draining transaction as `jiji deploy`, while
-reusing the currently running image.
+Restart running services with the same Candidate, health, Active, proxy
+reconciliation, and draining transaction as `jiji deploy`. The logical replica
+ID stays stable, but the replacement gets a fresh deployment ID and address
+lease. Jiji reuses the currently running image.
 
 ```bash
 jiji service restart
@@ -607,15 +610,16 @@ scale` each lock only the specific logical replicas they touch (plus a
 shared proxy lock when a route on an ingress host is involved) - an
 unrelated offline host or a different replica never blocks a targeted
 operation. `server setup`/`teardown` lock the whole targeted host.
-`network setup`/`backup`/`restore`/`import`/`compact` lock the whole
-project. Every lock is released on both the success and failure path of the
-command that took it.
+`network setup`/`backup`/`restore`/`recover`/`compact` use the
+project-maintenance lock. `server setup --import` stays within the targeted
+host-runtime locks that `server setup` already holds. Every automatic lock is
+released on both the success and failure path of the command that took it.
 
 `jiji lock acquire`/`release` default to that same whole-project scope -
 **not** the per-replica scope a normal deploy uses, so acquiring the
 project lock does not block an unrelated `jiji deploy`, `service restart`,
 or `service rollback`; it only blocks other project-scoped commands
-(`network setup`/`backup`/`restore`/`import`/`compact`, and any other
+(`network setup`/`backup`/`restore`/`recover`/`compact`, and any other
 `jiji lock acquire`). Use it to reserve a maintenance window around those
 operations, or use `jiji lock release --replica/--service/--scope` to clear
 a specific stuck finer-grained lock (see below) instead.
@@ -697,9 +701,10 @@ visible. `--stats` cannot be combined with `--lines` or `--follow`. With
 `by_action`, and `by_server` aggregates.
 
 `-S`/`--services` is rejected - the trail is host-scoped, not
-service-scoped. Every state-changing command writes to it: `deploy`,
-`service restart/rollback/remove/prune/scale`, `lock acquire/release`,
-`network backup/restore/compact/import`, and `server setup/teardown`.
+service-scoped. Current writers are `deploy`, `service
+restart/rollback/remove/prune/scale`, `lock acquire/release`, and `server
+setup/teardown`. Some other state-changing commands do not write audit entries
+yet.
 
 ## Examples
 

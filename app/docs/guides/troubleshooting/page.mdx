@@ -350,7 +350,7 @@ that DNS for the hostname points at the server.
 
 Enable build caching (`builder.cache: true`), keep `.dockerignore` tight,
 order Dockerfile layers so dependencies install before source is copied,
-or offload builds with `builder.local: false` + `builder.remote:`.
+or set `builder.remote` to offload builds to a dedicated host.
 
 ### High Memory Usage
 

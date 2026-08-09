@@ -39,19 +39,19 @@ const JIJI_VERSION = process.env.NEXT_PUBLIC_JIJI_VERSION || "dev";
 // own address on the private container network, plus the .jiji DNS name other services
 // actually reach it by -- both replicas of "web" share one aggregate name, distinct IPs.
 const RACKS = [
-  { name: "web1", provider: "AWS", ip: "10.210.0.1", blades: [
-    { name: "web", ip: "10.210.0.5", dns: "myapp-web.jiji" },
+  { name: "web1", provider: "AWS", ip: "198.18.17.27", blades: [
+    { name: "web", ip: "100.81.208.4", dns: "myapp-web.jiji" },
   ] },
-  { name: "web2", provider: "Hetzner", ip: "10.210.1.1", blades: [
-    { name: "web", ip: "10.210.1.5", dns: "myapp-web.jiji" },
+  { name: "web2", provider: "Hetzner", ip: "198.18.17.28", blades: [
+    { name: "web", ip: "100.81.216.4", dns: "myapp-web.jiji" },
   ] },
-  { name: "app1", provider: "DigitalOcean", ip: "10.210.2.1", blades: [
-    { name: "api", ip: "10.210.2.5", dns: "myapp-api.jiji" },
-    { name: "worker", ip: "10.210.2.6", dns: "myapp-worker.jiji" },
+  { name: "app1", provider: "DigitalOcean", ip: "198.18.17.25", blades: [
+    { name: "api", ip: "100.81.192.4", dns: "myapp-api.jiji" },
+    { name: "worker", ip: "100.81.192.5", dns: "myapp-worker.jiji" },
   ] },
-  { name: "data1", provider: "Bare Metal", ip: "10.210.3.1", blades: [
-    { name: "postgres", ip: "10.210.3.5", dns: "myapp-postgres.jiji" },
-    { name: "redis", ip: "10.210.3.6", dns: "myapp-redis.jiji" },
+  { name: "data1", provider: "Bare Metal", ip: "198.18.17.26", blades: [
+    { name: "postgres", ip: "100.81.200.4", dns: "myapp-postgres.jiji" },
+    { name: "redis", ip: "100.81.200.5", dns: "myapp-redis.jiji" },
   ] },
 ];
 

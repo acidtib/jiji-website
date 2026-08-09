@@ -172,7 +172,7 @@ failure path. A normal pipeline only needs the deploy step:
 ```
 
 `jiji lock acquire` is a separate, whole-project maintenance lock used
-by `jiji network setup`/`backup`/`restore`/`import`/`compact`. It does
+by `jiji network setup`/`backup`/`restore`/`recover`/`compact`. It does
 **not** block `jiji deploy`, `service restart`, or `service rollback` -
 those use a different, per-replica lock scope entirely. Use `jiji lock
 acquire` to reserve a window around network-layer maintenance, not to gate

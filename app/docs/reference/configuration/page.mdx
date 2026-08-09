@@ -39,9 +39,7 @@ project: myapp
 
 builder:
   engine: docker
-  local: true
   registry:
-    type: local
     port: 31270
 
 ssh:
@@ -80,14 +78,11 @@ builder:
   # Container engine (required): docker or podman
   engine: docker
 
-  # Build location (required)
-  # true = build on the local machine, false = build on a remote builder
-  local: true
-
   # Enable build cache (optional, default: true)
   cache: true
 
-  # Remote builder SSH connection (required when local: false)
+  # Remote builder SSH connection (optional)
+  # Omit this field to build on the local machine.
   remote: ssh://builder@192.168.1.50:22
 ```
 
@@ -96,7 +91,6 @@ builder:
 ```yaml
 builder:
   engine: docker
-  local: true
   cache: true
 ```
 
@@ -105,7 +99,6 @@ builder:
 ```yaml
 builder:
   engine: docker
-  local: false
   remote: ssh://builder@build-server.example.com
   cache: true
 ```
@@ -130,14 +123,13 @@ and reports whether it's there. The build context is streamed over SSH
 into a staging directory on the builder, which is always cleaned up
 afterward, including when the build fails.
 
-With `builder.registry.type: remote`, credentials are used to log in on
-the builder itself (the machine that actually runs `push`), not on your
-local machine. With `type: local`, jiji opens a reverse SSH tunnel from
-the builder's own `127.0.0.1:<registry.port>` back to your local
-registry - the same fixed-port design `jiji deploy` already uses when
-tunneling a local registry to a deployment host (see
+When `builder.registry.server` is set, Jiji uses a remote registry. Jiji logs
+in on the builder itself because that machine runs the push. When `server` is
+absent, Jiji opens a reverse SSH tunnel from the builder's
+`127.0.0.1:<registry.port>` to the local registry. This is the same fixed-port
+design that `jiji deploy` uses for a deployment host. See
 [Local Registry Details](/docs/reference/registry#local-registry-details)
-below). Two concurrent `jiji build` runs for the same project against the
+for details. Two concurrent `jiji build` runs for the same project against the
 same builder will race for that port; the loser fails with an actionable
 message. `jiji build` has no deployment lock, so either serialize
 concurrent builds against one builder, or give each run its own
@@ -148,7 +140,6 @@ concurrent builds against one builder, or give each run its own
 ```yaml
 builder:
   engine: docker
-  local: true
   cache: false
 ```
 
@@ -165,7 +156,6 @@ deploy, and tears the tunnel down afterward.
 ```yaml
 builder:
   registry:
-    type: local
     port: 31270 # optional, defaults to 31270
 ```
 
@@ -174,7 +164,6 @@ builder:
 ```yaml
 builder:
   registry:
-    type: remote
     server: ghcr.io
     username: myuser
     password: GITHUB_TOKEN
@@ -291,21 +280,14 @@ Enables the private, encrypted WireGuard mesh with automatic `.jiji`
 service discovery. See [Network Reference](/docs/reference/network) for the
 full design.
 
-```yaml
-network:
-  enabled: true
-  management_cidr: "198.18.0.0/16"
-  container_cidr: "100.64.0.0/10"
-  dns_forwarders:
-    - "1.1.1.1"
-    - "8.8.8.8"
-```
+Most projects must omit `network:`. Jiji derives stable project-specific
+ranges from `project:`.
 
 | Setting | Default | Description |
 | --- | --- | --- |
 | `enabled` | `true` | Enable the private network |
-| `management_cidr` | `198.18.0.0/16` | WireGuard host-address pool |
-| `container_cidr` | `100.64.0.0/10` | Routed container-address pool |
+| `management_cidr` | Project-derived `/24` | WireGuard host-address pool override |
+| `container_cidr` | Project-derived `/16` | Routed container-address pool override |
 | `dns_forwarders` | `1.1.1.1`, `8.8.8.8` | Resolvers used for any query outside this project's own `.jiji` zone |
 
 The `.jiji` domain is internal-only and not customizable - service
@@ -318,14 +300,16 @@ query to `dns_forwarders` rather than by the container also getting the
 host's own DNS servers. Override this list to point at a home router,
 Pi-hole, or other local resolver instead of the public default.
 
-`jiji init` writes smaller project-directory-derived ranges into new configurations. The table above describes the fallback values for configurations that omit these fields. Generated ranges are stable for a project directory, but should still be reviewed for overlap and rare slot collisions (see [Network Reference](/docs/reference/network)).
+The derived ranges depend only on `project:`, not the checkout directory.
+Jiji checks the host routes and the range markers of other projects before it
+changes the network. Use overrides for a LAN, VPN, cloud VPC, or rare project
+slot collision. See [Network Reference](/docs/reference/network).
 
 ```yaml
 # Avoid CIDR conflicts with an existing network
 network:
-  enabled: true
-  management_cidr: "198.19.0.0/16"
-  container_cidr: "172.16.0.0/12"
+  management_cidr: "172.20.0.0/24"
+  container_cidr: "172.21.0.0/16"
 ```
 
 ```yaml
@@ -333,6 +317,10 @@ network:
 network:
   enabled: false
 ```
+
+`jiji deploy`, `jiji service restart`, and `jiji service rollback` require
+the private network. Use `enabled: false` only when the configuration will not
+run these service operations.
 
 ### Service discovery example
 
@@ -779,9 +767,9 @@ Naming the upstream via `network_mode` is itself the dependency declaration
 automatically redeploys `qbittorrent` too, sequenced strictly after
 `gluetun`'s own deploy finishes. A dependent can't set `replicas` above 1 or
 configure its own `proxy:` block: traffic reaches it through the upstream's
-own route, at the upstream's address. The upstream itself must use
-`network_mode: bridge` (chained sharing isn't supported), and the
-dependent's `servers` must be a subset of the upstream's.
+own route, at the upstream's address. The upstream cannot itself be a
+`network_mode: service:<name>` dependent because chained sharing is not
+supported. The dependent's `servers` must be a subset of the upstream's.
 
 ```yaml
 services:
@@ -873,6 +861,31 @@ referenced by a running container. Pruning is a separate, manually-invoked
 step - `jiji deploy` never prunes images itself. Run `jiji service prune`
 (or `jiji service prune --retain N` to override this value for one run).
 
+## Project limits and validation
+
+Jiji rejects a configuration that exceeds these project limits:
+
+| Resource | Maximum |
+|---|---:|
+| Servers | 32 |
+| Services | 500 |
+| Logical replicas, across all services | 2,000 |
+| Cron jobs on one service | 32 |
+| Cron jobs across the project | 1,000 |
+
+Scaled services must use project bridge networking. A service with more than
+one replica cannot use local volumes, managed files or directories, privileged
+mode, devices, or GPUs. A `stop_first` service must remain a singleton.
+
+For `network_mode: service:<name>`, the dependent must remain a singleton. Its
+server list must be a subset of the upstream server list. Chained namespace
+sharing is not supported.
+
+Raw TCP proxy ports must be unique within one project. Ports 80 and 443 are
+reserved for HTTP ingress. A raw TCP target cannot set `path_prefix` or `ssl`.
+Jiji-proxy also rejects conflicts with routes from other projects on the same
+host when it applies the route.
+
 ## Complete example
 
 ```yaml
@@ -880,10 +893,8 @@ project: myapp-production
 
 builder:
   engine: docker
-  local: true
   cache: false
   registry:
-    type: remote
     server: ghcr.io
     username: myorg
     password: GITHUB_TOKEN
@@ -893,11 +904,6 @@ ssh:
   keys:
     - ~/.ssh/production_key
   proxy: bastion.example.com
-
-network:
-  enabled: true
-  management_cidr: "198.18.0.0/16"
-  container_cidr: "100.64.0.0/10"
 
 environment:
   clear:
@@ -959,13 +965,15 @@ services:
 
 ## Validation
 
-Jiji validates configuration on load and reports every problem it finds,
-not just the first one. Common errors:
+Jiji validates configuration before it runs a command. It collects applicable
+validation errors after YAML deserialization succeeds. A YAML or type error can
+stop deserialization before those checks run. Common validation failures
+include:
 
 ```
-Error: Missing required field 'project'
-Error: builder.engine must be 'docker' or 'podman'
-Error: Cannot specify both 'image' and 'build' for service 'web'
+Error: A project supports at most 32 servers
+Error: Registry credentials require builder.registry.server
+Error: A service with stop_first must remain a singleton
 ```
 
 Run with `-v`/`--verbose` for more detailed validation output:
