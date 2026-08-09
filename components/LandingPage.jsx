@@ -10,6 +10,7 @@ import {
   Box,
   Check,
   CheckCircle2,
+  Clock3,
   Copy,
   ExternalLink,
   FileCode,
@@ -77,12 +78,12 @@ const MESH_EVENTS = [
 // /docs/reference/features -- what actually matters when deciding whether
 // to use Jiji, not everything it does.
 const HIGHLIGHT_FEATURES = [
-  { icon: ShieldCheck, category: "INGRESS", title: "Auto SSL/TLS", description: "Issue and renew HTTPS certificates automatically through kamal-proxy." },
+  { icon: ShieldCheck, category: "INGRESS", title: "Auto SSL/TLS", description: "Issue and renew HTTPS certificates automatically through jiji-proxy." },
   { icon: Activity, category: "ROLLOUT", title: "Fail-safe health checks", description: "Discard failed candidates while the healthy version keeps serving traffic." },
   { icon: KeyRound, category: "SECURITY", title: "Secrets management", description: "Load secrets from environment files without logging them or placing them in command strings." },
   { icon: HardDrive, category: "IMAGES", title: "Any registry", description: "Use standard OCI registries or tunnel a local registry over SSH." },
   { icon: ScrollText, category: "VISIBILITY", title: "Audit trail", description: "Inspect timed deployment history and stream application logs in real time." },
-  { icon: Terminal, category: "OPERATIONS", title: "Remote execution", description: "Run commands across servers in parallel or open an interactive shell." },
+  { icon: Clock3, category: "AUTOMATION", title: "Scheduled jobs", description: "Run service commands on a cron schedule in isolated containers with durable status and logs." },
 ];
 
 function Github({ className }) {
@@ -260,7 +261,7 @@ export default function LandingPage() {
                 number="03"
                 icon={Lock}
                 title="Private by default"
-                description="Jiji connects servers with an encrypted WireGuard network and private DNS. Application traffic stays on the mesh while kamal-proxy handles public ingress."
+                description="Jiji connects servers with an encrypted WireGuard network and private DNS. Application traffic stays on the mesh while jiji-proxy handles public ingress."
                 proof="Encrypted mesh · Private DNS · Minimal exposure"
               />
             </div>
@@ -421,7 +422,7 @@ export default function LandingPage() {
                   <QuestionFact label="EXECUTION" value="Local CLI or CI" icon={Terminal} />
                   <QuestionFact label="CONNECTIVITY" value="SSH + WireGuard" icon={Network} />
                   <QuestionFact label="RUNTIME" value="Docker or Podman" icon={Box} />
-                  <QuestionFact label="INGRESS" value="kamal-proxy" icon={Globe} />
+                  <QuestionFact label="INGRESS" value="jiji-proxy" icon={Globe} />
                 </div>
                 <div className="mt-auto border-t border-border p-5">
                   <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
@@ -698,7 +699,7 @@ function HeroDeployBrief() {
     { icon: FileCode, label: "CONFIGURE", title: "Describe the app", detail: "Services, servers, domains, and health checks" },
     { icon: KeyRound, label: "CONNECT", title: "Reach every host", detail: "Parallel execution over standard SSH" },
     { icon: RefreshCw, label: "ROLLOUT", title: "Start candidates", detail: "Verify health before changing traffic" },
-    { icon: Globe, label: "ROUTE", title: "Serve HTTPS", detail: "Switch traffic through kamal-proxy" },
+    { icon: Globe, label: "ROUTE", title: "Serve HTTPS", detail: "Switch traffic through jiji-proxy" },
   ];
 
   return (
@@ -1173,7 +1174,7 @@ function ArchitectureMap() {
     {
       icon: Globe,
       label: "INGRESS",
-      title: "kamal-proxy",
+      title: "jiji-proxy",
       detail: "HTTPS termination and traffic switching",
     },
     {

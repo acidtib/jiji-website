@@ -16,6 +16,7 @@ Every built-in feature, organized by area.
 - **Runtime Agnostic** - Docker or Podman. Same config, your choice.
 - **Multi Server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
 - **Multi Project** - Run multiple apps on one server. Perfect for small teams and hobby projects.
+- **Scheduled Jobs** - Run service commands on cron schedules in isolated one-off containers.
 
 ## Proxy & SSL
 
@@ -104,6 +105,9 @@ Every built-in feature, organized by area.
 
 ## Operations
 
+- **Cron Ownership** - Assign each scheduled job to one active and healthy service replica.
+- **Cron Status and Logs** - Inspect durable run state and read output from retained run containers.
+- **Manual Cron Runs** - Start a configured job immediately without changing its next scheduled time.
 - **Remote Execution** - Run commands across servers in parallel or sequential, or drop into an interactive shell.
 - **Service Restart** - Restart services without full redeployment.
 - **Service Removal** - Clean removal with network unregistration.

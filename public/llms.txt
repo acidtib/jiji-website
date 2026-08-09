@@ -21,6 +21,7 @@
 ## Reference
 - [Configuration Reference](https://jiji.run/docs/reference/configuration): Complete reference for Jiji configuration files (.jiji/deploy.yml or jiji.<environment>.yml).
 - [Commands Reference](https://jiji.run/docs/reference/commands): These flags are accepted by every command:
+- [Scheduled Jobs](https://jiji.run/docs/reference/cron): Jiji runs scheduled service commands without a separate worker host or a host crontab. Each run starts in a new one-off container.
 - [Features Reference](https://jiji.run/docs/reference/features): Every built-in feature, organized by area.
 - [Network Reference](https://jiji.run/docs/reference/network): Jiji creates a project-isolated WireGuard mesh. Each server owns a routed container subnet and runs a per-project agent. Agents replicate desired placement, the service catalog, and DNS data directly over the mesh (memb…
 - [Jiji Proxy Reference](https://jiji.run/docs/reference/proxy): Jiji uses jiji-proxy, its own Pingora-based (Rust) reverse proxy, as the public HTTP and HTTPS entry point for proxied services. Jiji installs and manages the proxy container, translates each service's proxy: configurat…

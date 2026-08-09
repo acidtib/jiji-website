@@ -5,6 +5,9 @@ export default {
   commands: {
     title: 'Commands'
   },
+  cron: {
+    title: 'Scheduled Jobs'
+  },
   features: {
     title: 'Features'
   },

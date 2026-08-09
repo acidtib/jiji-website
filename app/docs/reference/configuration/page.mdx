@@ -443,6 +443,49 @@ hosts in deterministic order first. Change the runtime count without
 editing config with `jiji service scale -S web --replicas N` (or `--reset`
 to return to the configured value).
 
+### Scheduled jobs (`crons`)
+
+Each service can define multiple scheduled commands. The map key is the
+stable job name.
+
+```yaml
+services:
+  worker:
+    image: ghcr.io/example/worker:latest
+    servers: [server1, server2]
+    environment:
+      secrets:
+        - DATABASE_URL
+    crons:
+      sync-reports:
+        schedule: "7 */2 * * *"
+        command: ["npm", "run", "sync:reports"]
+      remove-expired:
+        schedule: "0 3 * * *"
+        command: ["npm", "run", "remove-expired"]
+        timezone: America/Denver
+        timeout: 30m
+        overlap: forbid
+        missed_runs: skip
+```
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `schedule` | required | Five-field cron expression: minute, hour, day of month, month, day of week |
+| `command` | required | Command string or argument list for the one-off container |
+| `timezone` | `UTC` | IANA time-zone name |
+| `timeout` | `1h` | Maximum run time, with an `s`, `m`, or `h` suffix |
+| `overlap` | `forbid` | Skip a due run while the prior run remains active |
+| `missed_runs` | `skip` | Do not replay times missed while the owning agent was offline |
+
+Each run uses the service image, environment, secrets, mounts, resources,
+project network, and `.jiji` DNS. It does not use the service command,
+ports, proxy routes, health checks, or restart policy.
+
+Run `jiji deploy` after a cron configuration change. See
+[Scheduled Jobs](/docs/reference/cron) for ownership, failure behavior,
+retention, and commands.
+
 ### Build configuration
 
 Use `build:` instead of `image:` to build from source (only one of the two

@@ -16,6 +16,8 @@ zero-downtime, private networking, and simple YAML configuration.
 - **Container engine agnostic** - works with Docker or Podman
 - **Private networking** - a per-project WireGuard mesh with automatic
   `.jiji` DNS service discovery
+- **Scheduled jobs** - run service commands on cron schedules in isolated
+  one-off containers
 - **Simple configuration** - everything lives in one YAML file
 
 ### How It's Built
@@ -61,6 +63,10 @@ services:
       ssl: true
       healthcheck:
         path: /health
+    crons:
+      remove-expired:
+        schedule: "0 3 * * *"
+        command: ["npm", "run", "remove-expired"]
 ```
 
 ```bash
@@ -79,6 +85,7 @@ jiji deploy --build
 - [Quick Start](/docs/getting-started/quick-start) - deploy your first
   application
 - [Architecture](/docs/getting-started/architecture) - how Jiji works
+- [Scheduled Jobs](/docs/reference/cron) - configure and operate cron jobs
 
 ## Getting Started
 
@@ -2302,6 +2309,49 @@ hosts in deterministic order first. Change the runtime count without
 editing config with `jiji service scale -S web --replicas N` (or `--reset`
 to return to the configured value).
 
+##### Scheduled jobs (`crons`)
+
+Each service can define multiple scheduled commands. The map key is the
+stable job name.
+
+```yaml
+services:
+  worker:
+    image: ghcr.io/example/worker:latest
+    servers: [server1, server2]
+    environment:
+      secrets:
+        - DATABASE_URL
+    crons:
+      sync-reports:
+        schedule: "7 */2 * * *"
+        command: ["npm", "run", "sync:reports"]
+      remove-expired:
+        schedule: "0 3 * * *"
+        command: ["npm", "run", "remove-expired"]
+        timezone: America/Denver
+        timeout: 30m
+        overlap: forbid
+        missed_runs: skip
+```
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `schedule` | required | Five-field cron expression: minute, hour, day of month, month, day of week |
+| `command` | required | Command string or argument list for the one-off container |
+| `timezone` | `UTC` | IANA time-zone name |
+| `timeout` | `1h` | Maximum run time, with an `s`, `m`, or `h` suffix |
+| `overlap` | `forbid` | Skip a due run while the prior run remains active |
+| `missed_runs` | `skip` | Do not replay times missed while the owning agent was offline |
+
+Each run uses the service image, environment, secrets, mounts, resources,
+project network, and `.jiji` DNS. It does not use the service command,
+ports, proxy routes, health checks, or restart policy.
+
+Run `jiji deploy` after a cron configuration change. See
+[Scheduled Jobs](/docs/reference/cron) for ownership, failure behavior,
+retention, and commands.
+
 ##### Build configuration
 
 Use `build:` instead of `image:` to build from source (only one of the two
@@ -3258,6 +3308,70 @@ jiji service scale -S web --replicas 3 --dry-run
 not a host filter, decides replica ownership. Interrupted scale operations
 are resumable by retrying the same command.
 
+##### `jiji service cron list`
+
+Show configured cron jobs and their installation state.
+
+```bash
+jiji service cron list
+jiji service cron list -S worker
+```
+
+The state is `installed`, `not-deployed`, or `drifted`. A drifted job has
+configuration changes that a deploy did not install yet.
+
+##### `jiji service cron status`
+
+Show durable scheduler and run state from each assigned agent.
+
+```bash
+jiji service cron status
+jiji service cron status -S worker
+```
+
+The output includes the owner, next run, last result, active run, and
+skipped overlap count.
+
+##### `jiji service cron logs`
+
+Show output for one job. This command requires one service and one cron
+name.
+
+```bash
+jiji service cron logs -S worker sync-reports
+jiji service cron logs -S worker sync-reports --run <run-id>
+jiji service cron logs -S worker sync-reports --lines 100
+jiji service cron logs -S worker sync-reports --since 30m
+jiji service cron logs -S worker sync-reports --follow
+```
+
+| Option | Description |
+| --- | --- |
+| `--run <ID>` | Show one retained run instead of the latest run |
+| `-n, --lines <N>` | Show this number of lines |
+| `-s, --since <TIMESTAMP>` | Show logs since a timestamp or relative duration |
+| `-f, --follow` | Follow the active run |
+
+`--follow` cannot be combined with `--run`.
+
+##### `jiji service cron run`
+
+Start one configured job immediately. The manual run does not change the
+next scheduled time.
+
+```bash
+jiji service cron run -S worker sync-reports
+jiji service cron run -S worker sync-reports --follow
+```
+
+| Option | Description |
+| --- | --- |
+| `--follow` | Stream output after the agent accepts the run |
+
+An active run causes an overlap conflict because `overlap: forbid` is the
+only supported policy. See [Scheduled Jobs](/docs/reference/cron) for the
+full execution model.
+
 ##### `jiji service prune`
 
 Clean up old container images for build-configured services (services with
@@ -3443,6 +3557,220 @@ jiji lock acquire "Taking over stuck network maintenance" --force
 jiji lock release --replica <replica-id>
 ```
 
+### Scheduled Jobs
+
+Source: https://jiji.run/docs/reference/cron
+
+Jiji runs scheduled service commands without a separate worker host or a
+host crontab. Each run starts in a new one-off container.
+
+The owning `jiji-agent` evaluates schedules and starts jobs. Jobs continue
+to run after the operator disconnects.
+
+#### Configure a Job
+
+Add a `crons` map to a service. Use each map key as a stable job name.
+
+```yaml
+services:
+  worker:
+    image: ghcr.io/example/worker:latest
+    servers: [app1, app2]
+    environment:
+      clear:
+        NODE_ENV: production
+      secrets:
+        - DATABASE_URL
+    volumes:
+      - worker_data:/app/data
+
+    crons:
+      sync-reports:
+        schedule: "7 */2 * * *"
+        command: ["npm", "run", "sync:reports"]
+
+      remove-expired:
+        schedule: "0 3 * * *"
+        command: ["npm", "run", "remove-expired"]
+        timezone: America/Denver
+        timeout: 30m
+        overlap: forbid
+        missed_runs: skip
+```
+
+Deploy the service after you add, remove, rename, or change a job:
+
+```bash
+jiji deploy -S worker
+```
+
+Jiji installs cron specifications after the service deployment becomes
+active and healthy. A failed cron installation does not remove a healthy
+service deployment.
+
+#### Schedule Format
+
+The `schedule` value uses five fields:
+
+```text
+minute hour day-of-month month day-of-week
+```
+
+This schedule runs every two hours at minute 7:
+
+```yaml
+schedule: "7 */2 * * *"
+```
+
+Seconds and aliases such as `@daily` are not supported. The default time
+zone is `UTC`.
+
+Set `timezone` to an IANA name when the schedule uses local wall-clock
+time:
+
+```yaml
+timezone: America/Denver
+```
+
+#### Container Context
+
+A cron run inherits these service values:
+
+- The active deployment image.
+- Environment values and secrets.
+- Files, directories, and volumes.
+- CPU, memory, GPU, device, privilege, and capability values.
+- The project bridge and `.jiji` DNS resolver.
+
+A cron run does not inherit these values:
+
+- The service command.
+- Published ports.
+- Proxy routes.
+- Health checks.
+- The service restart policy.
+
+The cron command replaces the service command. Jiji sets `--restart=no`
+and gives the container an explicit leased address.
+
+Jiji does not use `docker exec` or `podman exec` against the serving
+container. This separation protects the serving process and gives each run
+its own result, timeout, logs, and address lease.
+
+#### Ownership
+
+One agent owns each job. Jiji selects the active and healthy replica with
+the lowest ordinal.
+
+The owner remains stable until placement changes. Jiji reconciles ownership
+during deploy, restart, rollback, and scale operations.
+
+Jiji installs a job on the new owner before removal from the former owner.
+If installation fails, the former owner keeps the last working
+specification.
+
+Cron specifications and run history are local to the owner. Jiji does not
+replicate them through catalog anti-entropy.
+
+#### Outages and Overlap
+
+The first release supports `overlap: forbid`. Jiji skips a due run when the
+prior run remains active.
+
+The first release supports `missed_runs: skip`. Jiji does not replay runs
+missed while the owning agent was offline.
+
+Jiji does not transfer ownership automatically during an owner outage.
+This rule prevents two agents from starting the same job without a
+consensus service.
+
+#### Timeouts and Results
+
+The default timeout is `1h`. A timeout accepts seconds, minutes, or hours:
+
+```yaml
+timeout: 45s
+timeout: 20m
+timeout: 2h
+```
+
+The agent records each run as `claimed`, `running`, `succeeded`, `failed`,
+`timed_out`, or `skipped`. Agent restart recovery finds active cron
+containers before the scheduler accepts more work.
+
+Completed run metadata remains available for 30 days. Jiji also keeps the
+latest 100 runs for each job regardless of age.
+
+Completed containers remain for 24 hours so their engine logs stay
+available. These retention values are fixed in the first release.
+
+#### Inspect Jobs
+
+Show configured jobs and installation drift:
+
+```bash
+jiji service cron list
+jiji service cron list -S worker
+```
+
+Show durable run state:
+
+```bash
+jiji service cron status
+jiji service cron status -S worker
+```
+
+#### Run a Job Now
+
+Start a job without changing its schedule:
+
+```bash
+jiji service cron run -S worker sync-reports
+```
+
+Stream its output:
+
+```bash
+jiji service cron run -S worker sync-reports --follow
+```
+
+The command returns an overlap conflict when the job already has an active
+run.
+
+#### Read Logs
+
+Read the latest retained run:
+
+```bash
+jiji service cron logs -S worker sync-reports
+```
+
+Read a specific run:
+
+```bash
+jiji service cron logs -S worker sync-reports --run <run-id>
+```
+
+Filter or follow output:
+
+```bash
+jiji service cron logs -S worker sync-reports --lines 100
+jiji service cron logs -S worker sync-reports --since 30m
+jiji service cron logs -S worker sync-reports --follow
+```
+
+The `--follow` option requires an active run. It cannot be combined with
+`--run`.
+
+#### Current Limits
+
+- A job runs once per service, not once per replica.
+- Failed runs do not retry automatically.
+- Missed runs do not catch up.
+- Owner failover is not automatic.
+- Retention values are not configurable.
+- Services with `network_mode: service:<name>` cannot define cron jobs.
+
 ### Features Reference
 
 Source: https://jiji.run/docs/reference/features
@@ -3457,6 +3785,7 @@ Every built-in feature, organized by area.
 - **Runtime Agnostic** - Docker or Podman. Same config, your choice.
 - **Multi Server** - Independent services deploy concurrently. Each service rolls out to its servers one at a time, health-gated for safety.
 - **Multi Project** - Run multiple apps on one server. Perfect for small teams and hobby projects.
+- **Scheduled Jobs** - Run service commands on cron schedules in isolated one-off containers.
 
 #### Proxy & SSL
 
@@ -3545,6 +3874,9 @@ Every built-in feature, organized by area.
 
 #### Operations
 
+- **Cron Ownership** - Assign each scheduled job to one active and healthy service replica.
+- **Cron Status and Logs** - Inspect durable run state and read output from retained run containers.
+- **Manual Cron Runs** - Start a configured job immediately without changing its next scheduled time.
 - **Remote Execution** - Run commands across servers in parallel or sequential, or drop into an interactive shell.
 - **Service Restart** - Restart services without full redeployment.
 - **Service Removal** - Clean removal with network unregistration.

@@ -18,6 +18,8 @@ zero-downtime, private networking, and simple YAML configuration.
 - **Container engine agnostic** - works with Docker or Podman
 - **Private networking** - a per-project WireGuard mesh with automatic
   `.jiji` DNS service discovery
+- **Scheduled jobs** - run service commands on cron schedules in isolated
+  one-off containers
 - **Simple configuration** - everything lives in one YAML file
 
 ## How It's Built
@@ -63,6 +65,10 @@ services:
       ssl: true
       healthcheck:
         path: /health
+    crons:
+      remove-expired:
+        schedule: "0 3 * * *"
+        command: ["npm", "run", "remove-expired"]
 ```
 
 ```bash
@@ -81,3 +87,4 @@ jiji deploy --build
 - [Quick Start](/docs/getting-started/quick-start) - deploy your first
   application
 - [Architecture](/docs/getting-started/architecture) - how Jiji works
+- [Scheduled Jobs](/docs/reference/cron) - configure and operate cron jobs

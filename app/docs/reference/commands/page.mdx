@@ -494,6 +494,70 @@ jiji service scale -S web --replicas 3 --dry-run
 not a host filter, decides replica ownership. Interrupted scale operations
 are resumable by retrying the same command.
 
+### `jiji service cron list`
+
+Show configured cron jobs and their installation state.
+
+```bash
+jiji service cron list
+jiji service cron list -S worker
+```
+
+The state is `installed`, `not-deployed`, or `drifted`. A drifted job has
+configuration changes that a deploy did not install yet.
+
+### `jiji service cron status`
+
+Show durable scheduler and run state from each assigned agent.
+
+```bash
+jiji service cron status
+jiji service cron status -S worker
+```
+
+The output includes the owner, next run, last result, active run, and
+skipped overlap count.
+
+### `jiji service cron logs`
+
+Show output for one job. This command requires one service and one cron
+name.
+
+```bash
+jiji service cron logs -S worker sync-reports
+jiji service cron logs -S worker sync-reports --run <run-id>
+jiji service cron logs -S worker sync-reports --lines 100
+jiji service cron logs -S worker sync-reports --since 30m
+jiji service cron logs -S worker sync-reports --follow
+```
+
+| Option | Description |
+| --- | --- |
+| `--run <ID>` | Show one retained run instead of the latest run |
+| `-n, --lines <N>` | Show this number of lines |
+| `-s, --since <TIMESTAMP>` | Show logs since a timestamp or relative duration |
+| `-f, --follow` | Follow the active run |
+
+`--follow` cannot be combined with `--run`.
+
+### `jiji service cron run`
+
+Start one configured job immediately. The manual run does not change the
+next scheduled time.
+
+```bash
+jiji service cron run -S worker sync-reports
+jiji service cron run -S worker sync-reports --follow
+```
+
+| Option | Description |
+| --- | --- |
+| `--follow` | Stream output after the agent accepts the run |
+
+An active run causes an overlap conflict because `overlap: forbid` is the
+only supported policy. See [Scheduled Jobs](/docs/reference/cron) for the
+full execution model.
+
 ### `jiji service prune`
 
 Clean up old container images for build-configured services (services with
