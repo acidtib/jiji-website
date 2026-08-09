@@ -6,6 +6,7 @@
 bun run dev      # Start development server with Turbopack
 bun run build    # Production build (static export to ./out)
 bun run start    # Start production server
+bun test         # Test documentation generation and sitemap formatting
 bun run llms     # Regenerate public/llms.txt, llms-full.txt, and sitemaps from docs content
 ```
 
@@ -13,6 +14,9 @@ bun run llms     # Regenerate public/llms.txt, llms-full.txt, and sitemaps from 
 `app/page.mdx` and rebuilding is enough to keep `public/llms.txt`, `public/llms-full.txt`,
 `public/sitemap.xml`, `public/docs/sitemap.xml`, and `public/robots.txt` current - no manual
 sitemap or llms.txt edits needed.
+
+Do not edit generated files in `public/` by hand. Change the MDX source, then
+run `bun run llms` or `bun run build`.
 
 ## Architecture
 
@@ -41,7 +45,7 @@ Next.js 16 documentation website using Nextra v4 with the docs theme. Documents 
 **Documentation sections:**
 - `app/docs/getting-started/` - Installation, quick start, architecture
 - `app/docs/guides/` - Deployment, CI/CD, testing, troubleshooting
-- `app/docs/reference/` - Configuration, commands, features, network, registry, logs
+- `app/docs/reference/` - Configuration, commands, cron, features, network, proxy, registry, logs
 
 **Adding documentation pages:** Create `.mdx` files in the appropriate directory. Update the `_meta.js` file in that directory to add navigation entries.
 
@@ -61,6 +65,23 @@ build time (`const JIJI_VERSION = process.env.NEXT_PUBLIC_JIJI_VERSION || "dev"`
 
 The documentation content is based on:
 - `/home/acidtib/Code/jiji` - Main Jiji orchestration tool (source of truth for all docs content)
+
+## Documentation synchronization
+
+Use these files in the Jiji repository as the source of truth:
+
+- `crates/jiji-cli/src/cli.rs` and `jiji --help` for commands and flags.
+- `crates/jiji-config/src/schema.rs` for configuration fields and defaults.
+- `crates/jiji-config/src/validation.rs` for limits and invalid combinations.
+- `crates/jiji-config/src/jiji.yml` for the generated configuration reference.
+- `docs/architecture-notes.md` and `AGENTS.md` for runtime invariants.
+- `docs/todo.md` for advertised behavior that is not implemented.
+
+Do not present a schema-only field as an implemented feature. State the gap
+and link to the current supported behavior.
+
+After a documentation change, run `bun test` and `bun run build`. Then run
+`bun run dev` and load each changed route to make sure that it renders.
 
 ## Writing style
 
