@@ -165,7 +165,7 @@ flowchart TB
   server["Deployment server<br/>127.0.0.1:&lt;registry.port&gt;"]
 
   builder -->|"SSH reverse tunnel<br/>build and push"| local
-  local -->|"Separate SSH reverse tunnel<br/>pull"| server
+  server -->|"Pull through separate<br/>SSH reverse tunnel"| local
 
   classDef registry fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
   class local registry

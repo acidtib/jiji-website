@@ -178,15 +178,15 @@ export default function LandingPage() {
           <div className="mx-auto grid max-w-7xl gap-10 px-4 md:px-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-center lg:gap-14">
             <div>
               <h1 className="max-w-4xl text-balance font-display text-5xl font-bold uppercase leading-[0.88] tracking-tight sm:text-6xl md:text-7xl">
-                Deploy across Linux
+                Deploy containers across
                 <br />
-                <span className="text-primary">servers you control.</span>
+                <span className="text-primary">Linux servers you control.</span>
               </h1>
 
               <p className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-xl">
-                Ship applications across Linux servers with health-gated rollouts,
-                automatic HTTPS, private networking, and service discovery.
-                <span className="text-foreground"> One CLI takes you from config to healthy containers.</span>
+                Deploy Docker or Podman workloads with health-gated rollouts,
+                automatic HTTPS, private WireGuard networking, and service discovery.
+                <span className="text-foreground"> The CLI coordinates each deploy over SSH, while per-project agents maintain the distributed network and service state.</span>
               </p>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">

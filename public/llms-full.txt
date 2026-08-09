@@ -331,9 +331,9 @@ flowchart TB
     a["node-a<br/>agent + runtime + proxy"]
     b["node-b<br/>agent + runtime + proxy"]
     c["node-c<br/>agent + runtime + proxy"]
-    a <-->|"catalog replication"| b
-    b <-->|"catalog replication"| c
-    c <-->|"catalog replication"| a
+    a <-->|"catalog + desired state"| b
+    b <-->|"catalog + desired state"| c
+    c <-->|"catalog + desired state"| a
   end
 
   cli -->|"targeted SSH mutations"| mesh
@@ -388,18 +388,21 @@ ID, container name, and address lease:
 ```mermaid
 flowchart TB
   accTitle: Catalog-driven zero-downtime deployment
-  accDescr: A candidate receives a durable address, is health checked directly, becomes Active in the replicated catalog, and replaces the draining old deployment.
+  accDescr: A candidate receives a durable address and is published before it starts. After a direct health check, it becomes Active in the catalog, DNS begins answering its address, and Jiji verifies proxy discovery before draining the old deployment.
 
   old["Current Active deployment"]
   lease["Allocate address<br/>publish Candidate"]
+  start["Start candidate container"]
   health{"Direct health<br/>check passes?"}
   active["Publish Active"]
-  route["Reconcile DNS<br/>and proxy targets"]
+  route{"Proxy discovers healthy address?<br/>(if configured)"}
   drain["Drain old deployment<br/>release old lease"]
   rollback["Remove candidate<br/>release candidate lease"]
 
-  old --> lease --> health
-  health -->|"yes"| active --> route --> drain
+  old --> lease --> start --> health
+  health -->|"yes"| active -->|"DNS answers address"| route
+  route -->|"yes or no proxy"| drain
+  route -->|"no"| rollback
   health -->|"no"| rollback
 
   classDef success fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
@@ -440,8 +443,9 @@ sequenceDiagram
   participant catalog as Replicated catalog
   participant backend as Healthy Active replica
 
-  dns->>catalog: Read converged eligible records
   app->>dns: Query myproject-api.jiji
+  dns->>catalog: Read converged eligible records
+  catalog-->>dns: Healthy Active addresses
   dns-->>app: Return active leased addresses
   app->>backend: Connect directly
 ```
@@ -500,17 +504,20 @@ current Active deployment, so the running container is not interrupted:
 ```mermaid
 flowchart TB
   accTitle: Zero-downtime deployment decision flow
-  accDescr: Jiji starts a candidate beside the active container. A healthy candidate receives traffic before the old container is removed, while a failed candidate is rolled back without affecting the active container.
+  accDescr: Jiji publishes a leased candidate before starting it beside the active container. After direct health succeeds, DNS answers the new address and Jiji verifies proxy discovery before draining the old deployment. Failed health or proxy verification rolls the candidate back.
   active["Active deployment<br/>keeps serving"]
-  candidate["Candidate deployment<br/>gets an address lease"]
+  candidate["Lease address<br/>publish Candidate"]
+  start["Start candidate container"]
   health{"Healthy?"}
   catalog["Publish Active<br/>in replicated catalog"]
-  routes["Reconcile DNS<br/>and proxy targets"]
+  routes{"Proxy discovers healthy address?<br/>(if configured)"}
   cleanup["Drain old deployment<br/>and release its lease"]
   rollback["Remove candidate<br/>Active deployment is untouched"]
 
-  active --> candidate --> health
-  health -->|"yes"| catalog --> routes --> cleanup
+  active --> candidate --> start --> health
+  health -->|"yes"| catalog -->|"DNS answers address"| routes
+  routes -->|"yes or no proxy"| cleanup
+  routes -->|"no"| rollback
   health -->|"no"| rollback
 
   classDef success fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
@@ -3954,9 +3961,9 @@ flowchart LR
     proxyB["jiji-proxy<br/>all healthy targets"]
   end
 
-  agentA <-->|"WireGuard replication"| agentB
-  appA --> agentA
-  appB --> agentB
+  agentA <-->|"catalog + desired-state replication"| agentB
+  appA -->|"DNS queries"| agentA
+  appB -->|"DNS queries"| agentB
   proxyA --> appA
   proxyA --> appB
   proxyB --> appA
@@ -4776,7 +4783,7 @@ flowchart TB
   server["Deployment server<br/>127.0.0.1:&lt;registry.port&gt;"]
 
   builder -->|"SSH reverse tunnel<br/>build and push"| local
-  local -->|"Separate SSH reverse tunnel<br/>pull"| server
+  server -->|"Pull through separate<br/>SSH reverse tunnel"| local
 
   classDef registry fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
   class local registry

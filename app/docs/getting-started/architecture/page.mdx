@@ -25,9 +25,9 @@ flowchart TB
     a["node-a<br/>agent + runtime + proxy"]
     b["node-b<br/>agent + runtime + proxy"]
     c["node-c<br/>agent + runtime + proxy"]
-    a <-->|"catalog replication"| b
-    b <-->|"catalog replication"| c
-    c <-->|"catalog replication"| a
+    a <-->|"catalog + desired state"| b
+    b <-->|"catalog + desired state"| c
+    c <-->|"catalog + desired state"| a
   end
 
   cli -->|"targeted SSH mutations"| mesh
@@ -82,18 +82,21 @@ ID, container name, and address lease:
 ```mermaid
 flowchart TB
   accTitle: Catalog-driven zero-downtime deployment
-  accDescr: A candidate receives a durable address, is health checked directly, becomes Active in the replicated catalog, and replaces the draining old deployment.
+  accDescr: A candidate receives a durable address and is published before it starts. After a direct health check, it becomes Active in the catalog, DNS begins answering its address, and Jiji verifies proxy discovery before draining the old deployment.
 
   old["Current Active deployment"]
   lease["Allocate address<br/>publish Candidate"]
+  start["Start candidate container"]
   health{"Direct health<br/>check passes?"}
   active["Publish Active"]
-  route["Reconcile DNS<br/>and proxy targets"]
+  route{"Proxy discovers healthy address?<br/>(if configured)"}
   drain["Drain old deployment<br/>release old lease"]
   rollback["Remove candidate<br/>release candidate lease"]
 
-  old --> lease --> health
-  health -->|"yes"| active --> route --> drain
+  old --> lease --> start --> health
+  health -->|"yes"| active -->|"DNS answers address"| route
+  route -->|"yes or no proxy"| drain
+  route -->|"no"| rollback
   health -->|"no"| rollback
 
   classDef success fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px
@@ -134,8 +137,9 @@ sequenceDiagram
   participant catalog as Replicated catalog
   participant backend as Healthy Active replica
 
-  dns->>catalog: Read converged eligible records
   app->>dns: Query myproject-api.jiji
+  dns->>catalog: Read converged eligible records
+  catalog-->>dns: Healthy Active addresses
   dns-->>app: Return active leased addresses
   app->>backend: Connect directly
 ```

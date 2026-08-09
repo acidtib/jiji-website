@@ -7,10 +7,10 @@ const siteUrl = 'https://jiji.run'
 export const metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'Jiji - Deploy containers anywhere',
+    default: 'Jiji: Open-Source Container Deployment for Linux Servers',
     template: '%s | Jiji',
   },
-  description: 'Deploy containerized apps across any Linux servers with zero-downtime rollouts, automatic HTTPS, and private WireGuard networking. No control plane required.',
+  description: 'Deploy Docker and Podman containers across Linux servers with zero-downtime rollouts, automatic HTTPS, and private WireGuard networking.',
   applicationName: 'Jiji',
   authors: [{ name: 'Jiji', url: 'https://github.com/acidtib/jiji' }],
   creator: 'Jiji',
@@ -52,7 +52,7 @@ export const metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Jiji, deploy containers anywhere',
+        alt: 'Jiji open-source container deployment for Linux servers',
       },
     ],
   },

@@ -1,26 +1,70 @@
 import LandingPage from '@/components/LandingPage'
 
+const title = 'Jiji: Open-Source Container Deployment for Linux Servers'
+const description = 'Deploy Docker and Podman containers across Linux servers with zero-downtime rollouts, automatic HTTPS, and private WireGuard networking.'
+
 export const metadata = {
   title: {
-    absolute: 'Jiji - Deploy containers anywhere',
+    absolute: title,
   },
-  description: 'Deploy containerized apps across any Linux servers with zero-downtime rollouts, automatic HTTPS, and private WireGuard networking.',
+  description,
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'Jiji - Deploy containers anywhere',
-    description: 'Production container deploys across servers you control. No agents, hosted platform, or cluster to babysit.',
+    title,
+    description,
     url: '/',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Jiji - Deploy containers anywhere',
-    description: 'Production container deploys across servers you control. No agents, hosted platform, or cluster to babysit.',
+    title,
+    description,
     images: ['/twitter-image.png'],
   },
 }
 
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': 'https://jiji.run/#website',
+      url: 'https://jiji.run/',
+      name: 'Jiji',
+      description,
+    },
+    {
+      '@type': 'SoftwareApplication',
+      '@id': 'https://jiji.run/#software',
+      name: 'Jiji',
+      url: 'https://jiji.run/',
+      description,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'Linux, macOS',
+      softwareRequirements: 'Linux deployment servers with Docker or Podman and SSH access',
+      license: 'https://github.com/acidtib/jiji/blob/main/LICENSE',
+      downloadUrl: 'https://get.jiji.run/install.sh',
+      sameAs: ['https://github.com/acidtib/jiji'],
+      offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+}
+
 export default function HomePage() {
-  return <LandingPage />
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
+        }}
+      />
+      <LandingPage />
+    </>
+  )
 }

@@ -15,17 +15,20 @@ current Active deployment, so the running container is not interrupted:
 ```mermaid
 flowchart TB
   accTitle: Zero-downtime deployment decision flow
-  accDescr: Jiji starts a candidate beside the active container. A healthy candidate receives traffic before the old container is removed, while a failed candidate is rolled back without affecting the active container.
+  accDescr: Jiji publishes a leased candidate before starting it beside the active container. After direct health succeeds, DNS answers the new address and Jiji verifies proxy discovery before draining the old deployment. Failed health or proxy verification rolls the candidate back.
   active["Active deployment<br/>keeps serving"]
-  candidate["Candidate deployment<br/>gets an address lease"]
+  candidate["Lease address<br/>publish Candidate"]
+  start["Start candidate container"]
   health{"Healthy?"}
   catalog["Publish Active<br/>in replicated catalog"]
-  routes["Reconcile DNS<br/>and proxy targets"]
+  routes{"Proxy discovers healthy address?<br/>(if configured)"}
   cleanup["Drain old deployment<br/>and release its lease"]
   rollback["Remove candidate<br/>Active deployment is untouched"]
 
-  active --> candidate --> health
-  health -->|"yes"| catalog --> routes --> cleanup
+  active --> candidate --> start --> health
+  health -->|"yes"| catalog -->|"DNS answers address"| routes
+  routes -->|"yes or no proxy"| cleanup
+  routes -->|"no"| rollback
   health -->|"no"| rollback
 
   classDef success fill:#16a34a,color:#fff,stroke:#15803d,stroke-width:2px

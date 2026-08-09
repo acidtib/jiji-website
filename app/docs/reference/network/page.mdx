@@ -29,9 +29,9 @@ flowchart LR
     proxyB["jiji-proxy<br/>all healthy targets"]
   end
 
-  agentA <-->|"WireGuard replication"| agentB
-  appA --> agentA
-  appB --> agentB
+  agentA <-->|"catalog + desired-state replication"| agentB
+  appA -->|"DNS queries"| agentA
+  appB -->|"DNS queries"| agentB
   proxyA --> appA
   proxyA --> appB
   proxyB --> appA
