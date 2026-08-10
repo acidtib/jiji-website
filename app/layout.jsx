@@ -10,7 +10,7 @@ export const metadata = {
     default: 'Jiji: Open-Source Container Deployment for Linux Servers',
     template: '%s | Jiji',
   },
-  description: 'Deploy Docker and Podman containers across Linux servers with zero-downtime rollouts, automatic HTTPS, and private WireGuard networking.',
+  description: 'Deploy Docker and Podman containers across the servers you control — cloud, bare metal, or your own hardware — with health-gated rollouts, automatic HTTPS, and private networking built in.',
   applicationName: 'Jiji',
   authors: [{ name: 'Jiji', url: 'https://github.com/acidtib/jiji' }],
   creator: 'Jiji',
@@ -74,7 +74,7 @@ export default function RootLayout({ children }) {
       <Head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Courier+Prime:wght@400;700&family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Courier+Prime:wght@400;700&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,300..800;1,300..800&family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       </Head>
       <body className="antialiased">
         <ThemeProvider
