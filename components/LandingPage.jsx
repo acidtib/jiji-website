@@ -228,21 +228,18 @@ export default function LandingPage() {
 
             <div className="grid md:grid-cols-3 gap-3">
               <BenefitModule
-                number="01"
                 icon={Server}
                 title="Bring your Linux servers"
                 description="Deploy to supported Linux cloud VMs, bare metal, home labs, or across providers using SSH and root or sudo access."
                 proof="AWS · Hetzner · DigitalOcean · OVHcloud"
               />
               <BenefitModule
-                number="02"
                 icon={Zap}
                 title="Keep costs predictable"
                 description="Pay infrastructure providers directly and scale on your terms. Your deployment workflow stays the same as servers and traffic grow."
                 proof="Direct billing · Open source · Same workflow"
               />
               <BenefitModule
-                number="03"
                 icon={Lock}
                 title="Private by default"
                 description="Jiji connects servers with an encrypted WireGuard network and private DNS. Service-to-service and proxy-to-backend traffic uses the mesh."
@@ -971,14 +968,13 @@ function MeshMetric({ icon: Icon, label, value, note }) {
   );
 }
 
-function BenefitModule({ number, icon: Icon, title, description, proof }) {
+function BenefitModule({ icon: Icon, title, description, proof }) {
   return (
     <div className="module-card group flex flex-col p-6 transition-colors hover:border-primary/40">
-      <div className="mb-7 flex items-start justify-between">
+      <div className="mb-7">
         <div className="flex h-11 w-11 items-center justify-center border border-primary/25 bg-primary/[0.08]">
           <Icon className="h-5 w-5 text-primary" />
         </div>
-        <span className="font-mono text-[10px] text-muted-foreground">{number} / 03</span>
       </div>
       <h3 className="font-display text-2xl font-bold uppercase leading-none tracking-tight">{title}</h3>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{description}</p>
