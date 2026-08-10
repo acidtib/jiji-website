@@ -175,21 +175,21 @@ export default function LandingPage() {
       <main id="main-content" className="relative" tabIndex="-1">
         {/* Hero */}
         <section className="pb-10 pt-12 md:pb-14 md:pt-16 lg:pt-20">
-          <div className="mx-auto grid max-w-7xl gap-10 px-4 md:px-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-center lg:gap-14">
-            <div>
-              <h1 className="max-w-4xl text-balance font-display text-5xl font-bold uppercase leading-[0.88] tracking-tight sm:text-6xl md:text-7xl">
+          <div className="mx-auto max-w-5xl px-4 text-center md:px-6">
+            <div className="flex flex-col items-center">
+              <h1 className="text-balance font-display text-5xl font-bold uppercase leading-[0.88] tracking-tight sm:text-6xl md:text-7xl">
                 Deploy containers across
                 <br />
                 <span className="text-primary">Linux servers you control.</span>
               </h1>
 
-              <p className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-xl">
+              <p className="mt-6 max-w-3xl text-base leading-relaxed text-muted-foreground md:text-xl">
                 Deploy Docker or Podman workloads with health-gated rollouts,
                 automatic HTTPS, private WireGuard networking, and service discovery.
                 <span className="text-foreground"> The CLI coordinates each deploy over SSH, while per-project agents maintain the distributed network and service state.</span>
               </p>
 
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-7 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row">
                 <Button asChild className="h-11 w-full rounded-sm px-6 sm:w-auto">
                   <Link href="/docs/getting-started/quick-start">
                     <Terminal className="mr-2 h-4 w-4" />
@@ -205,25 +205,16 @@ export default function LandingPage() {
                 </Button>
               </div>
 
-              <div className="mt-7">
+              <div className="mt-7 w-full max-w-2xl text-left">
                 <InstallCommand />
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+              <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                 <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Cross-provider</span>
                 <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> SSH-driven</span>
                 <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> MIT Licensed</span>
               </div>
             </div>
-
-            <HeroDeployBrief />
-          </div>
-        </section>
-
-        {/* Mesh network visual -- the proof, right under the claim */}
-        <section className="pb-16 md:pb-20">
-          <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <NetworkMesh />
           </div>
         </section>
 
@@ -231,7 +222,6 @@ export default function LandingPage() {
         <section id="why-jiji" className="scroll-mt-20 border-t border-border py-16 md:py-24">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <SectionHeading
-              kicker="01 / WHY JIJI"
               title="Deploy on your servers. Roll out safely."
               description="Turn ordinary Linux servers into a repeatable deployment target with health checks, automatic HTTPS, private networking, and service discovery built in."
             />
@@ -262,11 +252,47 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Mesh network visual */}
+        <section id="how-it-works" className="scroll-mt-20 pb-16 md:pb-20">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <NetworkMesh />
+          </div>
+        </section>
+
+        {/* Comparison */}
+        <section className="border-t border-border py-16 md:py-20">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <SectionHeading
+              title="Where Jiji fits"
+              description="Match your deployment approach to the size of your application, infrastructure, and operations team."
+            />
+
+            <div className="grid md:grid-cols-3 gap-3">
+              <FitModule
+                scale="Local / Single Node"
+                title="Docker Compose"
+                description="Great for single server setups, but lacks multi node orchestration, zero-downtime deploys, and automated mesh networking."
+              />
+              <FitModule
+                scale="Small to Medium Fleets"
+                badge="THE SWEET SPOT"
+                title="Jiji"
+                description="Multi node coordination, secure mesh networking, and advanced routing without the overhead of managing a control plane cluster."
+                featured
+              />
+              <FitModule
+                scale="Enterprise Scale"
+                title="Kubernetes"
+                description="Incredible power and ecosystem, but requires dedicated platform engineering, managed service fees, and steep learning curves."
+              />
+            </div>
+          </div>
+        </section>
+
         {/* Config -> Output */}
         <section className="py-16 md:py-20 border-y border-border bg-card/40">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <SectionHeading
-              kicker="02 / WORKFLOW"
               title="From config to healthy containers"
               description={
                 <>
@@ -319,47 +345,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Comparison */}
-        <section className="py-16 md:py-20">
-          <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <SectionHeading
-              kicker="03 / FIT"
-              title="Choose the operating model you want"
-              description="Match your deployment approach to the size of your application, infrastructure, and operations team."
-            />
-
-            <div className="grid md:grid-cols-3 gap-3">
-              <FitModule
-                rank="01"
-                badge="RECOMMENDED"
-                title="Choose Jiji"
-                description="You want repeatable production deployments across Linux servers, with networking and safe rollouts handled for you."
-                points={["SSH-driven deployments", "Multi-server networking", "Health-gated rollouts"]}
-                featured
-              />
-              <FitModule
-                rank="02"
-                badge="ONE HOST"
-                title="Choose Compose"
-                description="Your application lives on one host and you are comfortable handling deployments, routing, and recovery yourself."
-                points={["Familiar Compose specification", "Excellent local workflow", "Single-host simplicity"]}
-              />
-              <FitModule
-                rank="03"
-                badge="FULLY MANAGED"
-                title="Choose a platform"
-                description="You want infrastructure, deployment, and operational tooling bundled into a managed service."
-                points={["Managed infrastructure", "Integrated web dashboard", "Provider-supported operations"]}
-              />
-            </div>
-          </div>
-        </section>
-
         {/* Highlights -- a handful of what matters, not all ~60 features at once */}
         <section className="py-16 md:py-20 border-y border-border bg-card/40">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <SectionHeading
-              kicker="04 / CAPABILITIES"
               title="Production tools, ready to use"
               description="Deploy, secure, observe, and operate applications across servers from one CLI."
             />
@@ -385,24 +374,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* How it works */}
-        <section id="how-it-works" className="py-16 md:py-20 scroll-mt-20">
-          <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <SectionHeading
-              kicker="05 / ARCHITECTURE"
-              title="From local intent to running services"
-              description="Jiji turns one deployment file into coordinated changes across your servers, then verifies the result before traffic moves."
-            />
-
-            <ArchitectureMap />
-          </div>
-        </section>
-
         {/* FAQ */}
         <section className="py-16 md:py-20 border-y border-border bg-card/40">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <SectionHeading
-              kicker="06 / QUESTIONS"
               title="What teams ask before deploying"
               description="Clear answers about where Jiji runs, how failed rollouts are handled, and which infrastructure it supports."
             />
@@ -473,10 +448,7 @@ export default function LandingPage() {
         <section className="border-t border-border py-16 md:py-24">
           <div className="mx-auto max-w-7xl px-4 md:px-6">
             <div className="module-card overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/40 px-5 py-3">
-                <span className="tag-chip bg-primary/15 px-2.5 py-1 text-[11px] text-primary">
-                  07 / START
-                </span>
+              <div className="flex flex-wrap items-center justify-end gap-3 border-b border-border bg-muted/40 px-5 py-3">
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                   <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Linux server</span>
                   <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> SSH access</span>
@@ -632,12 +604,9 @@ export default function LandingPage() {
 
 // Components
 
-function SectionHeading({ kicker, title, description }) {
+function SectionHeading({ title, description }) {
   return (
     <div className="mb-8">
-      <span className="tag-chip bg-primary/15 text-primary text-[11px] px-2.5 py-1 mb-4 inline-block">
-        {kicker}
-      </span>
       <h2 className="font-display font-bold uppercase text-2xl md:text-3xl tracking-tight mb-3">
         {title}
       </h2>
@@ -688,52 +657,6 @@ function FooterColumn({ title, links, className = "", compact = false }) {
   );
 }
 
-function HeroDeployBrief() {
-  const steps = [
-    { icon: FileCode, label: "CONFIGURE", title: "Describe the app", detail: "Services, servers, domains, and health checks" },
-    { icon: KeyRound, label: "CONNECT", title: "Reach selected hosts", detail: "Bounded parallel execution over SSH" },
-    { icon: RefreshCw, label: "ROLLOUT", title: "Start candidates", detail: "Verify health before changing traffic" },
-    { icon: Globe, label: "ROUTE", title: "Serve HTTPS", detail: "Switch traffic through jiji-proxy" },
-  ];
-
-  return (
-    <div className="module-card overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
-        <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-foreground">Deployment model</span>
-        <span className="flex items-center gap-1.5 font-mono text-[9px] text-primary">
-          <span className="status-dot bg-primary" />
-          READY
-        </span>
-      </div>
-      <div className="relative p-5 sm:p-6">
-        <div className="absolute bottom-8 left-[42px] top-8 border-l border-dashed border-primary/30 sm:left-[46px]" />
-        <div className="relative space-y-3">
-          {steps.map(({ icon: Icon, label, title, detail }, index) => (
-            <div key={label} className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 border border-border bg-background/90 p-3">
-              <div className="flex h-9 w-9 items-center justify-center border border-primary/25 bg-primary/[0.08]">
-                <Icon className="h-4 w-4 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[8px] font-bold tracking-[0.14em] text-primary">{label}</span>
-                  <span className="font-mono text-[8px] text-muted-foreground">{String(index + 1).padStart(2, "0")} / 04</span>
-                </div>
-                <div className="mt-1 font-display text-base font-bold uppercase leading-none">{title}</div>
-                <div className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">{detail}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="flex items-center gap-3 border-t border-border bg-primary/[0.06] px-4 py-3 font-mono text-[10px]">
-        <CheckCircle2 className="h-4 w-4 text-primary" />
-        <span className="text-foreground">Config to production</span>
-        <span className="ml-auto text-primary">ONE COMMAND</span>
-      </div>
-    </div>
-  );
-}
-
 function InstallCommand() {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -751,7 +674,7 @@ function InstallCommand() {
   };
 
   return (
-    <div className="w-full max-w-xl">
+    <div className="mx-auto w-full max-w-xl">
       <div className="flex min-w-0 items-center gap-3 bg-background border border-border pl-4 pr-2 py-2.5 rounded-sm font-mono text-sm w-full hover:border-primary/40 transition-colors">
         <span className="text-primary">$</span>
         <code className="min-w-0 flex-1 truncate text-left text-xs sm:text-sm">{command}</code>
@@ -772,7 +695,7 @@ function InstallCommand() {
           {copyError ? "Copy failed. Select and copy the command manually." : copied ? "Install command copied." : ""}
         </span>
       </div>
-      <p className="mt-2.5 font-mono text-xs text-muted-foreground">
+      <p className="mt-2.5 text-center font-mono text-xs text-muted-foreground">
         <a href="https://get.jiji.run/install.sh" target="_blank" rel="noopener noreferrer" className="underline decoration-dotted hover:text-primary">
           view script -{'>'}
         </a>
@@ -1050,8 +973,8 @@ function MeshMetric({ icon: Icon, label, value, note }) {
 
 function BenefitModule({ number, icon: Icon, title, description, proof }) {
   return (
-    <div className="module-card group flex min-h-[310px] flex-col p-6 transition-colors hover:border-primary/40">
-      <div className="mb-10 flex items-start justify-between">
+    <div className="module-card group flex flex-col p-6 transition-colors hover:border-primary/40">
+      <div className="mb-7 flex items-start justify-between">
         <div className="flex h-11 w-11 items-center justify-center border border-primary/25 bg-primary/[0.08]">
           <Icon className="h-5 w-5 text-primary" />
         </div>
@@ -1059,36 +982,27 @@ function BenefitModule({ number, icon: Icon, title, description, proof }) {
       </div>
       <h3 className="font-display text-2xl font-bold uppercase leading-none tracking-tight">{title}</h3>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{description}</p>
-      <div className="mt-auto border-t border-border pt-4 font-mono text-[10px] leading-relaxed text-primary">
+      <div className="mt-6 border-t border-border pt-4 font-mono text-[10px] leading-relaxed text-primary">
         {proof}
       </div>
     </div>
   );
 }
 
-function FitModule({ rank, badge, title, description, points, featured = false }) {
+function FitModule({ scale, badge, title, description, featured = false }) {
   return (
-    <div className={`module-card flex min-h-[330px] flex-col overflow-hidden ${featured ? "border-primary/45 bg-primary/[0.04]" : ""}`}>
+    <div className={`module-card relative flex flex-col overflow-hidden ${featured ? "border-primary/45 bg-primary/[0.04]" : ""}`}>
       <div className={`h-1 w-full ${featured ? "bg-primary" : "bg-border"}`} />
       <div className="flex flex-1 flex-col p-6">
-        <div className="mb-8 flex items-center justify-between gap-3">
-          <span className="font-mono text-[10px] text-muted-foreground">{rank} / 03</span>
-          <span className={`tag-chip px-2 py-1 text-[9px] ${featured ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+        {badge && (
+          <span className="tag-chip absolute right-6 top-5 border border-primary/35 bg-primary/10 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-primary">
             {badge}
           </span>
-        </div>
+        )}
         <h3 className="font-display text-2xl font-bold uppercase leading-none tracking-tight">{title}</h3>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{description}</p>
-        <div className="mt-auto pt-7">
-          <div className="mb-3 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Best when you need</div>
-          <div className="space-y-2.5">
-            {points.map((point) => (
-              <div key={point} className="flex items-start gap-2 text-sm">
-                <Check className={`mt-0.5 h-4 w-4 flex-shrink-0 ${featured ? "text-primary" : "text-muted-foreground"}`} />
-                <span>{point}</span>
-              </div>
-            ))}
-          </div>
+        <div className="mt-5 font-mono text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          {scale}
         </div>
       </div>
     </div>
@@ -1158,122 +1072,6 @@ function StartStep({ number, title, detail, command, prompt = true }) {
           <span className="mr-2 text-primary">{prompt ? "$" : "›"}</span>
           {command}
         </code>
-      </div>
-    </div>
-  );
-}
-
-function ArchitectureMap() {
-  const serverLayers = [
-    {
-      icon: Globe,
-      label: "INGRESS",
-      title: "jiji-proxy",
-      detail: "HTTPS termination and traffic switching",
-    },
-    {
-      icon: Box,
-      label: "WORKLOAD",
-      title: "Docker or Podman",
-      detail: "Health-checked application containers",
-    },
-    {
-      icon: Network,
-      label: "PRIVATE NETWORK",
-      title: "WireGuard + .jiji DNS",
-      detail: "Encrypted service-to-service connectivity",
-    },
-  ];
-
-  return (
-    <div className="module-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/40 px-5 py-3">
-        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-foreground">
-          Deployment path
-        </span>
-        <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-          <span>Local</span>
-          <ArrowRight className="h-3 w-3 text-primary" />
-          <span>Remote</span>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-[0.85fr_0.65fr_1.2fr]">
-        <div className="flex flex-col justify-center border-b border-border p-6 sm:p-8 lg:border-b-0 lg:border-r">
-          <div className="mb-6 flex h-12 w-12 items-center justify-center border border-primary/30 bg-primary/[0.08]">
-            <Terminal className="h-5 w-5 text-primary" />
-          </div>
-          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-primary">ORCHESTRATOR</span>
-          <h3 className="mt-2 font-display text-3xl font-bold uppercase tracking-tight">Jiji CLI</h3>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            Reads the desired state, builds an execution plan, and coordinates each deployment step.
-          </p>
-          <div className="mt-6 border-l border-primary/60 bg-primary/[0.06] px-3 py-2.5 font-mono text-[11px]">
-            <span className="mr-2 text-primary">$</span>
-            jiji deploy --build
-          </div>
-          <div className="mt-3 flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
-            <FileCode className="h-3.5 w-3.5 text-primary" />
-            .jiji/deploy.yml
-          </div>
-        </div>
-
-        <div className="relative flex min-h-40 flex-col items-center justify-center border-b border-border bg-background/50 px-5 py-8 lg:border-b-0 lg:border-r">
-          <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full border border-primary/35 bg-card">
-            <KeyRound className="h-5 w-5 text-primary" />
-          </div>
-          <div className="relative z-10 mt-3 bg-card px-2 text-center">
-            <div className="font-mono text-[10px] font-bold text-foreground">SSH</div>
-            <div className="mt-1 font-mono text-[9px] text-muted-foreground">parallel execution</div>
-          </div>
-          <ArrowRight className="absolute right-3 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-primary lg:block" />
-        </div>
-
-        <div className="p-6 sm:p-8">
-          <div className="mb-5 flex items-end justify-between gap-4">
-            <div>
-              <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-primary">TARGET SERVER</span>
-              <h3 className="mt-2 font-display text-2xl font-bold uppercase tracking-tight">Runtime stack</h3>
-            </div>
-            <div className="flex items-center gap-1.5 font-mono text-[9px] text-primary">
-              <span className="status-dot bg-primary" />
-              HEALTHY
-            </div>
-          </div>
-
-          <div className="border border-border">
-            {serverLayers.map(({ icon: Icon, label, title, detail }) => (
-              <div key={title} className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 border-b border-border p-4 last:border-b-0">
-                <div className="flex h-9 w-9 items-center justify-center bg-muted">
-                  <Icon className="h-4 w-4 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-mono text-[8px] font-bold tracking-[0.14em] text-muted-foreground">{label}</div>
-                  <div className="mt-1 font-display text-base font-bold uppercase leading-none">{title}</div>
-                  <div className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{detail}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid border-t border-border bg-muted/20 sm:grid-cols-3 lg:grid-cols-[0.85fr_0.65fr_1.2fr]">
-        <ArchitecturePhase number="01" title="Plan" detail="Resolve config and dependencies" />
-        <ArchitecturePhase number="02" title="Apply" detail="Build, push, and start candidates" />
-        <ArchitecturePhase number="03" title="Verify" detail="Check health and switch traffic" />
-      </div>
-    </div>
-  );
-}
-
-function ArchitecturePhase({ number, title, detail }) {
-  return (
-    <div className="flex gap-3 border-b border-border px-5 py-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
-      <span className="font-mono text-[10px] text-primary">{number}</span>
-      <div>
-        <div className="font-display text-sm font-bold uppercase tracking-tight">{title}</div>
-        <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
       </div>
     </div>
   );
