@@ -52,16 +52,14 @@ services:
         deploy_timeout: 60s
 ```
 
-| Option | Description |
-|--------|-------------|
-| `path` | HTTP endpoint to check (must return 2xx) |
-| `interval` | Time between checks |
-| `timeout` | Max time to wait for a response |
-| `deploy_timeout` | Max time to wait for the container to become healthy |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `path` | - | HTTP endpoint to check (must return 2xx) |
+| `interval` | `2s` | Time between checks |
+| `timeout` | `5s` | Max time to wait for a response |
+| `deploy_timeout` | `30s` | Max time to wait for the container to become healthy |
 
 ### Command health check
-
-For non-HTTP services, `path` and `cmd` are mutually exclusive:
 
 ```yaml
 services:
@@ -75,9 +73,22 @@ services:
         deploy_timeout: 60s
 ```
 
+If both `path` and `cmd` are set, `cmd` takes precedence; this isn't
+rejected by validation, so pick one deliberately rather than relying on
+the precedence rule.
+
 The health check always runs directly against the candidate's leased
 address, never through DNS or jiji-proxy, so a healthy result really
 means the new container is ready, not just that routing happens to work.
+
+### No health check configured
+
+A service with no `healthcheck:` block at all still gets a gate: Jiji polls
+the container engine's own readiness state (`docker inspect` / `podman
+inspect` status) until it reports `running`, up to `deploy_timeout`. This
+confirms the container started, not that the application inside it is
+actually accepting requests - configure `path` or `cmd` for a real
+application-level check.
 
 ## Deployment Strategies
 
@@ -302,6 +313,16 @@ services:
     volumes:
       - /data/postgres:/var/lib/postgresql/data
 ```
+
+A `stop_first` service must remain a singleton - `replicas` above 1 is
+rejected by validation.
+
+A service with a fixed host-port binding (`ports: ["80:80"]`, not a bare
+container port) needs `stop_first: true` for the same reason: the engine
+can't bind two containers to the same host port at once. Without
+`stop_first`, the candidate simply fails to bind the port and the deploy
+fails safely - the old container is never touched - rather than degrading
+gracefully into a stop-then-start window automatically.
 
 ## File and Directory Transfers
 

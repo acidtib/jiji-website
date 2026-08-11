@@ -77,9 +77,11 @@ jiji build --no-push           # Build without pushing (single-architecture only
 ### `jiji deploy`
 
 Deploy configured services across their target servers. Rolling services keep
-the healthy version serving until its replacement passes health checks;
-`stop_first` services and direct host-port bindings cannot guarantee zero
-downtime.
+the healthy version serving until its replacement passes health checks.
+`stop_first` services trade that for a brief stop-then-start window. A
+service with a fixed host-port binding needs `stop_first` too, or its
+deploys fail outright rather than degrading gracefully - see
+[Stateful Services](/docs/guides/deployment#stateful-services).
 
 ```bash
 jiji deploy

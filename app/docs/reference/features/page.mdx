@@ -12,7 +12,7 @@ Every built-in feature, organized by area.
 
 - **Private Mesh Network** - WireGuard VPN between all servers. Encrypted by default.
 - **Automatic DNS** - Built-in `.jiji` DNS resolution. Access services by name.
-- **Health-Gated Rollouts** - For rolling services, the old version keeps serving until the new one passes its health check. Host-port bindings and `stop_first` services use a brief stop-then-start window.
+- **Health-Gated Rollouts** - For rolling services, the old version keeps serving until the new one passes its health check. `stop_first` services use a brief stop-then-start window instead; a service with a fixed host-port binding needs `stop_first` for the same reason, or its deploys fail outright instead of degrading gracefully.
 - **Runtime Agnostic** - Docker or Podman. Same config, your choice.
 - **Multi-server** - Independent services deploy concurrently. A service replaces its selected replicas in sequence, with a health gate for each replacement.
 - **Multi-project** - Run multiple apps on one server with isolated project networks and a shared per-host ingress proxy.

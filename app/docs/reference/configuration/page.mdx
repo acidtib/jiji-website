@@ -171,7 +171,7 @@ builder:
 
 | Registry | `server` | Auto namespace | Result |
 |---|---|---|---|
-| GHCR | `ghcr.io` | `username/project-name` | `ghcr.io/username/project-name/service:version` |
+| GHCR | `ghcr.io` | `username` | `ghcr.io/username/project-service:version` |
 | Docker Hub | `docker.io` | `username` | `docker.io/username/project-service:version` |
 | Custom | `registry.example.com:5000` | none | `registry.example.com:5000/project-service:version` |
 
@@ -272,7 +272,12 @@ ssh:
   pool_idle_timeout: 900       # seconds before idle connections close
   dns_retries: 3                # retry DNS lookups with backoff
   log_level: error              # debug, info, warn, error, fatal
+  options:                      # optional, raw SSH client options
+    StrictHostKeyChecking: "no"
 ```
+
+`options:` is a map of raw SSH client option names to values, applied
+alongside the structured `ssh:` fields above.
 
 ## Network
 
@@ -477,7 +482,13 @@ retention, and commands.
 ### Build configuration
 
 Use `build:` instead of `image:` to build from source (only one of the two
-is allowed per service):
+is allowed per service). A bare string is shorthand for `context:`:
+
+```yaml
+services:
+  web:
+    build: ./web   # shorthand for build: { context: ./web }
+```
 
 ```yaml
 services:
@@ -518,8 +529,11 @@ ports:
 
 Binding a host port (`host:container`) means only one container can hold
 that port at a time, which rules out zero-downtime deploys for that
-service. Use this form only for services that need direct host port access
-without the proxy (databases, non-HTTP services):
+service - pair it with `stop_first: true` (see
+[Stateful services](#stateful-services-stop_first)) or the candidate will
+simply fail to bind the port and the deploy will fail outright. Use this
+form only for services that need direct host port access without the proxy
+(databases, non-HTTP services):
 
 ```yaml
 ports:
@@ -598,6 +612,43 @@ environment variables with `--host-env`), never written literally into
 config. Numbers and booleans under `clear` are converted to strings for
 container compatibility (`DEBUG: true` becomes `"true"`).
 
+Resolved secrets are staged on the target server at
+`.jiji/{project}/env/{service}-{server}.env`, mode `0600`, written over SSH
+so the value never appears as a command-line argument or in shell history.
+This file is not removed by `jiji service remove`; it persists (root-owned,
+mode `0600`) until `jiji server teardown` clears the project's `.jiji/`
+directory.
+
+#### Custom `.env` location
+
+```yaml
+secrets_path: config/secrets   # optional, default: .env
+```
+
+Jiji looks for `{secrets_path}.{environment}` first (e.g.
+`config/secrets.production` with `-e production`), then falls back to
+`secrets_path` itself. With the default `secrets_path`, that means
+`.env.{environment}` then `.env`.
+
+#### External secrets adapters
+
+The schema also accepts a top-level `secrets:` block describing an external
+adapter:
+
+```yaml
+secrets:
+  adapter: doppler
+  project: myapp
+  config: production
+```
+
+This currently parses but has no effect: no adapter implementation reads
+it yet, so configuring it changes nothing and produces no warning. Use
+`.env`-resolved `secrets:` entries under `environment:` (above), or a
+`$(command)` value for `builder.registry.password` (see
+[Registry Reference](/docs/reference/registry)), for anything that needs a
+secret today.
+
 ### Proxy
 
 Enables jiji-proxy routing for a service.
@@ -650,7 +701,8 @@ proxy:
     deploy_timeout: 60s
 ```
 
-**Command health check** (mutually exclusive with `path`):
+**Command health check** (`cmd` takes precedence if both `cmd` and `path`
+are set - not enforced as a validation error, so pick one):
 
 ```yaml
 proxy:
@@ -975,6 +1027,14 @@ Error: A project supports at most 32 servers
 Error: Registry credentials require builder.registry.server
 Error: A service with stop_first must remain a singleton
 ```
+
+A typo'd field name is not always caught. `servers:`, `builder:`,
+`environment:`, `build:`, and the top-level document reject unknown YAML
+keys silently rather than erroring - a typo like `pott:` instead of
+`ports:` inside a service is just ignored. `ssh:`, `network:`, `proxy:`,
+individual server entries, and `crons:` entries do reject unknown keys.
+When a setting doesn't seem to take effect, double-check spelling against
+this reference rather than assuming Jiji would have flagged it.
 
 Run with `-v`/`--verbose` for more detailed validation output:
 

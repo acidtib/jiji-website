@@ -356,7 +356,7 @@ healthcheck:
 | `timeout` | Timeout for one jiji-proxy check |
 | `cmd` | Command used instead of `path` for Jiji's own pre-activation gate |
 | `cmd_runtime` | `docker` or `podman`; defaults to `builder.engine` |
-| `deploy_timeout` | Maximum time allowed for both the pre-activation gate and proxy activation; defaults to `60s` |
+| `deploy_timeout` | Maximum time allowed for both the pre-activation gate and proxy activation; defaults to `30s` |
 
 `path` and `cmd` serve two different checks with two different scopes.
 `path` becomes jiji-proxy's own *ongoing* health check, run on its own

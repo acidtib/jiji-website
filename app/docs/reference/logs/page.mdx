@@ -35,8 +35,8 @@ combined with `-S`.
 | `--grep-options <opts>` | Extra flags passed to grep (`-i`, `-v`, `-E`, `-C 5`, ...) |
 | `-f, --follow` | Follow in real time (requires exactly one target) |
 | `--container-id <id>` | Fetch logs from an arbitrary container name, bypassing service config |
-| `-H, --hosts <pattern>` | Target specific hosts |
-| `-q, --quiet` | Suppress host headers, lower log verbosity |
+| `-H, --hosts <pattern>` | Target specific hosts (global flag) |
+| `-q, --quiet` | Suppress host headers, lower log verbosity (global flag) |
 
 ```bash
 jiji service logs -S web --since 30m

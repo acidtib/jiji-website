@@ -304,14 +304,17 @@ services:
 
 ### Build Arguments Not Working
 
+`args:` is a mapping of build-arg names to values, not a list of
+`KEY=value` strings:
+
 ```yaml
 services:
   api:
     build:
       context: .
       args:
-        - NODE_ENV=production
-        - VERSION=1.2.3
+        NODE_ENV: production
+        VERSION: "1.2.3"
 ```
 
 ## Proxy Issues

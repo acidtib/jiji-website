@@ -536,16 +536,14 @@ services:
         deploy_timeout: 60s
 ```
 
-| Option | Description |
-|--------|-------------|
-| `path` | HTTP endpoint to check (must return 2xx) |
-| `interval` | Time between checks |
-| `timeout` | Max time to wait for a response |
-| `deploy_timeout` | Max time to wait for the container to become healthy |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `path` | - | HTTP endpoint to check (must return 2xx) |
+| `interval` | `2s` | Time between checks |
+| `timeout` | `5s` | Max time to wait for a response |
+| `deploy_timeout` | `30s` | Max time to wait for the container to become healthy |
 
 ##### Command health check
-
-For non-HTTP services, `path` and `cmd` are mutually exclusive:
 
 ```yaml
 services:
@@ -559,9 +557,22 @@ services:
         deploy_timeout: 60s
 ```
 
+If both `path` and `cmd` are set, `cmd` takes precedence; this isn't
+rejected by validation, so pick one deliberately rather than relying on
+the precedence rule.
+
 The health check always runs directly against the candidate's leased
 address, never through DNS or jiji-proxy, so a healthy result really
 means the new container is ready, not just that routing happens to work.
+
+##### No health check configured
+
+A service with no `healthcheck:` block at all still gets a gate: Jiji polls
+the container engine's own readiness state (`docker inspect` / `podman
+inspect` status) until it reports `running`, up to `deploy_timeout`. This
+confirms the container started, not that the application inside it is
+actually accepting requests - configure `path` or `cmd` for a real
+application-level check.
 
 #### Deployment Strategies
 
@@ -786,6 +797,16 @@ services:
     volumes:
       - /data/postgres:/var/lib/postgresql/data
 ```
+
+A `stop_first` service must remain a singleton - `replicas` above 1 is
+rejected by validation.
+
+A service with a fixed host-port binding (`ports: ["80:80"]`, not a bare
+container port) needs `stop_first: true` for the same reason: the engine
+can't bind two containers to the same host port at once. Without
+`stop_first`, the candidate simply fails to bind the port and the deploy
+fails safely - the old container is never touched - rather than degrading
+gracefully into a stop-then-start window automatically.
 
 #### File and Directory Transfers
 
@@ -1739,14 +1760,17 @@ services:
 
 ##### Build Arguments Not Working
 
+`args:` is a mapping of build-arg names to values, not a list of
+`KEY=value` strings:
+
 ```yaml
 services:
   api:
     build:
       context: .
       args:
-        - NODE_ENV=production
-        - VERSION=1.2.3
+        NODE_ENV: production
+        VERSION: "1.2.3"
 ```
 
 #### Proxy Issues
@@ -2048,7 +2072,7 @@ builder:
 
 | Registry | `server` | Auto namespace | Result |
 |---|---|---|---|
-| GHCR | `ghcr.io` | `username/project-name` | `ghcr.io/username/project-name/service:version` |
+| GHCR | `ghcr.io` | `username` | `ghcr.io/username/project-service:version` |
 | Docker Hub | `docker.io` | `username` | `docker.io/username/project-service:version` |
 | Custom | `registry.example.com:5000` | none | `registry.example.com:5000/project-service:version` |
 
@@ -2149,7 +2173,12 @@ ssh:
   pool_idle_timeout: 900       # seconds before idle connections close
   dns_retries: 3                # retry DNS lookups with backoff
   log_level: error              # debug, info, warn, error, fatal
+  options:                      # optional, raw SSH client options
+    StrictHostKeyChecking: "no"
 ```
+
+`options:` is a map of raw SSH client option names to values, applied
+alongside the structured `ssh:` fields above.
 
 #### Network
 
@@ -2354,7 +2383,13 @@ retention, and commands.
 ##### Build configuration
 
 Use `build:` instead of `image:` to build from source (only one of the two
-is allowed per service):
+is allowed per service). A bare string is shorthand for `context:`:
+
+```yaml
+services:
+  web:
+    build: ./web   # shorthand for build: { context: ./web }
+```
 
 ```yaml
 services:
@@ -2395,8 +2430,11 @@ ports:
 
 Binding a host port (`host:container`) means only one container can hold
 that port at a time, which rules out zero-downtime deploys for that
-service. Use this form only for services that need direct host port access
-without the proxy (databases, non-HTTP services):
+service - pair it with `stop_first: true` (see
+[Stateful services](#stateful-services-stop_first)) or the candidate will
+simply fail to bind the port and the deploy will fail outright. Use this
+form only for services that need direct host port access without the proxy
+(databases, non-HTTP services):
 
 ```yaml
 ports:
@@ -2475,6 +2513,43 @@ environment variables with `--host-env`), never written literally into
 config. Numbers and booleans under `clear` are converted to strings for
 container compatibility (`DEBUG: true` becomes `"true"`).
 
+Resolved secrets are staged on the target server at
+`.jiji/{project}/env/{service}-{server}.env`, mode `0600`, written over SSH
+so the value never appears as a command-line argument or in shell history.
+This file is not removed by `jiji service remove`; it persists (root-owned,
+mode `0600`) until `jiji server teardown` clears the project's `.jiji/`
+directory.
+
+###### Custom `.env` location
+
+```yaml
+secrets_path: config/secrets   # optional, default: .env
+```
+
+Jiji looks for `{secrets_path}.{environment}` first (e.g.
+`config/secrets.production` with `-e production`), then falls back to
+`secrets_path` itself. With the default `secrets_path`, that means
+`.env.{environment}` then `.env`.
+
+###### External secrets adapters
+
+The schema also accepts a top-level `secrets:` block describing an external
+adapter:
+
+```yaml
+secrets:
+  adapter: doppler
+  project: myapp
+  config: production
+```
+
+This currently parses but has no effect: no adapter implementation reads
+it yet, so configuring it changes nothing and produces no warning. Use
+`.env`-resolved `secrets:` entries under `environment:` (above), or a
+`$(command)` value for `builder.registry.password` (see
+[Registry Reference](/docs/reference/registry)), for anything that needs a
+secret today.
+
 ##### Proxy
 
 Enables jiji-proxy routing for a service.
@@ -2527,7 +2602,8 @@ proxy:
     deploy_timeout: 60s
 ```
 
-**Command health check** (mutually exclusive with `path`):
+**Command health check** (`cmd` takes precedence if both `cmd` and `path`
+are set - not enforced as a validation error, so pick one):
 
 ```yaml
 proxy:
@@ -2853,6 +2929,14 @@ Error: Registry credentials require builder.registry.server
 Error: A service with stop_first must remain a singleton
 ```
 
+A typo'd field name is not always caught. `servers:`, `builder:`,
+`environment:`, `build:`, and the top-level document reject unknown YAML
+keys silently rather than erroring - a typo like `pott:` instead of
+`ports:` inside a service is just ignored. `ssh:`, `network:`, `proxy:`,
+individual server entries, and `crons:` entries do reject unknown keys.
+When a setting doesn't seem to take effect, double-check spelling against
+this reference rather than assuming Jiji would have flagged it.
+
 Run with `-v`/`--verbose` for more detailed validation output:
 
 ```bash
@@ -2934,9 +3018,11 @@ jiji build --no-push           # Build without pushing (single-architecture only
 ##### `jiji deploy`
 
 Deploy configured services across their target servers. Rolling services keep
-the healthy version serving until its replacement passes health checks;
-`stop_first` services and direct host-port bindings cannot guarantee zero
-downtime.
+the healthy version serving until its replacement passes health checks.
+`stop_first` services trade that for a brief stop-then-start window. A
+service with a fixed host-port binding needs `stop_first` too, or its
+deploys fail outright rather than degrading gracefully - see
+[Stateful Services](/docs/guides/deployment#stateful-services).
 
 ```bash
 jiji deploy
@@ -3837,7 +3923,7 @@ Every built-in feature, organized by area.
 
 - **Private Mesh Network** - WireGuard VPN between all servers. Encrypted by default.
 - **Automatic DNS** - Built-in `.jiji` DNS resolution. Access services by name.
-- **Health-Gated Rollouts** - For rolling services, the old version keeps serving until the new one passes its health check. Host-port bindings and `stop_first` services use a brief stop-then-start window.
+- **Health-Gated Rollouts** - For rolling services, the old version keeps serving until the new one passes its health check. `stop_first` services use a brief stop-then-start window instead; a service with a fixed host-port binding needs `stop_first` for the same reason, or its deploys fail outright instead of degrading gracefully.
 - **Runtime Agnostic** - Docker or Podman. Same config, your choice.
 - **Multi-server** - Independent services deploy concurrently. A service replaces its selected replicas in sequence, with a health gate for each replacement.
 - **Multi-project** - Run multiple apps on one server with isolated project networks and a shared per-host ingress proxy.
@@ -4490,7 +4576,7 @@ healthcheck:
 | `timeout` | Timeout for one jiji-proxy check |
 | `cmd` | Command used instead of `path` for Jiji's own pre-activation gate |
 | `cmd_runtime` | `docker` or `podman`; defaults to `builder.engine` |
-| `deploy_timeout` | Maximum time allowed for both the pre-activation gate and proxy activation; defaults to `60s` |
+| `deploy_timeout` | Maximum time allowed for both the pre-activation gate and proxy activation; defaults to `30s` |
 
 `path` and `cmd` serve two different checks with two different scopes.
 `path` becomes jiji-proxy's own *ongoing* health check, run on its own
@@ -4650,8 +4736,8 @@ builder:
     password: GITHUB_TOKEN
 ```
 
-Auto namespace: `username/project-name`. Images push to
-`ghcr.io/your-github-username/project-name/service:version`.
+Auto namespace: `username`. Images push to
+`ghcr.io/your-github-username/project-service:version`.
 
 Create a token at [github.com/settings/tokens](https://github.com/settings/tokens)
 with `write:packages` and `read:packages`, then `export
@@ -4940,8 +5026,8 @@ combined with `-S`.
 | `--grep-options <opts>` | Extra flags passed to grep (`-i`, `-v`, `-E`, `-C 5`, ...) |
 | `-f, --follow` | Follow in real time (requires exactly one target) |
 | `--container-id <id>` | Fetch logs from an arbitrary container name, bypassing service config |
-| `-H, --hosts <pattern>` | Target specific hosts |
-| `-q, --quiet` | Suppress host headers, lower log verbosity |
+| `-H, --hosts <pattern>` | Target specific hosts (global flag) |
+| `-q, --quiet` | Suppress host headers, lower log verbosity (global flag) |
 
 ```bash
 jiji service logs -S web --since 30m
