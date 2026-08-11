@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 @theme {
   --color-background: hsl(var(--background));
@@ -20,9 +21,9 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  --font-sans: 'Archivo', system-ui, sans-serif;
-  --font-mono: 'Courier Prime', ui-monospace, monospace;
-  --font-display: 'Big Shoulders Display', system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: 'Syne', 'Plus Jakarta Sans', sans-serif;
 }
 
 @layer base {
@@ -90,17 +91,58 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Archivo', system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }
 
   code, pre, .font-mono {
-    font-family: 'Courier Prime', ui-monospace, monospace;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
   }
 
   .font-display {
-    font-family: 'Big Shoulders Display', system-ui, sans-serif;
-    font-stretch: condensed;
+    font-family: 'Syne', 'Plus Jakarta Sans', sans-serif;
   }
+
+  .font-heading {
+    font-family: 'Syne', 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 3%) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 3%) 1px, transparent 1px);
+}
+
+.bg-grid-dots {
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle, rgb(163 230 53 / 12%) 1px, transparent 1px);
+}
+
+.green-glow {
+  box-shadow: 0 0 30px -5px rgb(163 230 53 / 25%);
+}
+
+.green-glow-lg {
+  box-shadow: 0 0 60px -10px rgb(163 230 53 / 35%);
+}
+
+.green-border-glow {
+  border-color: rgb(163 230 53 / 40%);
+  box-shadow: 0 0 15px rgb(163 230 53 / 15%);
+}
+
+.glowing-beam {
+  background: linear-gradient(90deg, transparent, rgb(163 230 53 / 60%), transparent);
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s infinite ease-in-out;
 }
 
 .skip-link {

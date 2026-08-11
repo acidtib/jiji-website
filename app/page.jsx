@@ -1,7 +1,7 @@
-import LandingPage from '@/components/LandingPage'
+import LandingPage from '@/components/landing/LandingPage'
 
 const title = 'Jiji: Open-Source Container Deployment for Linux Servers'
-const description = 'Deploy Docker and Podman containers across Linux servers with zero-downtime rollouts, automatic HTTPS, and private WireGuard networking.'
+const description = 'Deploy Docker and Podman containers across the servers you control — cloud, bare metal, or your own hardware — with health-gated rollouts, automatic HTTPS, and private networking built in.'
 
 export const metadata = {
   title: {
