@@ -101,7 +101,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-1.5 text-xs font-mono font-medium text-zinc-400 hover:text-white transition cursor-pointer"
           >
             <DiscordIcon className="w-4 h-4" />
-            <span>Discord</span>
+            <span className="hidden sm:inline">Discord</span>
           </a>
           <a
             href="https://github.com/acidtib/jiji"
@@ -111,7 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-1.5 text-xs font-mono font-medium text-zinc-400 hover:text-white transition cursor-pointer"
           >
             <GithubIcon className="w-4 h-4" />
-            <span>GitHub</span>
+            <span className="hidden sm:inline">GitHub</span>
           </a>
 
           {/* Mobile hamburger */}
