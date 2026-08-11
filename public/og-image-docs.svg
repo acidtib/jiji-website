@@ -16,23 +16,23 @@
 
   <image href="jiji_logo.svg" x="64" y="50" width="182" height="55"/>
 
-  <g transform="translate(946 63)">
-    <rect width="190" height="42" rx="21" fill="#14150F" stroke="#33391F"/>
+  <g transform="translate(1004 63)">
+    <rect width="132" height="42" rx="21" fill="#14150F" stroke="#33391F"/>
     <circle cx="24" cy="21" r="5" fill="#A3E635"/>
-    <text x="42" y="27" fill="#C9CFC0" font-family="monospace" font-size="15" letter-spacing="1.5">OPEN SOURCE</text>
+    <text x="42" y="27" fill="#C9CFC0" font-family="monospace" font-size="15" letter-spacing="1.5">DOCS</text>
   </g>
 
   <text x="64" y="238" fill="#F5F6F2" font-family="Arial, sans-serif" font-size="70" font-weight="800" letter-spacing="-3">
-    Your apps. Your
+    Everything you
   </text>
   <text x="64" y="315" fill="#F5F6F2" font-family="Arial, sans-serif" font-size="70" font-weight="800" letter-spacing="-3">
-    infrastructure.
+    need to deploy
   </text>
   <text x="64" y="392" fill="#A3E635" font-family="Arial, sans-serif" font-size="70" font-weight="800" letter-spacing="-3">
-    Anywhere.
+    anywhere.
   </text>
   <text x="68" y="440" fill="#B2B8A9" font-family="Arial, sans-serif" font-size="22">
-    Deploy Docker and Podman containers on the servers you control.
+    Install, configure, and deploy Jiji across your own servers.
   </text>
 
   <g transform="translate(760 175)">
@@ -42,32 +42,29 @@
     <circle cx="24" cy="24" r="5" fill="#A3E635"/>
     <circle cx="43" cy="24" r="5" fill="#4C5140"/>
     <circle cx="62" cy="24" r="5" fill="#4C5140"/>
-    <text x="352" y="29" fill="#82897A" font-family="monospace" font-size="12" text-anchor="end">DEPLOYMENT</text>
+    <text x="352" y="29" fill="#82897A" font-family="monospace" font-size="12" text-anchor="end">GETTING STARTED</text>
 
-    <text x="25" y="88" fill="#82897A" font-family="monospace" font-size="15">$</text>
-    <text x="47" y="88" fill="#F1F4EE" font-family="monospace" font-size="15">jiji deploy -e production</text>
+    <text x="25" y="88" fill="#82897A" font-family="monospace" font-size="13">$</text>
+    <text x="41" y="88" fill="#F1F4EE" font-family="monospace" font-size="13">curl -fsSL get.jiji.run/install.sh | sh</text>
 
     <circle cx="31" cy="128" r="8" fill="#A3E635"/>
     <path d="M27 128L30 131L35 125" stroke="#0D1206" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="52" y="133" fill="#C9CFC0" font-family="monospace" font-size="14">Build image</text>
-    <text x="346" y="133" fill="#82897A" font-family="monospace" font-size="13" text-anchor="end">done</text>
+    <text x="52" y="133" fill="#C9CFC0" font-family="monospace" font-size="14">Install the CLI</text>
 
     <circle cx="31" cy="169" r="8" fill="#A3E635"/>
     <path d="M27 169L30 172L35 166" stroke="#0D1206" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="52" y="174" fill="#C9CFC0" font-family="monospace" font-size="14">Push registry</text>
-    <text x="346" y="174" fill="#82897A" font-family="monospace" font-size="13" text-anchor="end">done</text>
+    <text x="52" y="174" fill="#C9CFC0" font-family="monospace" font-size="14">Configure your servers</text>
 
     <circle cx="31" cy="210" r="8" fill="#A3E635"/>
     <path d="M27 210L30 213L35 207" stroke="#0D1206" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="52" y="215" fill="#C9CFC0" font-family="monospace" font-size="14">Health-gated rollout</text>
-    <text x="346" y="215" fill="#82897A" font-family="monospace" font-size="13" text-anchor="end">healthy</text>
+    <text x="52" y="215" fill="#C9CFC0" font-family="monospace" font-size="14">jiji deploy</text>
 
     <rect x="24" y="246" width="328" height="30" rx="4" fill="#1B2410"/>
-    <text x="188" y="266" fill="#C3F53C" font-family="monospace" font-size="13" text-anchor="middle">DEPLOYMENT COMPLETE</text>
+    <text x="188" y="266" fill="#C3F53C" font-family="monospace" font-size="13" text-anchor="middle">READ THE DOCS</text>
   </g>
 
   <path d="M64 526H1136" stroke="#2A2E22"/>
   <circle cx="72" cy="566" r="5" fill="#A3E635"/>
-  <text x="90" y="573" fill="#B2B8A9" font-family="monospace" font-size="18">JIJI.RUN</text>
-  <text x="1136" y="573" fill="#B2B8A9" font-family="monospace" font-size="18" text-anchor="end">DOCKER · PODMAN · CLOUD · BARE METAL · HOME LABS</text>
+  <text x="90" y="573" fill="#B2B8A9" font-family="monospace" font-size="18">JIJI.RUN/DOCS</text>
+  <text x="1136" y="573" fill="#B2B8A9" font-family="monospace" font-size="18" text-anchor="end">INSTALL · CONFIGURE · DEPLOY · MONITOR</text>
 </svg>

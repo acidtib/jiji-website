@@ -10,7 +10,7 @@ export const metadata = {
     default: 'Jiji: Open-Source Container Deployment for Linux Servers',
     template: '%s | Jiji',
   },
-  description: 'Deploy Docker and Podman containers across the servers you control — cloud, bare metal, or your own hardware — with health-gated rollouts, automatic HTTPS, and private networking built in.',
+  description: 'Your apps. Your infrastructure. Anywhere. Jiji deploys Docker and Podman containers to the servers you control (cloud, bare metal, or your own hardware) with health-gated rollouts, automatic HTTPS, and private networking built in.',
   applicationName: 'Jiji',
   authors: [{ name: 'Jiji', url: 'https://github.com/acidtib/jiji' }],
   creator: 'Jiji',
@@ -24,6 +24,8 @@ export const metadata = {
     'WireGuard',
     'self-hosting',
     'Linux servers',
+    'no vendor lock-in',
+    'SSH deployment CLI',
   ],
   robots: {
     index: true,
@@ -47,18 +49,9 @@ export const metadata = {
     type: 'website',
     siteName: 'Jiji',
     locale: 'en_US',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Jiji open-source container deployment for Linux servers',
-      },
-    ],
   },
   twitter: {
     card: 'summary_large_image',
-    images: ['/og-image.png'],
   },
 }
 

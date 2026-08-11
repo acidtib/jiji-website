@@ -43,7 +43,6 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'Jiji Documentation',
     description: 'Installation, deployment guides, architecture, and reference documentation for Jiji.',
-    images: ['/docs/twitter-image.png'],
   },
 }
 

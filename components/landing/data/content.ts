@@ -151,30 +151,24 @@ export const INITIAL_NODES: ServerNode[] = [
 export const TOP_FEATURE_CARDS: FeatureCardItem[] = [
   {
     id: 'f-1',
-    title: 'BRING YOUR LINUX SERVERS',
-    badge: 'SSH & ROOT/SUDO',
-    description: 'Deploy across supported Linux cloud VMs, bare metal, home labs, or multiple providers. Jiji connects over SSH and works with root or sudo access.',
-    details: 'Connect AWS, Hetzner, DigitalOcean, OVHcloud, or your own bare metal hardware over standard SSH without installing complex Kubernetes clusters.',
-    iconName: 'Server',
-    techSpecs: ['AWS / Hetzner / DigitalOcean / Bare Metal', 'Standard SSH authentication', 'Docker or Podman engine support', 'No hosted platform required']
+    title: 'YOUR INFRASTRUCTURE',
+    badge: 'RUN IT WHERE YOU WANT',
+    description: 'Cloud VMs, dedicated servers, bare metal, or hardware at home. If it runs Linux and you control it, Jiji can make it part of your deployment workflow.',
+    iconName: 'Server'
   },
   {
     id: 'f-2',
     title: 'KEEP COSTS PREDICTABLE',
     badge: 'DIRECT BILLING',
     description: 'Pay infrastructure providers directly and grow on your terms. Keep the same deployment workflow as you add servers and move across providers.',
-    details: 'Because Jiji is a free open-source CLI, you pay $0 in vendor markup fees or managed cluster subscriptions.',
-    iconName: 'DollarSign',
-    techSpecs: ['Direct provider billing', '100% Open source (MIT)', 'One workflow as you grow', 'No per-container tax']
+    iconName: 'DollarSign'
   },
   {
     id: 'f-3',
     title: 'PRIVATE NETWORKING BUILT IN',
     badge: 'ENCRYPTED MESH',
     description: 'Jiji connects your servers with an encrypted WireGuard network and private DNS, so services can communicate across hosts without exposing internal traffic publicly.',
-    details: 'Encrypted communication between nodes across any provider without exposing backend database ports to the open internet.',
-    iconName: 'ShieldCheck',
-    techSpecs: ['Encrypted WireGuard mesh', 'Private DNS resolution', 'Minimal exposure surface', 'Secrets stay out of deployment command strings']
+    iconName: 'ShieldCheck'
   }
 ];
 

@@ -49,8 +49,7 @@ export interface FeatureCardItem {
   badge: string;
   description: string;
   iconName: string;
-  details: string;
-  techSpecs?: string[];
+  details?: string;
 }
 
 export interface LiveTrafficLog {

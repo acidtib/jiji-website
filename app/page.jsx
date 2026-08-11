@@ -1,7 +1,8 @@
 import LandingPage from '@/components/landing/LandingPage'
 
 const title = 'Jiji: Open-Source Container Deployment for Linux Servers'
-const description = 'Deploy Docker and Podman containers across the servers you control — cloud, bare metal, or your own hardware — with health-gated rollouts, automatic HTTPS, and private networking built in.'
+const tagline = 'Your apps. Your infrastructure. Anywhere.'
+const description = 'Jiji deploys Docker and Podman containers to the servers you control (cloud, bare metal, or your own hardware) with health-gated rollouts, automatic HTTPS, and private networking built in.'
 
 export const metadata = {
   title: {
@@ -12,15 +13,14 @@ export const metadata = {
     canonical: '/',
   },
   openGraph: {
-    title,
+    title: tagline,
     description,
     url: '/',
   },
   twitter: {
     card: 'summary_large_image',
-    title,
+    title: tagline,
     description,
-    images: ['/twitter-image.png'],
   },
 }
 
