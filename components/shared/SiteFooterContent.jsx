@@ -81,6 +81,16 @@ export function SiteFooterContent() {
                   Discord
                 </a>
               </li>
+              <li>
+                <Link href="/terms" className="hover:text-lime-400 transition cursor-pointer">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="hover:text-lime-400 transition cursor-pointer">
+                  Privacy Policy
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
