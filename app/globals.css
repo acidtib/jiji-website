@@ -21,9 +21,9 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  --font-sans: 'Archivo', system-ui, sans-serif;
-  --font-mono: 'Courier Prime', ui-monospace, monospace;
-  --font-display: 'Big Shoulders Display', system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: 'Syne', 'Plus Jakarta Sans', sans-serif;
 }
 
 @layer base {
@@ -91,20 +91,19 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Archivo', system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }
 
   code, pre, .font-mono {
-    font-family: 'Courier Prime', ui-monospace, monospace;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
   }
 
   .font-display {
-    font-family: 'Big Shoulders Display', system-ui, sans-serif;
-    font-stretch: condensed;
+    font-family: 'Syne', 'Plus Jakarta Sans', sans-serif;
   }
 
   .font-heading {
-    font-family: 'Big Shoulders Display', system-ui, sans-serif;
+    font-family: 'Syne', 'Plus Jakarta Sans', sans-serif;
   }
 }
 
@@ -144,22 +143,6 @@
 
 .animate-pulse-subtle {
   animation: pulse-subtle 3s infinite ease-in-out;
-}
-
-/* New landing page uses its own type system, scoped so /old-home and /docs keep Archivo/Big Shoulders. */
-.jiji-landing {
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-}
-
-.jiji-landing code,
-.jiji-landing pre,
-.jiji-landing .font-mono {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-}
-
-.jiji-landing .font-heading {
-  font-family: 'Syne', 'Plus Jakarta Sans', sans-serif;
 }
 
 .skip-link {
