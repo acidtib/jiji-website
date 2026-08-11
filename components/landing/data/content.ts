@@ -13,40 +13,29 @@ export const INITIAL_NODES: ServerNode[] = [
     ramTotal: 32,
     diskUsed: 42,
     diskTotal: 500,
-    containersCount: 4,
     status: 'healthy',
     containers: [
       {
         id: 'c-101',
         name: 'jiji-proxy',
         image: 'jiji/proxy:v2.4.0',
-        port: '443:3000',
+        port: '80:80, 443:443',
         status: 'running',
         cpu: '1.4%',
         ram: '64 MB',
         uptime: '14d 6h',
-        ssl: true,
-        logs: [
-          '[jiji-proxy] Automatic Let\'s Encrypt TLS certificate issued for api.example.com',
-          '[jiji-proxy] Routing GET /v1/health -> Candidate container (myapp-api.jiji)',
-          '[jiji-proxy] Health-gated traffic switch completed in 542ms'
-        ]
+        ssl: true
       },
       {
         id: 'c-102',
-        name: 'myapp-api-primary',
+        name: 'myapp-api-8f31c2a4b91e',
         image: 'registry.example.com/myapp:8f31c2a',
-        port: '3000:3000',
+        port: '3000',
         status: 'running',
         cpu: '3.2%',
         ram: '180 MB',
         uptime: '14d 6h',
-        ssl: true,
-        logs: [
-          '[myapp-api] Server listening on 0.0.0.0:3000',
-          '[myapp-api] Registered in service catalog as myapp-api.jiji',
-          '[myapp-api] Health probe GET /health responded 200 OK (2ms)'
-        ]
+        ssl: true
       }
     ]
   },
@@ -62,23 +51,29 @@ export const INITIAL_NODES: ServerNode[] = [
     ramTotal: 16,
     diskUsed: 28,
     diskTotal: 160,
-    containersCount: 3,
     status: 'healthy',
     containers: [
       {
+        id: 'c-200',
+        name: 'jiji-proxy',
+        image: 'jiji/proxy:v2.4.0',
+        port: '80:80, 443:443',
+        status: 'running',
+        cpu: '1.1%',
+        ram: '61 MB',
+        uptime: '14d 6h',
+        ssl: true
+      },
+      {
         id: 'c-201',
-        name: 'myapp-api-secondary',
+        name: 'myapp-api-8f31c2a4b91e',
         image: 'registry.example.com/myapp:8f31c2a',
-        port: '3000:3000',
+        port: '3000',
         status: 'running',
         cpu: '2.8%',
         ram: '175 MB',
         uptime: '14d 6h',
-        ssl: true,
-        logs: [
-          '[myapp-api] Discoverable at myapp-api.jiji from any server',
-          '[myapp-api] Health check passed: 200 OK'
-        ]
+        ssl: true
       }
     ]
   },
@@ -94,23 +89,29 @@ export const INITIAL_NODES: ServerNode[] = [
     ramTotal: 8,
     diskUsed: 18,
     diskTotal: 80,
-    containersCount: 2,
     status: 'healthy',
     containers: [
+      {
+        id: 'c-300',
+        name: 'jiji-proxy',
+        image: 'jiji/proxy:v2.4.0',
+        port: '80:80, 443:443',
+        status: 'running',
+        cpu: '0.4%',
+        ram: '58 MB',
+        uptime: '30d 1h',
+        ssl: true
+      },
       {
         id: 'c-301',
         name: 'worker-service',
         image: 'registry.example.com/worker:8f31c2a',
-        port: '8080:8080',
+        port: '8080',
         status: 'running',
         cpu: '1.2%',
         ram: '98 MB',
         uptime: '30d 1h',
-        ssl: false,
-        logs: [
-          '[worker] Connected to myapp-database.jiji:5432',
-          '[worker] Processing scheduled cron tasks...'
-        ]
+        ssl: false
       }
     ]
   },
@@ -126,23 +127,29 @@ export const INITIAL_NODES: ServerNode[] = [
     ramTotal: 64,
     diskUsed: 180,
     diskTotal: 1000,
-    containersCount: 2,
     status: 'healthy',
     containers: [
+      {
+        id: 'c-400',
+        name: 'jiji-proxy',
+        image: 'jiji/proxy:v2.4.0',
+        port: '80:80, 443:443',
+        status: 'running',
+        cpu: '0.3%',
+        ram: '57 MB',
+        uptime: '60d 12h',
+        ssl: true
+      },
       {
         id: 'c-401',
         name: 'postgres-primary',
         image: 'postgres:16-alpine',
-        port: '5432:5432',
+        port: '5432',
         status: 'running',
         cpu: '18.4%',
         ram: '4.2 GB',
         uptime: '60d 12h',
-        ssl: true,
-        logs: [
-          '[postgres] Accepting connections on the private project network',
-          '[postgres] WAL replication sync active'
-        ]
+        ssl: false
       }
     ]
   }

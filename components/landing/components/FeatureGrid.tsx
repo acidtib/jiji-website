@@ -35,10 +35,13 @@ services:
   api:
     build:
       context: .
-    servers: [web1, web2]
+    servers:
+      - web1
+      - web2
     proxy:
       port: 3000
-      hosts: [api.example.com]
+      hosts:
+        - api.example.com
       ssl: true`;
 
   const sampleRolloutOutput = `$ jiji deploy --build             PRODUCTION

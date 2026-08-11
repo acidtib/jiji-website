@@ -33,7 +33,7 @@ export default function LandingPage() {
         <ServerRolloutSection />
 
         {/* Section 3: Four Hosts, One Private Network (Interactive Dashboard) */}
-        <DashboardShowcase onShowToast={showToast} />
+        <DashboardShowcase />
 
         {/* Section 4: Where JIJI Fits */}
         <EcosystemSection />

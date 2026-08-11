@@ -1,77 +1,57 @@
 import React, { useState } from 'react';
-import { Server, Cpu, HardDrive, Database, Terminal, FileCode, Activity, CheckCircle2, AlertTriangle, Play, RefreshCw, Layers, Shield } from 'lucide-react';
+import { Server, Cpu, HardDrive, Database, FileCode, Activity, CheckCircle2, AlertTriangle, Play, Layers, Shield } from 'lucide-react';
 import { INITIAL_NODES } from '../data/content';
-import { ServerNode, ContainerItem } from '../types';
 
-interface DashboardShowcaseProps {
-  onShowToast: (msg: string) => void;
-}
+const PROJECT_CONFIG_YAML = `project: myapp
 
-export const DashboardShowcase: React.FC<DashboardShowcaseProps> = ({
-  onShowToast
-}) => {
-  const [nodes, setNodes] = useState<ServerNode[]>(INITIAL_NODES);
+servers:
+  web1:
+    host: web1.example.com
+  web2:
+    host: web2.example.com
+  app1:
+    host: app1.example.com
+  data1:
+    host: data1.example.com
+
+services:
+  api:
+    image: registry.example.com/myapp:8f31c2a
+    servers:
+      - web1
+      - web2
+    replicas: 2
+    ports:
+      - "3000"
+    proxy:
+      port: 3000
+      hosts:
+        - api.example.com
+      ssl: true
+      healthcheck:
+        path: /health
+        interval: 10s
+
+  worker:
+    image: registry.example.com/worker:8f31c2a
+    servers:
+      - app1
+
+  database:
+    image: postgres:16-alpine
+    servers:
+      - data1
+    volumes:
+      - "/data/postgres:/var/lib/postgresql/data"`;
+
+export const DashboardShowcase: React.FC = () => {
+  const nodes = INITIAL_NODES;
   const [selectedNodeId, setSelectedNodeId] = useState<string>('node-01');
-  const [activeTab, setActiveTab] = useState<'containers' | 'logs' | 'compose'>('containers');
+  const [activeTab, setActiveTab] = useState<'containers' | 'compose'>('containers');
   const [selectedContainerId, setSelectedContainerId] = useState<string>('c-101');
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || nodes[0];
-  const selectedContainer = selectedNode.containers.find((c) => c.id === selectedContainerId) || selectedNode.containers[0];
-
-  const handleRestartContainer = (containerName: string) => {
-    onShowToast(`Restarting container ${containerName}...`);
-    // update status temporarily
-    setNodes((prev) =>
-      prev.map((node) => {
-        if (node.id === selectedNode.id) {
-          return {
-            ...node,
-            containers: node.containers.map((c) =>
-              c.name === containerName
-                ? { ...c, status: 'restarting' as const }
-                : c
-            )
-          };
-        }
-        return node;
-      })
-    );
-
-    setTimeout(() => {
-      setNodes((prev) =>
-        prev.map((node) => {
-          if (node.id === selectedNode.id) {
-            return {
-              ...node,
-              containers: node.containers.map((c) =>
-                c.name === containerName
-                  ? { ...c, status: 'running' as const }
-                  : c
-              )
-            };
-          }
-          return node;
-        })
-      );
-      onShowToast(`Container ${containerName} is healthy and live!`);
-    }, 1500);
-  };
-
-  const sampleConfigYaml = `project: myapp
-
-services:
-  ${selectedContainer?.name || 'web-app'}:
-    image: ${selectedContainer?.image || 'ghcr.io/example/web-app:latest'}
-    servers: [${selectedNode.name}]
-    ports:
-      - "${(selectedContainer?.port || '3000:3000').split(':')[1] || '3000'}"
-    proxy:
-      port: ${(selectedContainer?.port || '3000:3000').split(':')[1] || '3000'}
-      hosts: [api.example.com]
-      ssl: ${selectedContainer?.ssl ? 'true' : 'false'}
-      healthcheck:
-        path: /health
-        interval: 10s`;
+  const totalContainers = nodes.reduce((sum, node) => sum + node.containers.length, 0);
 
   return (
     <section id="topology" className="py-20 bg-[#060806] relative overflow-hidden border-t border-zinc-800/80">
@@ -99,14 +79,6 @@ services:
                 <Server className="w-4 h-4" />
                 <span>JIJI CLUSTER</span>
               </div>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-500 text-[10px] tracking-wider">
-                ILLUSTRATIVE
-              </span>
-              <span className="text-zinc-500">|</span>
-              <div className="flex items-center gap-2 text-zinc-400">
-                <span className="w-2 h-2 rounded-full bg-lime-400 animate-ping"></span>
-                <span>Private Network: <span className="text-lime-400 font-bold">CONNECTED</span></span>
-              </div>
             </div>
 
             {/* View Switcher Tabs */}
@@ -118,17 +90,7 @@ services:
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>Containers ({selectedNode.containers.length})</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('logs')}
-                className={`px-3 py-1.5 rounded transition cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'logs' ? 'bg-lime-950 text-lime-400 border border-lime-500/40 font-bold' : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <Terminal className="w-3.5 h-3.5" />
-                <span>Logs Stream</span>
+                <span>Containers</span>
               </button>
 
               <button
@@ -216,10 +178,13 @@ services:
                       <div>
                         <div className="flex justify-between text-zinc-400 mb-1">
                           <span>CONTAINERS</span>
-                          <span className="text-white font-bold">{node.containersCount}</span>
+                          <span className="text-white font-bold">{node.containers.length}</span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                          <div className="h-full bg-emerald-500 rounded-full w-4/5"></div>
+                          <div
+                            className="h-full bg-emerald-500 rounded-full"
+                            style={{ width: `${Math.min((node.containers.length / 4) * 100, 100)}%` }}
+                          ></div>
                         </div>
                       </div>
                     </div>
@@ -285,16 +250,6 @@ services:
                             <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px]">
                               {container.port}
                             </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRestartContainer(container.name);
-                              }}
-                              className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition cursor-pointer"
-                              title="Restart container"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                            </button>
                           </div>
                         </div>
 
@@ -309,53 +264,17 @@ services:
                 </div>
               )}
 
-              {activeTab === 'logs' && (
+              {activeTab === 'compose' && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                    <div className="flex items-center gap-2">
-                      <Terminal className="w-4 h-4 text-lime-400" />
-                      <span className="font-bold text-white">
-                        Streaming logs: {selectedContainer?.name || 'container'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-lime-400 bg-lime-950 px-2 py-0.5 rounded border border-lime-800">
-                      SAMPLE LOG OUTPUT
+                  <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
+                    <FileCode className="w-4 h-4 text-lime-400" />
+                    <span className="font-bold text-white">
+                      .jiji/deploy.yml
                     </span>
                   </div>
 
-                  <div className="bg-[#050705] border border-zinc-800 rounded-lg p-3 font-mono text-[11px] text-zinc-300 h-[280px] overflow-y-auto space-y-1.5">
-                    {selectedContainer?.logs?.map((line, idx) => (
-                      <div key={idx} className="leading-relaxed hover:bg-zinc-900/60 p-1 rounded">
-                        <span className="text-zinc-500 font-semibold">{line.split(' ')[0]} </span>
-                        <span className="text-lime-300">{line.substring(line.indexOf(' ') + 1)}</span>
-                      </div>
-                    )) || <div>No logs available</div>}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'compose' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                    <div className="flex items-center gap-2">
-                      <FileCode className="w-4 h-4 text-lime-400" />
-                      <span className="font-bold text-white">
-                        .jiji/deploy.yml configuration
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(sampleConfigYaml);
-                        onShowToast('Config YAML copied!');
-                      }}
-                      className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] rounded transition cursor-pointer"
-                    >
-                      Copy YAML
-                    </button>
-                  </div>
-
-                  <pre className="bg-[#050705] border border-zinc-800 rounded-lg p-3 font-mono text-[11px] text-lime-300 h-[280px] overflow-y-auto">
-                    {sampleConfigYaml}
+                  <pre className="bg-[#050705] border border-zinc-800 rounded-lg p-3 font-mono text-[11px] text-lime-300 max-h-[475px] overflow-y-auto">
+                    {PROJECT_CONFIG_YAML}
                   </pre>
                 </div>
               )}
@@ -366,13 +285,10 @@ services:
           <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-3 bg-zinc-950 border-t border-zinc-800 text-zinc-400 text-xs">
             <div className="flex items-center gap-6">
               <div>
-                NODES: <strong className="text-white">4</strong>
+                NODES: <strong className="text-white">{nodes.length}</strong>
               </div>
               <div>
-                CONTAINERS: <strong className="text-lime-400">18 ACTIVE</strong>
-              </div>
-              <div>
-                REPLICAS: <strong className="text-white">11 ACTIVE</strong>
+                CONTAINERS: <strong className="text-lime-400">{totalContainers} ACTIVE</strong>
               </div>
             </div>
 

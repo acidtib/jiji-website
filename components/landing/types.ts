@@ -23,7 +23,6 @@ export interface ContainerItem {
   ram: string;
   uptime: string;
   ssl: boolean;
-  logs?: string[];
 }
 
 export interface ServerNode {
@@ -39,7 +38,6 @@ export interface ServerNode {
   diskUsed?: number;
   diskTotal?: number;
   status?: string;
-  containersCount: number;
   containers: ContainerItem[];
 }
 
