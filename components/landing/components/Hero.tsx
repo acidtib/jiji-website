@@ -19,7 +19,7 @@ export const Hero: React.FC<HeroProps> = ({ onShowToast }) => {
   };
 
   return (
-    <section className="relative pt-20 sm:pt-28 md:pt-36 pb-20 sm:pb-28 md:pb-36 overflow-hidden bg-zinc-950">
+    <section className="relative bg-[#060806] pt-20 sm:pt-28 md:pt-36 pb-20 sm:pb-28 md:pb-36 overflow-hidden">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
         <h1 className="font-heading uppercase text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight text-white max-w-4xl mx-auto leading-snug sm:leading-tight mb-5">
           Your apps. Your infrastructure.

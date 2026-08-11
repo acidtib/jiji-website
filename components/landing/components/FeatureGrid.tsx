@@ -65,50 +65,6 @@ HEALTH-GATED ROLLOUT                   2 / 2 healthy
   return (
     <section id="tools" className="py-20 bg-[#060806] border-t border-zinc-800/80 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section 5: From Config to Healthy Containers */}
-        <div className="max-w-3xl mb-10">
-          <div className="text-xs font-mono font-bold text-lime-400 uppercase tracking-widest mb-2">
-            // SIMPLE CONFIGURATION
-          </div>
-          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-extrabold uppercase text-white tracking-tight">
-            FROM CONFIG TO <span className="text-lime-400">HEALTHY CONTAINERS</span>
-          </h2>
-          <p className="mt-2 text-sm sm:text-base text-zinc-300 font-sans">
-            Describe your deployment once. Jiji handles the rollout from image to healthy traffic across your servers.
-          </p>
-        </div>
-
-        {/* Side-by-Side Config & Terminal Preview */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-20 font-mono text-xs">
-          {/* Left: YAML Config */}
-          <div className="lg:col-span-5 bg-[#0a0d0a] border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
-            <div className="px-4 py-3 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between text-zinc-400">
-              <div className="flex items-center gap-2">
-                <Code2 className="w-4 h-4 text-lime-400" />
-                <span className="font-bold text-white">CONFIG: .jiji/deploy.yml</span>
-              </div>
-              <span className="text-[10px] text-zinc-500">YAML</span>
-            </div>
-            <pre className="p-4 text-zinc-300 leading-relaxed overflow-x-auto text-[11px]">
-              {sampleYamlConfig}
-            </pre>
-          </div>
-
-          {/* Right: Rollout Command Output */}
-          <div className="lg:col-span-7 bg-[#070a07] border border-zinc-800 rounded-xl overflow-hidden shadow-xl green-border-glow">
-            <div className="px-4 py-3 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between text-zinc-400">
-              <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-lime-400" />
-                <span className="font-bold text-white">OUTPUT: DEPLOY COMPLETE</span>
-              </div>
-              <span className="text-[10px] bg-lime-950 text-lime-400 border border-lime-800 px-2 py-0.5 rounded font-bold">HEALTHY</span>
-            </div>
-            <pre className="p-4 text-lime-300 leading-relaxed overflow-x-auto text-[11px]">
-              {sampleRolloutOutput}
-            </pre>
-          </div>
-        </div>
-
         {/* Section 6: Production Tools Ready to Use */}
         <div className="max-w-3xl mb-12">
           <div className="text-xs font-mono font-bold text-lime-400 uppercase tracking-widest mb-2">

@@ -58,16 +58,13 @@ export const DashboardShowcase: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Title Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-mono text-lime-400 mb-3">
-            <span className="w-2 h-2 rounded-full bg-lime-400"></span>
-            ILLUSTRATIVE TOPOLOGY
-          </div>
           <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-extrabold uppercase text-white tracking-tight">
-            SERVICE TOPOLOGY: <span className="text-lime-400">FOUR HOSTS, ONE PRIVATE NETWORK</span>
+            ONE PRIVATE NETWORK. <span className="text-lime-400">EVERY SERVER.</span>
           </h2>
           <p className="mt-2 text-sm sm:text-base text-zinc-300 font-sans">
-            Every server you add joins one private network with its own DNS, so services find each other by name across clouds, datacenters, or your own hardware. Below is an illustrative topology showing how a four-host Jiji deployment can fit together.
+            Add servers wherever you need them across cloud providers, datacenters, or your own hardware. Jiji connects them with private networking and service discovery, so your applications can communicate across machines by name.
           </p>
+          <p className="mt-2 text-sm sm:text-base text-zinc-300 font-sans">Below is an example of how a multi-server Jiji deployment can fit together.</p>
         </div>
 
         {/* Dashboard Shell Container */}
