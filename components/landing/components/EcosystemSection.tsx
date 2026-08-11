@@ -72,7 +72,7 @@ export const EcosystemSection: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[10px] font-bold px-2.5 py-1 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
-                  ENTERPRISE SCALE
+                  FULL ORCHESTRATION
                 </span>
                 <span className="text-zinc-500">K8S</span>
               </div>

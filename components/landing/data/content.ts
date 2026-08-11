@@ -156,7 +156,7 @@ export const TOP_FEATURE_CARDS: FeatureCardItem[] = [
     description: 'Deploy across supported Linux cloud VMs, bare metal, home labs, or multiple providers. Jiji connects over SSH and works with root or sudo access.',
     details: 'Connect AWS, Hetzner, DigitalOcean, OVHcloud, or your own bare metal hardware over standard SSH without installing complex Kubernetes clusters.',
     iconName: 'Server',
-    techSpecs: ['AWS / Hetzner / DigitalOcean / Bare Metal', 'Standard SSH authentication', 'Docker or Podman engine support', 'Zero PaaS overhead']
+    techSpecs: ['AWS / Hetzner / DigitalOcean / Bare Metal', 'Standard SSH authentication', 'Docker or Podman engine support', 'No hosted platform required']
   },
   {
     id: 'f-2',
@@ -208,7 +208,7 @@ export const DEEP_DIVE_FEATURES: FeatureCardItem[] = [
     title: 'STANDARD CONTAINER REGISTRIES',
     badge: '04/06 IMAGES',
     description: 'Use standard container registries such as GHCR, Docker Hub, ECR, or Artifact Registry, or use Jiji\'s local registry workflow over SSH.',
-    details: 'Build container images locally on your machine or CI runner and push directly to your servers or any container registry.',
+    details: 'Build container images locally or in CI, then deliver them through a standard container registry or Jiji\'s SSH-based local registry workflow.',
     iconName: 'Database'
   },
   {
