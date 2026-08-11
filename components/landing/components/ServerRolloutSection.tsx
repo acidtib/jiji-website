@@ -29,7 +29,7 @@ export const ServerRolloutSection: React.FC = () => {
             <span className="text-lime-400">ROLL OUT SAFELY.</span>
           </h2>
           <p className="mt-3 text-sm sm:text-base text-zinc-300 font-sans leading-relaxed">
-            Turn ordinary Linux servers into a repeatable deployment target with health checks, automatic HTTPS, private networking, and service discovery built in.
+            Turn the Linux servers you already control into one repeatable deployment target, with health-gated rollouts, automatic HTTPS, private networking, and service discovery built in.
           </p>
         </div>
 

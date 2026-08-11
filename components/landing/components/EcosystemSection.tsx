@@ -31,12 +31,12 @@ export const EcosystemSection: React.FC = () => {
                 DOCKER COMPOSE
               </h3>
               <p className="text-zinc-400 font-sans text-xs sm:text-sm leading-relaxed mb-6">
-                Great for single server setups, but lacks multi node orchestration, zero-downtime deploys, and automated mesh networking.
+                Great for single-server setups, but it does not provide Jiji's multi-server coordination, health-gated rollout workflow, or built-in private mesh networking.
               </p>
             </div>
             <div className="space-y-2 pt-4 border-t border-zinc-800 text-[11px] text-zinc-500">
-              <div className="flex items-center gap-2"><span>✗</span> <span>Single host limitation</span></div>
-              <div className="flex items-center gap-2"><span>✗</span> <span>Manual downtime during updates</span></div>
+              <div className="flex items-center gap-2"><span>✗</span> <span>Designed around a single Docker host</span></div>
+              <div className="flex items-center gap-2"><span>✗</span> <span>No built-in health-gated rollout workflow</span></div>
             </div>
           </div>
 
@@ -80,12 +80,12 @@ export const EcosystemSection: React.FC = () => {
                 KUBERNETES
               </h3>
               <p className="text-zinc-400 font-sans text-xs sm:text-sm leading-relaxed mb-6">
-                Incredible power and ecosystem, but requires dedicated platform engineering, managed service fees, and steep learning curves.
+                Powerful and flexible, but it brings substantially more infrastructure, operational machinery, and a steeper learning curve.
               </p>
             </div>
             <div className="space-y-2 pt-4 border-t border-zinc-800 text-[11px] text-zinc-500">
-              <div className="flex items-center gap-2"><span>!</span> <span>High operational complexity</span></div>
-              <div className="flex items-center gap-2"><span>!</span> <span>Costly control plane nodes</span></div>
+              <div className="flex items-center gap-2"><span>!</span> <span>More operational complexity</span></div>
+              <div className="flex items-center gap-2"><span>!</span> <span>More infrastructure to manage</span></div>
             </div>
           </div>
         </div>

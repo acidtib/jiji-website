@@ -71,7 +71,7 @@ HEALTH-GATED ROLLOUT                   2 / 2 healthy
             FROM CONFIG TO <span className="text-lime-400">HEALTHY CONTAINERS</span>
           </h2>
           <p className="mt-2 text-sm sm:text-base text-zinc-300 font-sans">
-            Describe the desired deployment once. Jiji builds, pushes, starts, health-checks, and switches traffic with <code className="text-lime-400 bg-zinc-900 px-1.5 py-0.5 rounded font-mono text-xs">jiji deploy</code>.
+            Describe your deployment once. Jiji handles the rollout from image to healthy traffic across your servers.
           </p>
         </div>
 
@@ -115,7 +115,7 @@ HEALTH-GATED ROLLOUT                   2 / 2 healthy
             PRODUCTION TOOLS, <span className="text-lime-400">READY TO USE</span>
           </h2>
           <p className="mt-2 text-sm sm:text-base text-zinc-300 font-sans">
-            Deploy, secure, observe, and operate applications across servers from one CLI.
+            Deploy and operate applications across your servers from one CLI, with networking, HTTPS, health checks, logs, and scheduled jobs built in.
           </p>
         </div>
 
@@ -155,7 +155,7 @@ HEALTH-GATED ROLLOUT                   2 / 2 healthy
               THERE IS MORE UNDER THE HOOD
             </div>
             <div className="text-zinc-400 font-sans">
-              Explore networking, scheduled jobs, encrypted backups, logs, and the complete CLI command surface.
+              Explore networking, scheduled jobs, encrypted network backups, logs, and the complete CLI command surface.
             </div>
           </div>
           <Link

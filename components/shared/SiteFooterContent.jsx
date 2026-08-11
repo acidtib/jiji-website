@@ -17,7 +17,7 @@ export function SiteFooterContent() {
             </div>
 
             <p className="text-zinc-400 font-sans text-xs leading-relaxed max-w-sm">
-              Deploy containers across the Linux servers you control, with health-gated rollouts, automatic HTTPS, and private networking built in.
+              Deploy your apps across the Linux servers you control, with health-gated rollouts, automatic HTTPS, and private networking built in.
             </p>
 
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-lime-400">

@@ -153,7 +153,7 @@ export const TOP_FEATURE_CARDS: FeatureCardItem[] = [
     id: 'f-1',
     title: 'BRING YOUR LINUX SERVERS',
     badge: 'SSH & ROOT/SUDO',
-    description: 'Deploy to supported Linux cloud VMs, bare metal, home labs, or across providers using SSH and root or sudo access.',
+    description: 'Deploy across supported Linux cloud VMs, bare metal, home labs, or multiple providers. Jiji connects over SSH and works with root or sudo access.',
     details: 'Connect AWS, Hetzner, DigitalOcean, OVHcloud, or your own bare metal hardware over standard SSH without installing complex Kubernetes clusters.',
     iconName: 'Server',
     techSpecs: ['AWS / Hetzner / DigitalOcean / Bare Metal', 'Standard SSH authentication', 'Docker or Podman engine support', 'Zero PaaS overhead']
@@ -162,19 +162,19 @@ export const TOP_FEATURE_CARDS: FeatureCardItem[] = [
     id: 'f-2',
     title: 'KEEP COSTS PREDICTABLE',
     badge: 'DIRECT BILLING',
-    description: 'Pay infrastructure providers directly and scale on your terms. Your deployment workflow stays the same as servers and traffic grow.',
+    description: 'Pay infrastructure providers directly and grow on your terms. Keep the same deployment workflow as you add servers and move across providers.',
     details: 'Because Jiji is a free open-source CLI, you pay $0 in vendor markup fees or managed cluster subscriptions.',
     iconName: 'DollarSign',
-    techSpecs: ['Direct provider billing', '100% Open source (MIT)', 'Identical workflow at any scale', 'No per-container tax']
+    techSpecs: ['Direct provider billing', '100% Open source (MIT)', 'One workflow as you grow', 'No per-container tax']
   },
   {
     id: 'f-3',
-    title: 'PRIVATE BY DEFAULT',
+    title: 'PRIVATE NETWORKING BUILT IN',
     badge: 'ENCRYPTED MESH',
-    description: 'Jiji connects servers with an encrypted WireGuard network and private DNS. Service-to-service and proxy-to-backend traffic uses the mesh.',
+    description: 'Jiji connects your servers with an encrypted WireGuard network and private DNS, so services can communicate across hosts without exposing internal traffic publicly.',
     details: 'Encrypted communication between nodes across any provider without exposing backend database ports to the open internet.',
     iconName: 'ShieldCheck',
-    techSpecs: ['Encrypted WireGuard mesh', 'Private DNS resolution', 'Minimal exposure surface', 'Secrets never appear in commands or logs']
+    techSpecs: ['Encrypted WireGuard mesh', 'Private DNS resolution', 'Minimal exposure surface', 'Secrets stay out of deployment command strings']
   }
 ];
 
@@ -199,15 +199,15 @@ export const DEEP_DIVE_FEATURES: FeatureCardItem[] = [
     id: 'dd-3',
     title: 'SECRETS MANAGEMENT',
     badge: '03/06 SECURITY',
-    description: 'Load secrets from environment files without logging them or placing sensitive tokens in command strings.',
+    description: 'Load secrets from environment files without placing them in deployment command strings or Jiji\'s own logs.',
     details: 'Keep production credentials out of your shell history and process list. Secrets are staged into containers as files, never as command-line arguments.',
     iconName: 'Key'
   },
   {
     id: 'dd-4',
-    title: 'ANY REGISTRY',
+    title: 'STANDARD CONTAINER REGISTRIES',
     badge: '04/06 IMAGES',
-    description: 'Use a standard container registry (GHCR, Docker Hub, ECR, GCP Artifact Registry) or tunnel a local registry directly over SSH.',
+    description: 'Use standard container registries such as GHCR, Docker Hub, ECR, or Artifact Registry, or use Jiji\'s local registry workflow over SSH.',
     details: 'Build container images locally on your machine or CI runner and push directly to your servers or any container registry.',
     iconName: 'Database'
   },
@@ -241,8 +241,8 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: 'faq-2',
     category: 'Rollbacks',
     question: 'WHAT HAPPENS IF A ROLLOUT FAILS?',
-    answer: 'Jiji evaluates candidate health probes before routing live traffic. If candidate containers fail to start or pass health checks, the CLI discards the failed containers, reports the failure details, and leaves the currently healthy deployment serving traffic without interruption.',
-    codeSnippet: '03 Start candidates [ROLLOUT ACROSS 2 SERVERS] ... FAILED\nHealth probe GET /health failed (500 Internal Server Error)\n✓ Rolled back automatically. Previous healthy release active.'
+    answer: 'Jiji evaluates candidate health probes before routing live traffic. If candidate containers fail to start or pass health checks, the CLI discards the failed containers, reports the failure details, and leaves the currently healthy deployment serving traffic without interruption. For a manual rollback to a previously deployed version, use `jiji service rollback --version <tag>`.',
+    codeSnippet: '03 Start candidates [ROLLOUT ACROSS 2 SERVERS] ... FAILED\nHealth probe GET /health failed (500 Internal Server Error)\n✓ Failed candidate discarded. Previous healthy release still serving traffic.'
   },
   {
     id: 'faq-3',
@@ -255,7 +255,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: 'faq-4',
     category: 'Registries',
     question: 'WHICH CONTAINER REGISTRIES CAN I USE?',
-    answer: 'You can use any standard container registry (GitHub Container Registry, Docker Hub, AWS ECR, GCP Artifact Registry, or a self-hosted registry) or tunnel a local image registry directly over SSH during build.',
+    answer: 'You can use standard container registries (GitHub Container Registry, Docker Hub, AWS ECR, GCP Artifact Registry, or a self-hosted registry) or tunnel a local image registry directly over SSH during build.',
     codeSnippet: 'services:\n  api:\n    image: ghcr.io/myorg/myapp-api:latest'
   },
   {

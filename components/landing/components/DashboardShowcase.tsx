@@ -80,13 +80,13 @@ services:
         <div className="text-center max-w-3xl mx-auto mb-12">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-mono text-lime-400 mb-3">
             <span className="w-2 h-2 rounded-full bg-lime-400"></span>
-            EXAMPLE DEPLOYMENT
+            ILLUSTRATIVE TOPOLOGY
           </div>
           <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-extrabold uppercase text-white tracking-tight">
             SERVICE TOPOLOGY: <span className="text-lime-400">FOUR HOSTS, ONE PRIVATE NETWORK</span>
           </h2>
           <p className="mt-2 text-sm sm:text-base text-zinc-300 font-sans">
-            Every server you add joins one private network with its own DNS, so services find each other by name across clouds, datacenters, or your own hardware. An illustrative project below.
+            Every server you add joins one private network with its own DNS, so services find each other by name across clouds, datacenters, or your own hardware. Below is an illustrative topology showing how a four-host Jiji deployment can fit together.
           </p>
         </div>
 
@@ -99,6 +99,9 @@ services:
                 <Server className="w-4 h-4" />
                 <span>JIJI CLUSTER</span>
               </div>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-500 text-[10px] tracking-wider">
+                ILLUSTRATIVE
+              </span>
               <span className="text-zinc-500">|</span>
               <div className="flex items-center gap-2 text-zinc-400">
                 <span className="w-2 h-2 rounded-full bg-lime-400 animate-ping"></span>
