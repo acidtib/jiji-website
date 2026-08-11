@@ -7,7 +7,8 @@ html.dark,
 html.light,
 [data-theme="dark"],
 [data-theme="light"] {
-  --nextra-bg: 18 18 18 !important;
+  /* Matches the landing page's #070907 canvas, not a neutral gray */
+  --nextra-bg: 7 9 7 !important;
   --nextra-content-width: none !important;
   color-scheme: dark !important;
 
@@ -86,7 +87,7 @@ article a:hover {
 
 /* ===== Sidebar ===== */
 aside {
-  background: hsl(0 0% 7%) !important;
+  background: hsl(120 15% 3%) !important;
   border-color: hsl(0 0% 19%) !important;
 }
 
@@ -97,7 +98,7 @@ aside a {
 
 aside a:hover {
   color: hsl(0 0% 95%) !important;
-  background: hsl(0 0% 11%) !important;
+  background: hsl(120 13% 9%) !important;
 }
 
 aside a[aria-current="page"],
@@ -113,7 +114,7 @@ main, article {
 
 /* ===== Code ===== */
 pre {
-  background: hsl(0 0% 10%) !important;
+  background: hsl(120 14% 6%) !important;
   border: 1px solid hsl(0 0% 19%) !important;
   border-radius: 0.25rem !important;
 }
@@ -123,7 +124,7 @@ pre code {
 }
 
 :not(pre) > code {
-  background: hsl(0 0% 13%) !important;
+  background: hsl(120 13% 9%) !important;
   color: hsl(83 78% 55%) !important;
   padding: 0.2em 0.4em !important;
   border-radius: 0.125rem !important;
@@ -132,7 +133,7 @@ pre code {
 
 /* ===== Tables ===== */
 th {
-  background: hsl(0 0% 11%) !important;
+  background: hsl(120 12% 11%) !important;
   color: hsl(0 0% 90%) !important;
   font-family: 'JetBrains Mono', ui-monospace, monospace !important;
   font-size: 0.75rem !important;
@@ -147,20 +148,20 @@ td {
 }
 
 tr:hover td {
-  background: hsl(0 0% 9%) !important;
+  background: hsl(120 15% 5%) !important;
 }
 
 /* ===== Blockquotes & Callouts ===== */
 blockquote {
   border-left-color: hsl(83 78% 45% / 0.5) !important;
-  background: hsl(0 0% 9%) !important;
+  background: hsl(120 15% 5%) !important;
   color: hsl(0 0% 70%) !important;
   border-radius: 0.125rem !important;
 }
 
 [class*="callout"],
 [class*="Callout"] {
-  background: hsl(0 0% 9%) !important;
+  background: hsl(120 15% 5%) !important;
   border-color: hsl(0 0% 19%) !important;
   border-radius: 0.25rem !important;
 }
@@ -181,7 +182,7 @@ nav[aria-label="Table of contents"] a[aria-current="true"] {
 /* ===== Search ===== */
 [data-search],
 input[type="search"] {
-  background: hsl(0 0% 8%) !important;
+  background: hsl(120 15% 4%) !important;
   border-color: hsl(0 0% 19%) !important;
   border-radius: 0.25rem !important;
   color: hsl(0 0% 95%) !important;
@@ -189,7 +190,7 @@ input[type="search"] {
 
 /* ===== Cards ===== */
 [class*="card"] {
-  background: hsl(0 0% 9%) !important;
+  background: hsl(120 14% 6%) !important;
   border-color: hsl(0 0% 19%) !important;
   border-radius: 0.25rem !important;
 }
@@ -220,7 +221,7 @@ button:focus-visible {
 
 /* ===== Navbar ===== */
 nav[class*="sticky"] {
-  background: hsl(0 0% 7% / 0.9) !important;
+  background: hsl(120 15% 3% / 0.9) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
   border-bottom-color: hsl(0 0% 19% / 0.6) !important;
@@ -317,12 +318,12 @@ nav[class*="sticky"] {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(0 0% 20%);
+  background: hsl(120 10% 20%);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(0 0% 30%);
+  background: hsl(120 10% 30%);
 }
 
 /* ===== Noise Texture ===== */

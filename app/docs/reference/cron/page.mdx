@@ -20,7 +20,9 @@ Add a `crons` map to a service. Use each map key as a stable job name.
 services:
   worker:
     image: ghcr.io/example/worker:latest
-    servers: [app1, app2]
+    servers:
+      - app1
+      - app2
     environment:
       clear:
         NODE_ENV: production

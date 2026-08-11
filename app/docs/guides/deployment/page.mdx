@@ -184,7 +184,10 @@ Set the configured total replica count with `replicas:` and choose
 services:
   web:
     image: nginx:alpine
-    servers: [app1, app2, app3]
+    servers:
+      - app1
+      - app2
+      - app3
     replicas: 3
     placement: spread
 ```
@@ -261,7 +264,8 @@ services:
       - NET_ADMIN
     proxy:
       port: 8080
-      hosts: [torrents.example.com]
+      hosts:
+        - torrents.example.com
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest

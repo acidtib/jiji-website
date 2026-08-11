@@ -38,7 +38,8 @@ services:
       - web1
     proxy:
       port: 3000
-      hosts: [myapp.example.com]
+      hosts:
+        - myapp.example.com
       ssl: true
       healthcheck:
         path: /health

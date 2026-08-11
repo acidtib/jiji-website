@@ -55,7 +55,7 @@
 
   /* Dense ops dashboard: near-black ground, hairline-ruled modules, one utility accent. */
   .dark {
-    --background: 0 0% 7%;
+    --background: 120 15% 3%;
     --foreground: 0 0% 95%;
     --card: 0 0% 10%;
     --card-foreground: 0 0% 95%;

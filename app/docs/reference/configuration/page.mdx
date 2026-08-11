@@ -340,9 +340,12 @@ servers:
 
 services:
   api:
-    servers: [server1, server2]
+    servers:
+      - server1
+      - server2
   database:
-    servers: [server3]
+    servers:
+      - server3
 ```
 
 ```bash
@@ -424,7 +427,10 @@ Image names are normalized before Docker or Podman operations. `nginx:latest` be
 services:
   web:
     image: nginx:latest
-    servers: [server1, server2, server3]   # eligible placement set
+    servers:
+      - server1              # eligible placement set
+      - server2
+      - server3
     replicas: 2                             # optional, default: 1
     placement: spread                       # optional, default: spread
 ```
@@ -445,7 +451,9 @@ stable job name.
 services:
   worker:
     image: ghcr.io/example/worker:latest
-    servers: [server1, server2]
+    servers:
+      - server1
+      - server2
     environment:
       secrets:
         - DATABASE_URL
@@ -656,7 +664,8 @@ Enables jiji-proxy routing for a service.
 ```yaml
 proxy:
   port: 3000
-  hosts: [myapp.example.com]
+  hosts:
+    - myapp.example.com
   ssl: false
 ```
 
@@ -679,7 +688,8 @@ does the bare `example.com`):
 ```yaml
 proxy:
   port: 3000
-  hosts: ["*.example.com"]
+  hosts:
+    - "*.example.com"
 ```
 
 A wildcard host cannot use `ssl: true` (jiji-proxy's automatic certificate
@@ -693,7 +703,8 @@ for details.
 ```yaml
 proxy:
   port: 3000
-  hosts: [myapp.example.com]
+  hosts:
+    - myapp.example.com
   healthcheck:
     path: /health
     interval: 10s
@@ -707,7 +718,8 @@ are set - not enforced as a validation error, so pick one):
 ```yaml
 proxy:
   port: 3000
-  hosts: [myapp.example.com]
+  hosts:
+    - myapp.example.com
   healthcheck:
     cmd: "test -f /app/ready"   # exit 0 = healthy
     cmd_runtime: docker           # optional, defaults to builder.engine
@@ -724,7 +736,8 @@ Other command examples: `pgrep -f myapp`, `/app/healthcheck.sh`,
 ```yaml
 proxy:
   port: 3000
-  hosts: [myapp.example.com]
+  hosts:
+    - myapp.example.com
   path_prefix: /api
 ```
 
@@ -734,11 +747,13 @@ proxy:
 proxy:
   targets:
     - port: 3900
-      hosts: [s3.example.com]
+      hosts:
+        - s3.example.com
       healthcheck:
         path: /health
     - port: 3903
-      hosts: [admin.example.com]
+      hosts:
+        - admin.example.com
       ssl: true
       healthcheck:
         cmd: "test -f /ready"
@@ -752,7 +767,9 @@ port accepted by jiji-proxy:
 services:
   postgres:
     image: postgres:18
-    servers: [db1, db2]
+    servers:
+      - db1
+      - db2
     proxy:
       port: 5432
       listen_port: 15432
@@ -774,7 +791,8 @@ for routing and multi-project details.
 services:
   worker:
     image: myapp:latest
-    servers: [server1]
+    servers:
+      - server1
     command: ["./run-worker.sh", "--queue", "high"]
     # or as a string: command: "./run-worker.sh --queue high"
 ```
@@ -783,7 +801,8 @@ services:
 services:
   monitoring:
     image: prometheus:latest
-    servers: [server1]
+    servers:
+      - server1
     network_mode: bridge   # bridge (default) or service:<other-service-name>
 ```
 
@@ -802,14 +821,17 @@ network stack, so all its traffic is forced through the tunnel.
 services:
   gluetun:
     image: qmcgaw/gluetun:latest
-    servers: [server1]
+    servers:
+      - server1
     proxy:
       port: 8080
-      hosts: [torrents.example.com]
+      hosts:
+        - torrents.example.com
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
-    servers: [server1]
+    servers:
+      - server1
     network_mode: service:gluetun
 ```
 
@@ -827,7 +849,8 @@ supported. The dependent's `servers` must be a subset of the upstream's.
 services:
   api:
     image: myapp:latest
-    servers: [server1]
+    servers:
+      - server1
     cpus: 2               # or a string: "1.5"
     memory: "512m"         # "512m", "1g", "2gb"
 ```
@@ -836,7 +859,8 @@ services:
 services:
   ml-worker:
     image: pytorch:latest
-    servers: [gpu-server]
+    servers:
+      - gpu-server
     gpus: "all"   # or "0", "0,1", "device=0"
 ```
 
@@ -844,7 +868,8 @@ services:
 services:
   video-processor:
     image: ffmpeg:latest
-    servers: [server1]
+    servers:
+      - server1
     devices:
       - "/dev/video0"
       - "/dev/snd"
@@ -854,7 +879,8 @@ services:
 services:
   system-tool:
     image: debug-tools:latest
-    servers: [server1]
+    servers:
+      - server1
     privileged: true   # use with caution
 ```
 
@@ -862,7 +888,8 @@ services:
 services:
   network-tool:
     image: nettools:latest
-    servers: [server1]
+    servers:
+      - server1
     cap_add:
       - NET_ADMIN
       - SYS_PTRACE
@@ -874,7 +901,8 @@ services:
 services:
   database:
     image: postgres:15
-    servers: [db-server]
+    servers:
+      - db-server
     stop_first: true
 ```
 
@@ -889,7 +917,8 @@ deploy. Default is `false`.
 services:
   worker:
     image: myapp/worker:latest
-    servers: [server1]
+    servers:
+      - server1
     restart: on-failure # unless-stopped (default), always, on-failure, no
 ```
 
@@ -902,7 +931,8 @@ services:
   web:
     build:
       context: .
-    servers: [server1]
+    servers:
+      - server1
     retain: 5   # optional, default: 3
 ```
 
@@ -977,8 +1007,11 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile.production
-    servers: [web1, web2]
-    ports: ["3000"]
+    servers:
+      - web1
+      - web2
+    ports:
+      - "3000"
     proxy:
       port: 3000
       hosts:
@@ -992,14 +1025,17 @@ services:
   api:
     build:
       context: ./api
-    servers: [api1]
-    ports: ["4000"]
+    servers:
+      - api1
+    ports:
+      - "4000"
     environment:
       secrets:
         - DB_PASSWORD
     proxy:
       port: 4000
-      hosts: [api.example.com]
+      hosts:
+        - api.example.com
       ssl: true
       path_prefix: /api
       healthcheck:
@@ -1007,7 +1043,8 @@ services:
 
   database:
     image: postgres:15
-    servers: [db1]
+    servers:
+      - db1
     volumes:
       - "/data/postgres:/var/lib/postgresql/data"
     environment:

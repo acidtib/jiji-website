@@ -82,7 +82,9 @@ Configure one proxy target directly under a service:
 services:
   web:
     image: ghcr.io/example/web:latest
-    servers: [web1, web2]
+    servers:
+      - web1
+      - web2
     proxy:
       port: 3000
       hosts:
@@ -114,16 +116,19 @@ Use `targets` when one service exposes more than one proxied port:
 services:
   storage:
     image: example/storage:latest
-    servers: [storage1]
+    servers:
+      - storage1
     proxy:
       targets:
         - port: 3900
-          hosts: [s3.example.com]
+          hosts:
+            - s3.example.com
           ssl: true
           healthcheck:
             path: /health
         - port: 3903
-          hosts: [admin.example.com]
+          hosts:
+            - admin.example.com
           ssl: true
           healthcheck:
             path: /health
@@ -143,7 +148,9 @@ backends discovered through the service's aggregate `.jiji` DNS record.
 services:
   postgres:
     image: postgres:18
-    servers: [db1, db2]
+    servers:
+      - db1
+      - db2
     proxy:
       port: 5432
       listen_port: 15432
@@ -174,11 +181,14 @@ ports from one service:
 services:
   gateway:
     image: example/gateway:latest
-    servers: [edge1, edge2]
+    servers:
+      - edge1
+      - edge2
     proxy:
       targets:
         - port: 8080
-          hosts: [gateway.example.com]
+          hosts:
+            - gateway.example.com
           ssl: true
         - port: 9000
           listen_port: 19000
@@ -210,7 +220,8 @@ services:
   api:
     proxy:
       port: 3000
-      hosts: [api.example.com]
+      hosts:
+        - api.example.com
 ```
 
 the route on `api.example.com` resolves backends from `storefront-api.jiji`.
@@ -232,12 +243,14 @@ services:
   web:
     proxy:
       port: 3000
-      hosts: [example.com]
+      hosts:
+        - example.com
 
   api:
     proxy:
       port: 4000
-      hosts: [api.example.com]
+      hosts:
+        - api.example.com
 ```
 
 Use `path_prefix` to share one hostname:
@@ -247,12 +260,14 @@ services:
   web:
     proxy:
       port: 3000
-      hosts: [example.com]
+      hosts:
+        - example.com
 
   api:
     proxy:
       port: 4000
-      hosts: [example.com]
+      hosts:
+        - example.com
       path_prefix: /api
 ```
 
@@ -266,7 +281,8 @@ A `hosts` entry may be a single-label wildcard:
 ```yaml
 proxy:
   port: 3000
-  hosts: ["*.example.com"]
+  hosts:
+    - "*.example.com"
 ```
 
 `*.example.com` matches any single subdomain level -
@@ -286,7 +302,8 @@ HTTPS with a certificate you provide yourself:
 ```yaml
 proxy:
   port: 3000
-  hosts: ["*.example.com"]
+  hosts:
+    - "*.example.com"
   ssl:
     certificate_pem: CERTIFICATE_PEM
     private_key_pem: PRIVATE_KEY_PEM
@@ -299,7 +316,8 @@ Set `ssl: true` to enable TLS for a target:
 ```yaml
 proxy:
   port: 3000
-  hosts: [example.com]
+  hosts:
+    - example.com
   ssl: true
 ```
 
@@ -314,7 +332,8 @@ The configuration schema also accepts certificate and private-key values:
 ```yaml
 proxy:
   port: 3000
-  hosts: [internal.example.com]
+  hosts:
+    - internal.example.com
   ssl:
     certificate_pem: CERTIFICATE_PEM
     private_key_pem: PRIVATE_KEY_PEM
