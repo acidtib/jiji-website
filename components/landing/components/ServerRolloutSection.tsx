@@ -24,7 +24,7 @@ export const ServerRolloutSection: React.FC = () => {
           <div className="text-xs font-mono font-bold text-lime-400 uppercase tracking-widest mb-2">
             // WHY JIJI
           </div>
-          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-extrabold uppercase text-white tracking-tight leading-tight">
+          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold uppercase text-white tracking-tight leading-tight">
             DEPLOY ON YOUR SERVERS. <br className="hidden sm:inline" />
             <span className="text-lime-400">ROLL OUT SAFELY.</span>
           </h2>

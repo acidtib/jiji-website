@@ -70,7 +70,7 @@ HEALTH-GATED ROLLOUT                   2 / 2 healthy
           <div className="text-xs font-mono font-bold text-lime-400 uppercase tracking-widest mb-2">
             // TOOLING SURFACE
           </div>
-          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-extrabold uppercase text-white tracking-tight">
+          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold uppercase text-white tracking-tight">
             PRODUCTION TOOLS, <span className="text-lime-400">READY TO USE</span>
           </h2>
           <p className="mt-2 text-sm sm:text-base text-zinc-300 font-sans">

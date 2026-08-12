@@ -23,7 +23,7 @@ export const QuickStart: React.FC<QuickStartSectionProps> = ({ onShowToast }) =>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-[#0a0d0a] border border-zinc-800 rounded-2xl p-6 sm:p-10 md:p-14 font-mono shadow-2xl green-border-glow text-center">
           <div className="max-w-2xl mx-auto">
-            <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-extrabold uppercase text-white tracking-tight leading-tight mb-4">
+            <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold uppercase text-white tracking-tight leading-tight mb-4">
               YOUR NEXT DEPLOY <br className="hidden sm:inline" />
               <span className="text-lime-400">CAN BE BORING.</span>
             </h2>

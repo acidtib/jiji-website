@@ -23,7 +23,7 @@ export function LegalLayout({ children }) {
       </header>
 
       <main className="flex-grow">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
           <div className="legal-content">
             {children}
           </div>

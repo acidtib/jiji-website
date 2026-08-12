@@ -58,7 +58,7 @@ export const DashboardShowcase: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Title Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-extrabold uppercase text-white tracking-tight">
+          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold uppercase text-white tracking-tight">
             ONE PRIVATE NETWORK. <span className="text-lime-400">EVERY SERVER.</span>
           </h2>
           <p className="mt-2 text-sm sm:text-base text-zinc-300 font-sans">

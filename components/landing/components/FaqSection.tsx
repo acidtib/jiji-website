@@ -21,7 +21,7 @@ export const FaqSection: React.FC = () => {
           <div className="text-xs font-mono font-bold text-lime-400 uppercase tracking-widest mb-2">
             // FREQUENTLY ASKED QUESTIONS
           </div>
-          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-extrabold uppercase text-white tracking-tight">
+          <h2 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold uppercase text-white tracking-tight">
             WHAT TEAMS ASK <span className="text-lime-400">BEFORE DEPLOYING</span>
           </h2>
           <p className="mt-2 text-sm sm:text-base text-zinc-400 font-sans">
