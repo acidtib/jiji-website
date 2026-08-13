@@ -502,12 +502,24 @@ services:
 services:
   web:
     build:
-      context: .
+      context: .                # optional, default: .
       dockerfile: Dockerfile   # optional, default: Dockerfile
       target: production       # optional, build target for multi-stage Dockerfiles
       args:
         NODE_ENV: production
         VERSION: 1.2.3
+    servers:
+      - server1
+```
+
+`context:` can be omitted entirely from the detailed form - it defaults to
+the project root, same as leaving it out of the shorthand:
+
+```yaml
+services:
+  site:
+    build:
+      dockerfile: Dockerfile   # context defaults to the project root
     servers:
       - server1
 ```
@@ -937,11 +949,15 @@ services:
 ```
 
 Only relevant for build-configured services (a static `image:` service is
-never pruned). Sets how many recent image tags `jiji service prune` keeps
-per server before removing the rest, as long as they aren't still
-referenced by a running container. Pruning is a separate, manually-invoked
-step - `jiji deploy` never prunes images itself. Run `jiji service prune`
-(or `jiji service prune --retain N` to override this value for one run).
+never pruned). Sets how many recent image tags each server keeps before
+removing the rest, as long as they aren't still referenced by a running
+container. After every successful deploy, restart, or rollback, jiji
+pushes this value to every server in the service's `servers:` list, and
+each server's `jiji-agent` prunes to it continuously in the background -
+no need to run anything manually for routine cleanup. Run `jiji service
+prune` (or `jiji service prune --retain N`) to prune immediately instead
+of waiting for the next reconcile tick, or to override this value for one
+run.
 
 ## Project limits and validation
 

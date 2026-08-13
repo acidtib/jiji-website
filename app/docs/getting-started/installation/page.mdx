@@ -46,6 +46,33 @@ cargo build --release --bin jiji
 # binary is at target/release/jiji
 ```
 
+## Upgrading
+
+```bash
+jiji update
+```
+
+Downloads the latest release, verifies its checksum, and replaces the
+installed binary in place. Exits without changing anything if you're already
+current.
+
+Pin or roll back to a specific release:
+
+```bash
+jiji update --release v1.2.3
+```
+
+Check what's available without installing it:
+
+```bash
+jiji update --check
+```
+
+`jiji update` only replaces the local `jiji` binary. It never touches remote
+servers, `jiji-agent`, or `jiji-proxy` — after updating, run [`jiji server
+upgrade -e <environment>`](/docs/reference/commands#jiji-server-upgrade) for
+each environment configuration to bring your servers up to date.
+
 ## Server Requirements
 
 Target Servers need:

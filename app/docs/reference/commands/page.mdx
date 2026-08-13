@@ -188,6 +188,52 @@ Set `JIJI_AGENT_VERSION` to pin a different release tag than the running
 CLI's own version, or `JIJI_RELEASE_BASE_URL` to fetch from a self-hosted
 mirror.
 
+### `jiji server upgrade`
+
+Bring `jiji-agent` and the shared `jiji-proxy` container on selected servers
+up to the versions the local `jiji` binary requires, after running
+`jiji update`. This replaces the manual sequence of re-running
+`jiji server setup`, conditionally running `jiji proxy restart`, and then
+`jiji network diagnostics`.
+
+```bash
+jiji server upgrade
+jiji server upgrade -H "web*"
+jiji server upgrade -y
+```
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Skip the confirmation prompt |
+
+For each selected server, jiji reads the running `jiji-agent` version (over
+its own socket) and the running `jiji-proxy` version (`jiji-proxy version`
+inside the container), and compares both against the versions the local
+`jiji` binary was built against:
+
+- **Outdated** - the agent binary is replaced and jiji-proxy is recreated
+  with the current image.
+- **Current** - the agent's configuration, systemd unit, and membership are
+  still refreshed (this is a normal, idempotent no-op most of the time);
+  jiji-proxy's daemon configuration is refreshed without an interruption.
+- **Ahead** (a server running something newer than this `jiji` requires) -
+  never touched. Jiji does not downgrade a component that's ahead of what
+  the local binary asks for.
+- **Unavailable** (unreachable host, or a component that was never
+  installed) - skipped and reported; the command exits non-zero if this
+  happens anywhere.
+
+Component versions are read and compared per host, so one host's outdated
+proxy never blocks another host's already-current agent from having its
+configuration refreshed. `jiji server upgrade` finishes by running
+`jiji network diagnostics` against the same selection.
+
+`-S`/`--services` is rejected: this command upgrades host-level components
+shared across every service on a host, not per-service state.
+
+Run `jiji server upgrade` again for each other environment configuration
+(`-e staging`, `-e production`, ...).
+
 ### `jiji server exec`
 
 Run a command on any number of selected servers, or attach an interactive
