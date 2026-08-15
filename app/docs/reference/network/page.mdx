@@ -131,9 +131,9 @@ project-specific port shown by `jiji network plan`.
 
 ## Service Placement and Scale
 
-`services.*.servers` is the eligible host set. `replicas` is the total desired
-count, not a count per host. `placement: spread` balances replicas;
-`placement: packed` chooses hosts deterministically.
+`services.*.servers` is the literal deploy target list -- every listed
+server gets a deployment. `scale` is the instance count on *each* listed
+server, not a total across them.
 
 `jiji service scale` writes a replicated desired-placement record before it
 changes containers. Scale-up and scale-down are resumable. Scale-to-zero

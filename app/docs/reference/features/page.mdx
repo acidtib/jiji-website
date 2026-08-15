@@ -37,6 +37,7 @@ Every built-in feature, organized by area.
 - **Build Arguments** - Pass build-time arguments (ARGs) to Docker.
 - **Remote Builds** - Execute builds on remote SSH hosts for faster CI/CD.
 - **Build Cache** - Control whether to use Docker layer cache for builds.
+- **Build Secrets** - Mount tokens and credentials into a build via `--secret` instead of `--build-arg`, so they never land in image layers or metadata.
 
 ## Container Config
 
@@ -51,6 +52,7 @@ Every built-in feature, organized by area.
 - **Project Bridge Networking** - Give each deployment a dynamic address on
   the project bridge.
 - **Container Namespace Sharing** - Share another service's network stack (`network_mode: service:<name>`) for VPN killswitch patterns. Redeploying the upstream automatically redeploys its dependents.
+- **Host Networking** - Run a service on the host's own network namespace (`network_mode: host`) instead of the project bridge, for containers that need direct host-level ports.
 
 ## Deployment
 
@@ -85,6 +87,7 @@ Every built-in feature, organized by area.
 - **External DNS Forwarding** - Service containers resolve normal internet hostnames too, forwarded to configurable resolvers (default public DNS).
 - **Clean Teardown** - Remove a project's network, containers, and routes in one command.
 - **Multi-Project Isolation** - Each project has its own mesh, bridge, DNS, catalog, and agent state; jiji-proxy is shared per host.
+- **Backup, Restore & Recovery** - Export an encrypted control-plane backup and restore it into surviving hosts, or recover into a new fenced epoch after losing hosts.
 
 ## Registry
 
@@ -111,5 +114,6 @@ Every built-in feature, organized by area.
 - **Service Removal** - Clean removal with network unregistration.
 - **Image Pruning** - Explicitly remove old build-produced images with configurable per-service retention.
 - **Server Teardown** - Clean server removal from cluster.
+- **Server Upgrade** - Bring `jiji-agent` and `jiji-proxy` on each server in line with the installed `jiji` CLI, per host and per component, without downgrading.
 - **Auto-install Engine** - Install Docker/Podman automatically on servers.
 - **Architecture Support** - Explicitly set server architecture (amd64/arm64).

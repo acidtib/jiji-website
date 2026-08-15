@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync as writeFile } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -7,6 +11,7 @@ import {
   metaTitle,
   nestHeadings,
   pageTitle,
+  topLevelRoutes,
   urlSet,
 } from "./generate-llms-txt.mjs";
 
@@ -86,6 +91,63 @@ describe("sitemap formatting", () => {
   test("renders routes with the configured site URL", () => {
     expect(urlSet(["/", "/docs?a=1&b=2"], "https://example.com")).toContain(
       "<loc>https://example.com/docs?a=1&amp;b=2</loc>"
+    );
+  });
+});
+
+describe("topLevelRoutes", () => {
+  function withFixtureProject(pages, run) {
+    const projectRoot = mkdtempSync(path.join(tmpdir(), "jiji-website-"));
+    const appDir = path.join(projectRoot, "app");
+    mkdirSync(appDir, { recursive: true });
+    for (const relativePath of pages) {
+      const filePath = path.join(appDir, relativePath);
+      mkdirSync(path.dirname(filePath), { recursive: true });
+      writeFile(filePath, "");
+    }
+    try {
+      run(projectRoot);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  }
+
+  test("discovers every app/<name>/page.* directory, root included", () => {
+    withFixtureProject(
+      ["page.jsx", "docs/page.mdx", "privacy/page.jsx", "terms/page.jsx"],
+      (projectRoot) => {
+        expect(topLevelRoutes(projectRoot)).toEqual([
+          "/",
+          "/docs",
+          "/privacy",
+          "/terms",
+        ]);
+      }
+    );
+  });
+
+  test("a new page directory is picked up without editing this script", () => {
+    withFixtureProject(
+      ["page.jsx", "docs/page.mdx", "pricing/page.tsx"],
+      (projectRoot) => {
+        expect(topLevelRoutes(projectRoot)).toContain("/pricing");
+      }
+    );
+  });
+
+  test("ignores directories with no page file and Next.js private/group/dynamic segments", () => {
+    withFixtureProject(
+      [
+        "page.jsx",
+        "docs/page.mdx",
+        "api/route.js",
+        "_components/button.jsx",
+        "(marketing)/about/page.jsx",
+        "[slug]/page.jsx",
+      ],
+      (projectRoot) => {
+        expect(topLevelRoutes(projectRoot)).toEqual(["/", "/docs"]);
+      }
     );
   });
 });

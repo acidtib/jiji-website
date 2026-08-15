@@ -39,7 +39,7 @@ Jiji runs one jiji-proxy container on each server that needs proxy routes.
 | Property | Value |
 |---|---|
 | Container name | `jiji-proxy` |
-| Image | `ghcr.io/acidtib/jiji-proxy:jiji` |
+| Image | `ghcr.io/acidtib/jiji-proxy:v<version>` (the jiji-proxy release version this CLI was built against) |
 | Restart policy | `unless-stopped` |
 | Public ports | `80` and `443` |
 | Internal ports | `8080` and `8443` |

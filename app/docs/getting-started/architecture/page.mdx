@@ -113,13 +113,13 @@ run two containers at once.
 
 ## Placement and Scaling
 
-`services.*.servers` defines eligible owners. `replicas` is the total count,
-and `placement` is `spread` or `packed`. Runtime overrides are replicated
-desired state:
+`services.*.servers` is the literal deploy target list: every listed server
+gets a deployment. `scale` is the instance count on *each* listed server, not
+a total across them. Runtime overrides are replicated desired state:
 
 ```bash
-jiji service scale -S web --replicas 4
-jiji service scale -S web --reset
+jiji service scale 4 -S web
+jiji service scale --reset -S web
 ```
 
 Scale writes desired placement first, then converges containers, DNS, and

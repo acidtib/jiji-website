@@ -177,8 +177,9 @@ jiji lock release --replica <replica-id>   # release one stuck replica lock inst
 
 ## Scaling
 
-Set the configured total replica count with `replicas:` and choose
-`placement: spread` or `packed`. `servers:` is the eligible placement set:
+`servers:` is the literal deploy target list -- every listed server gets a
+deployment. `scale:` sets the instance count on *each* listed server, not a
+total across them:
 
 ```yaml
 services:
@@ -188,17 +189,18 @@ services:
       - app1
       - app2
       - app3
-    replicas: 3
-    placement: spread
+    scale: 3
 ```
 
-Change the replicated runtime desired count without editing configuration:
+The config above runs 3 instances on app1, 3 on app2, and 3 on app3 (9
+total), not 3 total. Change the replicated runtime desired count without
+editing configuration:
 
 ```bash
-jiji service scale -S web --replicas 5
-jiji service scale -S web --replicas 0
-jiji service scale -S web --reset
-jiji service scale -S web --replicas 3 --dry-run
+jiji service scale 5 -S web
+jiji service scale 0 -S web
+jiji service scale --reset -S web
+jiji service scale 3 -S web --dry-run
 ```
 
 Scale commits desired placement first, then adds or retires replicas.
@@ -318,7 +320,7 @@ services:
       - /data/postgres:/var/lib/postgresql/data
 ```
 
-A `stop_first` service must remain a singleton - `replicas` above 1 is
+A `stop_first` service must remain a singleton - `scale` above 1 is
 rejected by validation.
 
 A service with a fixed host-port binding (`ports: ["80:80"]`, not a bare

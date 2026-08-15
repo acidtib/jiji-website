@@ -1,10 +1,32 @@
 #!/usr/bin/env bun
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
+
+const PAGE_FILENAMES = ["page.jsx", "page.mdx", "page.tsx", "page.js"];
+
+// Every top-level route under `app/` that renders a page: `/` (app/page.jsx
+// itself) plus one entry per `app/<name>/page.*` directory, `/docs` included.
+// Derived from the filesystem instead of a hand-maintained list so a new
+// page (e.g. `app/pricing/page.jsx`) is never silently missing from the
+// sitemap the way `/terms` and `/privacy` previously were -- this file
+// used to hardcode `["/"]`, so every `bun run build` wiped out sitemap
+// entries a prior commit had hand-added for those pages.
+export function topLevelRoutes(projectRoot) {
+  const appDir = path.join(projectRoot, "app");
+  const routes = ["/"];
+  for (const entry of readdirSync(appDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || /^[_(\[]/.test(entry.name)) continue;
+    const dir = path.join(appDir, entry.name);
+    if (PAGE_FILENAMES.some((file) => existsSync(path.join(dir, file)))) {
+      routes.push(`/${entry.name}`);
+    }
+  }
+  return routes.sort();
+}
 
 // _meta.js files are ESM ("export default {...}"), which plain Node can't
 // import without the package declaring "type": "module". They're just
@@ -192,7 +214,7 @@ export function generate({
   );
   writeFileSync(
     path.join(projectRoot, "public/sitemap.xml"),
-    urlSet(["/"], normalizedSiteUrl)
+    urlSet(topLevelRoutes(projectRoot), normalizedSiteUrl)
   );
   writeFileSync(
     path.join(projectRoot, "public/docs/sitemap.xml"),

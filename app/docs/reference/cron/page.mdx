@@ -172,13 +172,13 @@ jiji service cron status -S worker
 Start a job without changing its schedule:
 
 ```bash
-jiji service cron run -S worker sync-reports
+jiji service cron run sync-reports -S worker
 ```
 
 Stream its output:
 
 ```bash
-jiji service cron run -S worker sync-reports --follow
+jiji service cron run sync-reports -S worker --follow
 ```
 
 The command returns an overlap conflict when the job already has an active
@@ -189,21 +189,21 @@ run.
 Read the latest retained run:
 
 ```bash
-jiji service cron logs -S worker sync-reports
+jiji service cron logs sync-reports -S worker
 ```
 
 Read a specific run:
 
 ```bash
-jiji service cron logs -S worker sync-reports --run <run-id>
+jiji service cron logs sync-reports -S worker --run <run-id>
 ```
 
 Filter or follow output:
 
 ```bash
-jiji service cron logs -S worker sync-reports --lines 100
-jiji service cron logs -S worker sync-reports --since 30m
-jiji service cron logs -S worker sync-reports --follow
+jiji service cron logs sync-reports -S worker --lines 100
+jiji service cron logs sync-reports -S worker --since 30m
+jiji service cron logs sync-reports -S worker --follow
 ```
 
 The `--follow` option requires an active run. It cannot be combined with

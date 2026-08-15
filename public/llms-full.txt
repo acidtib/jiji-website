@@ -136,6 +136,33 @@ cargo build --release --bin jiji
 # binary is at target/release/jiji
 ```
 
+#### Upgrading
+
+```bash
+jiji update
+```
+
+Downloads the latest release, verifies its checksum, and replaces the
+installed binary in place. Exits without changing anything if you're already
+current.
+
+Pin or roll back to a specific release:
+
+```bash
+jiji update --release v1.2.3
+```
+
+Check what's available without installing it:
+
+```bash
+jiji update --check
+```
+
+`jiji update` only replaces the local `jiji` binary. It never touches remote
+servers, `jiji-agent`, or `jiji-proxy` — after updating, run [`jiji server
+upgrade -e <environment>`](/docs/reference/commands#jiji-server-upgrade) for
+each environment configuration to bring your servers up to date.
+
 #### Server Requirements
 
 Target Servers need:
@@ -418,13 +445,13 @@ run two containers at once.
 
 #### Placement and Scaling
 
-`services.*.servers` defines eligible owners. `replicas` is the total count,
-and `placement` is `spread` or `packed`. Runtime overrides are replicated
-desired state:
+`services.*.servers` is the literal deploy target list: every listed server
+gets a deployment. `scale` is the instance count on *each* listed server, not
+a total across them. Runtime overrides are replicated desired state:
 
 ```bash
-jiji service scale -S web --replicas 4
-jiji service scale -S web --reset
+jiji service scale 4 -S web
+jiji service scale --reset -S web
 ```
 
 Scale writes desired placement first, then converges containers, DNS, and
@@ -665,8 +692,9 @@ jiji lock release --replica <replica-id>   # release one stuck replica lock inst
 
 #### Scaling
 
-Set the configured total replica count with `replicas:` and choose
-`placement: spread` or `packed`. `servers:` is the eligible placement set:
+`servers:` is the literal deploy target list -- every listed server gets a
+deployment. `scale:` sets the instance count on *each* listed server, not a
+total across them:
 
 ```yaml
 services:
@@ -676,17 +704,18 @@ services:
       - app1
       - app2
       - app3
-    replicas: 3
-    placement: spread
+    scale: 3
 ```
 
-Change the replicated runtime desired count without editing configuration:
+The config above runs 3 instances on app1, 3 on app2, and 3 on app3 (9
+total), not 3 total. Change the replicated runtime desired count without
+editing configuration:
 
 ```bash
-jiji service scale -S web --replicas 5
-jiji service scale -S web --replicas 0
-jiji service scale -S web --reset
-jiji service scale -S web --replicas 3 --dry-run
+jiji service scale 5 -S web
+jiji service scale 0 -S web
+jiji service scale --reset -S web
+jiji service scale 3 -S web --dry-run
 ```
 
 Scale commits desired placement first, then adds or retires replicas.
@@ -806,7 +835,7 @@ services:
       - /data/postgres:/var/lib/postgresql/data
 ```
 
-A `stop_first` service must remain a singleton - `replicas` above 1 is
+A `stop_first` service must remain a singleton - `scale` above 1 is
 rejected by validation.
 
 A service with a fixed host-port binding (`ports: ["80:80"]`, not a bare
@@ -2330,26 +2359,25 @@ services:
 
 Image names are normalized before Docker or Podman operations. `nginx:latest` becomes `docker.io/library/nginx:latest`, and `owner/image:tag` becomes `docker.io/owner/image:tag`. Already-qualified registries such as `ghcr.io/owner/image`, `localhost:5000/image`, and private registry hostnames remain unchanged.
 
-##### Replicas and placement
+##### Servers and scale
 
 ```yaml
 services:
   web:
     image: nginx:latest
     servers:
-      - server1              # eligible placement set
+      - server1              # literal deploy target list
       - server2
       - server3
-    replicas: 2                             # optional, default: 1
-    placement: spread                       # optional, default: spread
+    scale: 2                                # optional, default: 1
 ```
 
-`servers:` is the eligible placement set, not "one copy per server."
-`replicas:` is the desired total count across that whole set. `placement:
-spread` (the default) prefers distinct hosts; `placement: packed` fills
-hosts in deterministic order first. Change the runtime count without
-editing config with `jiji service scale -S web --replicas N` (or `--reset`
-to return to the configured value).
+`servers:` is the literal deploy target list: every listed server gets a
+deployment, always. `scale:` is the instance count on *each* listed server,
+not a total across them -- `scale: 2` here runs 2 on server1, 2 on server2,
+and 2 on server3 (6 total), not 2 total. Change the runtime count without
+editing config with `jiji service scale N -S web` (or `--reset` to return to
+the configured value).
 
 ##### Scheduled jobs (`crons`)
 
@@ -2411,7 +2439,7 @@ services:
 services:
   web:
     build:
-      context: .
+      context: .                # optional, default: .
       dockerfile: Dockerfile   # optional, default: Dockerfile
       target: production       # optional, build target for multi-stage Dockerfiles
       args:
@@ -2421,8 +2449,58 @@ services:
       - server1
 ```
 
+`context:` can be omitted entirely from the detailed form - it defaults to
+the project root, same as leaving it out of the shorthand:
+
+```yaml
+services:
+  site:
+    build:
+      dockerfile: Dockerfile   # context defaults to the project root
+    servers:
+      - server1
+```
+
 `args:` is a mapping of build-arg names to values, not a list of
 `KEY=value` strings.
+
+Secret values (API tokens, private registry credentials) don't belong in
+`args:` - a build argument ends up readable in `docker history` and image
+metadata forever. Use `secrets:` instead, which mounts the value into the
+build via Docker/Podman's `--secret` flag and never writes it into the
+image:
+
+```yaml
+services:
+  api-backend:
+    build:
+      context: ./api
+      secrets:
+        - NPM_TOKEN
+        - PIP_INDEX_PASSWORD
+```
+
+Each name is resolved the same way `environment.secrets` names are - from
+the selected `.env` file, then the host environment if `--host-env` is
+passed - but **never** from `environment.clear`: a build secret exists
+specifically to bypass the cleartext build-arg path, so mixing in a
+cleartext source would defeat the point. The Dockerfile reads it as a
+mounted file, not an environment variable:
+
+```dockerfile
+RUN --mount=type=secret,id=NPM_TOKEN \
+    NPM_TOKEN=$(cat /run/secrets/NPM_TOKEN) npm install
+```
+
+Classic (non-buildx) `docker build` only understands `--secret` when
+BuildKit is active; Jiji sets `DOCKER_BUILDKIT=1` automatically for that
+one build invocation when `secrets:` is configured, so this needs no setup
+step from you. `buildx build` and `podman build` support `--secret`
+natively. Works for local builds, `builder.remote`, and multi-architecture
+builds - the CLI stages each secret to a mode-0600 temporary file (locally)
+or a mode-0600 file on the builder host (remotely, piped over SSH stdin,
+never embedded in a command string) and removes it once the build
+finishes, whether it succeeded or failed.
 
 `dockerfile:` is resolved relative to **`context:`**, matching Docker
 Compose - if `context: ./web`, `dockerfile: Dockerfile` (the default)
@@ -2712,13 +2790,41 @@ services:
     image: prometheus:latest
     servers:
       - server1
-    network_mode: bridge   # bridge (default) or service:<other-service-name>
+    network_mode: bridge   # bridge (default), service:<other-service-name>, or host
 ```
 
-`"host"` and `"none"` are accepted by the schema but aren't currently
-implemented -- setting either one is silently ignored and the service still
-gets normal bridge networking. Docker's native `container:<id>` syntax is
+`network_mode: none` is rejected by validation: every service needs a
+reachable address for DNS and health checks. Use `service:<name>` to
+explicitly share another service's namespace, or `crons:` for isolated
+one-off/scheduled work. Docker's native `container:<id>` syntax is also
 rejected outright by validation.
+
+**Host networking** (`network_mode: host`) -- shares the host's own network
+namespace instead of getting a project-bridge address.
+
+```yaml
+services:
+  app:
+    image: nginx:latest
+    servers:
+      - server1
+    network_mode: host
+    ports:
+      - "8080"   # what the service listens on; never rendered as -p
+```
+
+`ports:` accepts at most one entry, a bare container-side port number only
+(never a `host:container` mapping or a `/udp` suffix): it's metadata for the
+per-server uniqueness check below, not a port mapping -- the app must
+already bind the port it wants directly on the host. Two `host`-mode
+services whose `servers` overlap can't declare the same port; this check
+only sees services within the same project, so a different project's
+`host`-mode service on a shared machine can still collide, surfacing as a
+failed container start instead of a validation error. `proxy:` and
+`scale` above 1 are rejected, the same as for `service:<name>` sharing.
+Host networking removes jiji's mesh isolation for that container: it can
+reach, and be reached by, anything the host's own network can, bypassing
+the project bridge entirely.
 
 **Container namespace sharing** (`network_mode: service:<name>`) -- shares
 another ("upstream") service's container network namespace instead of
@@ -2748,7 +2854,7 @@ Naming the upstream via `network_mode` is itself the dependency declaration
 -- there's no separate `depends_on` field. Redeploying `gluetun` (via
 `jiji deploy`, `jiji service restart`, or `jiji service rollback`)
 automatically redeploys `qbittorrent` too, sequenced strictly after
-`gluetun`'s own deploy finishes. A dependent can't set `replicas` above 1 or
+`gluetun`'s own deploy finishes. A dependent can't set `scale` above 1 or
 configure its own `proxy:` block: traffic reaches it through the upstream's
 own route, at the upstream's address. The upstream cannot itself be a
 `network_mode: service:<name>` dependent because chained sharing is not
@@ -2846,11 +2952,15 @@ services:
 ```
 
 Only relevant for build-configured services (a static `image:` service is
-never pruned). Sets how many recent image tags `jiji service prune` keeps
-per server before removing the rest, as long as they aren't still
-referenced by a running container. Pruning is a separate, manually-invoked
-step - `jiji deploy` never prunes images itself. Run `jiji service prune`
-(or `jiji service prune --retain N` to override this value for one run).
+never pruned). Sets how many recent image tags each server keeps before
+removing the rest, as long as they aren't still referenced by a running
+container. After every successful deploy, restart, or rollback, jiji
+pushes this value to every server in the service's `servers:` list, and
+each server's `jiji-agent` prunes to it continuously in the background -
+no need to run anything manually for routine cleanup. Run `jiji service
+prune` (or `jiji service prune --retain N`) to prune immediately instead
+of waiting for the next reconcile tick, or to override this value for one
+run.
 
 #### Project limits and validation
 
@@ -3040,6 +3150,31 @@ Show the compiled jiji version.
 jiji version
 ```
 
+##### `jiji update`
+
+Detect and install a newer `jiji` binary release. Config-free, like `init`
+and `version` — this never touches remote servers, `jiji-agent`, or
+`jiji-proxy`.
+
+```bash
+jiji update                    # Update to the latest release
+jiji update --check            # Report available versions without installing
+jiji update --release v1.2.3   # Pin or roll back to a specific release
+```
+
+| Option | Description |
+|--------|-------------|
+| `--check` | Report the current and latest version without changing anything |
+| `--release <version>` | Install a specific release instead of latest (also the rollback path) |
+
+Downloads the matching platform artifact and its `.sha256` checksum, rejects
+a mismatch, and installs atomically (temp file on the same filesystem, then
+rename) preserving the existing binary's permissions. After updating, run
+[`jiji server upgrade -e
+<environment>`](/docs/reference/commands#jiji-server-upgrade) for each
+environment configuration to bring `jiji-agent` and `jiji-proxy` up to date
+on your servers.
+
 #### Build
 
 ##### `jiji build`
@@ -3173,6 +3308,52 @@ order:
 Set `JIJI_AGENT_VERSION` to pin a different release tag than the running
 CLI's own version, or `JIJI_RELEASE_BASE_URL` to fetch from a self-hosted
 mirror.
+
+##### `jiji server upgrade`
+
+Bring `jiji-agent` and the shared `jiji-proxy` container on selected servers
+up to the versions the local `jiji` binary requires, after running
+`jiji update`. This replaces the manual sequence of re-running
+`jiji server setup`, conditionally running `jiji proxy restart`, and then
+`jiji network diagnostics`.
+
+```bash
+jiji server upgrade
+jiji server upgrade -H "web*"
+jiji server upgrade -y
+```
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Skip the confirmation prompt |
+
+For each selected server, jiji reads the running `jiji-agent` version (over
+its own socket) and the running `jiji-proxy` version (`jiji-proxy version`
+inside the container), and compares both against the versions the local
+`jiji` binary was built against:
+
+- **Outdated** - the agent binary is replaced and jiji-proxy is recreated
+  with the current image.
+- **Current** - the agent's configuration, systemd unit, and membership are
+  still refreshed (this is a normal, idempotent no-op most of the time);
+  jiji-proxy's daemon configuration is refreshed without an interruption.
+- **Ahead** (a server running something newer than this `jiji` requires) -
+  never touched. Jiji does not downgrade a component that's ahead of what
+  the local binary asks for.
+- **Unavailable** (unreachable host, or a component that was never
+  installed) - skipped and reported; the command exits non-zero if this
+  happens anywhere.
+
+Component versions are read and compared per host, so one host's outdated
+proxy never blocks another host's already-current agent from having its
+configuration refreshed. `jiji server upgrade` finishes by running
+`jiji network diagnostics` against the same selection.
+
+`-S`/`--services` is rejected: this command upgrades host-level components
+shared across every service on a host, not per-service state.
+
+Run `jiji server upgrade` again for each other environment configuration
+(`-e staging`, `-e production`, ...).
 
 ##### `jiji server exec`
 
@@ -3473,25 +3654,27 @@ jiji service remove --volumes   # Also remove named volumes
 
 ##### `jiji service scale`
 
-Change the replicated desired count for exactly one service:
+Change the replicated desired instance count, per server, for exactly one
+service:
 
 ```bash
-jiji service scale -S web --replicas 4
-jiji service scale -S web --replicas 0
-jiji service scale -S web --reset
-jiji service scale -S web --replicas 3 --dry-run
+jiji service scale 4 -S web
+jiji service scale 0 -S web
+jiji service scale --reset -S web
+jiji service scale 3 -S web --dry-run
 ```
 
 | Option | Description |
 |---|---|
-| `--replicas N` | Set the runtime desired total |
-| `--reset` | Return to the configured `replicas:` value |
+| `N` (positional) | Set the runtime desired instance count on each of the service's `servers:` |
+| `--reset` | Return to the configured `scale:` value |
 | `--dry-run` | Print placement and mutations without changing state |
 | `-y, --yes` | Skip confirmation |
 
-`-S` must match exactly one service. `-H` is rejected because placement,
-not a host filter, decides replica ownership. Interrupted scale operations
-are resumable by retrying the same command.
+`-S` must match exactly one service. `-H` is rejected: `servers:` is the
+literal deploy target list already, so there's no separate host filter to
+apply. Interrupted scale operations are resumable by retrying the same
+command.
 
 ##### `jiji service cron list`
 
@@ -3523,11 +3706,11 @@ Show output for one job. This command requires one service and one cron
 name.
 
 ```bash
-jiji service cron logs -S worker sync-reports
-jiji service cron logs -S worker sync-reports --run <run-id>
-jiji service cron logs -S worker sync-reports --lines 100
-jiji service cron logs -S worker sync-reports --since 30m
-jiji service cron logs -S worker sync-reports --follow
+jiji service cron logs sync-reports -S worker
+jiji service cron logs sync-reports -S worker --run <run-id>
+jiji service cron logs sync-reports -S worker --lines 100
+jiji service cron logs sync-reports -S worker --since 30m
+jiji service cron logs sync-reports -S worker --follow
 ```
 
 | Option | Description |
@@ -3545,8 +3728,8 @@ Start one configured job immediately. The manual run does not change the
 next scheduled time.
 
 ```bash
-jiji service cron run -S worker sync-reports
-jiji service cron run -S worker sync-reports --follow
+jiji service cron run sync-reports -S worker
+jiji service cron run sync-reports -S worker --follow
 ```
 
 | Option | Description |
@@ -3585,10 +3768,12 @@ jiji secrets print --show-values   # Reveal actual values, use with caution
 ```
 
 Shows `[SET]`/`[MISSING]` for every secret-shaped reference in
-configuration. `environment.secrets`, `builder.registry.password`, and
-ALL_CAPS references in SSH `keys` are resolved from `.env`/host-env;
-other fields (SSH key passphrase, proxy SSL certs, build args) are scanned
-and reported for visibility only.
+configuration. `environment.secrets`, `build.secrets`,
+`builder.registry.password`, ALL_CAPS references in SSH `keys`, ALL_CAPS
+build-arg values, and proxy SSL cert references are resolved from
+`.env`/host-env; SSH key passphrases and `${VAR}` command interpolation are
+scanned and reported for visibility only, since Jiji uses those values as
+literal configuration rather than resolving them.
 
 #### Deployment Locks
 
@@ -3690,9 +3875,16 @@ visible. `--stats` cannot be combined with `--lines` or `--follow`. With
 
 `-S`/`--services` is rejected - the trail is host-scoped, not
 service-scoped. Current writers are `deploy`, `service
-restart/rollback/remove/prune/scale`, `lock acquire/release`, and `server
-setup/teardown`. Some other state-changing commands do not write audit entries
-yet.
+restart/rollback/remove/prune/scale`, `server setup/teardown/upgrade`,
+`network setup/compact/restore`, `registry login/logout`, `proxy restart`,
+`server exec`, `service cron run`, `jiji build` (the `builder.remote` path
+only), and `lock acquire/release`. `proxy restart` and `server exec` do not
+hold a lock today, so their audit entries carry no lock scope.
+
+A local build opens no SSH session, so it has no host to write an entry
+through. `registry teardown`, local (non-`-H`) `registry login`/`logout`,
+and `network recover` are local-only operations with the same no-host
+reasoning, and are unaudited by design, not by gap.
 
 #### Examples
 
@@ -3914,13 +4106,13 @@ jiji service cron status -S worker
 Start a job without changing its schedule:
 
 ```bash
-jiji service cron run -S worker sync-reports
+jiji service cron run sync-reports -S worker
 ```
 
 Stream its output:
 
 ```bash
-jiji service cron run -S worker sync-reports --follow
+jiji service cron run sync-reports -S worker --follow
 ```
 
 The command returns an overlap conflict when the job already has an active
@@ -3931,21 +4123,21 @@ run.
 Read the latest retained run:
 
 ```bash
-jiji service cron logs -S worker sync-reports
+jiji service cron logs sync-reports -S worker
 ```
 
 Read a specific run:
 
 ```bash
-jiji service cron logs -S worker sync-reports --run <run-id>
+jiji service cron logs sync-reports -S worker --run <run-id>
 ```
 
 Filter or follow output:
 
 ```bash
-jiji service cron logs -S worker sync-reports --lines 100
-jiji service cron logs -S worker sync-reports --since 30m
-jiji service cron logs -S worker sync-reports --follow
+jiji service cron logs sync-reports -S worker --lines 100
+jiji service cron logs sync-reports -S worker --since 30m
+jiji service cron logs sync-reports -S worker --follow
 ```
 
 The `--follow` option requires an active run. It cannot be combined with
@@ -3995,6 +4187,7 @@ Every built-in feature, organized by area.
 - **Build Arguments** - Pass build-time arguments (ARGs) to Docker.
 - **Remote Builds** - Execute builds on remote SSH hosts for faster CI/CD.
 - **Build Cache** - Control whether to use Docker layer cache for builds.
+- **Build Secrets** - Mount tokens and credentials into a build via `--secret` instead of `--build-arg`, so they never land in image layers or metadata.
 
 #### Container Config
 
@@ -4009,6 +4202,7 @@ Every built-in feature, organized by area.
 - **Project Bridge Networking** - Give each deployment a dynamic address on
   the project bridge.
 - **Container Namespace Sharing** - Share another service's network stack (`network_mode: service:<name>`) for VPN killswitch patterns. Redeploying the upstream automatically redeploys its dependents.
+- **Host Networking** - Run a service on the host's own network namespace (`network_mode: host`) instead of the project bridge, for containers that need direct host-level ports.
 
 #### Deployment
 
@@ -4043,6 +4237,7 @@ Every built-in feature, organized by area.
 - **External DNS Forwarding** - Service containers resolve normal internet hostnames too, forwarded to configurable resolvers (default public DNS).
 - **Clean Teardown** - Remove a project's network, containers, and routes in one command.
 - **Multi-Project Isolation** - Each project has its own mesh, bridge, DNS, catalog, and agent state; jiji-proxy is shared per host.
+- **Backup, Restore & Recovery** - Export an encrypted control-plane backup and restore it into surviving hosts, or recover into a new fenced epoch after losing hosts.
 
 #### Registry
 
@@ -4069,6 +4264,7 @@ Every built-in feature, organized by area.
 - **Service Removal** - Clean removal with network unregistration.
 - **Image Pruning** - Explicitly remove old build-produced images with configurable per-service retention.
 - **Server Teardown** - Clean server removal from cluster.
+- **Server Upgrade** - Bring `jiji-agent` and `jiji-proxy` on each server in line with the installed `jiji` CLI, per host and per component, without downgrading.
 - **Auto-install Engine** - Install Docker/Podman automatically on servers.
 - **Architecture Support** - Explicitly set server architecture (amd64/arm64).
 
@@ -4201,9 +4397,9 @@ project-specific port shown by `jiji network plan`.
 
 #### Service Placement and Scale
 
-`services.*.servers` is the eligible host set. `replicas` is the total desired
-count, not a count per host. `placement: spread` balances replicas;
-`placement: packed` chooses hosts deterministically.
+`services.*.servers` is the literal deploy target list -- every listed
+server gets a deployment. `scale` is the instance count on *each* listed
+server, not a total across them.
 
 `jiji service scale` writes a replicated desired-placement record before it
 changes containers. Scale-up and scale-down are resumable. Scale-to-zero
@@ -4306,7 +4502,7 @@ Jiji runs one jiji-proxy container on each server that needs proxy routes.
 | Property | Value |
 |---|---|
 | Container name | `jiji-proxy` |
-| Image | `ghcr.io/acidtib/jiji-proxy:jiji` |
+| Image | `ghcr.io/acidtib/jiji-proxy:v<version>` (the jiji-proxy release version this CLI was built against) |
 | Restart policy | `unless-stopped` |
 | Public ports | `80` and `443` |
 | Internal ports | `8080` and `8443` |
@@ -5180,9 +5376,13 @@ Timestamps come from Docker/Podman in ISO 8601:
 
 `jiji audit` reads the append-only JSONL trail at
 `.jiji/{project}/audit.log` on each selected server. Current writers are
-`deploy`, `service restart/rollback/remove/prune/scale`, `lock
-acquire/release`, and `server setup/teardown`. Some other state-changing
-commands do not write audit entries yet.
+`deploy`, `service restart/rollback/remove/prune/scale`, `server
+setup/teardown/upgrade`, `network setup/compact/restore`, `registry
+login/logout`, `proxy restart`, `server exec`, `service cron run`, `jiji
+build` (the `builder.remote` path only), and `lock acquire/release`.
+`registry teardown`, local `registry login`/`logout`, and `network recover`
+are local-only operations with no remote host to audit against, and are
+unaudited by design -- the same reason a local `jiji build` writes no entry.
 
 ```bash
 jiji audit

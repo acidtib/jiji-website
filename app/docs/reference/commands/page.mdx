@@ -54,6 +54,31 @@ Show the compiled jiji version.
 jiji version
 ```
 
+### `jiji update`
+
+Detect and install a newer `jiji` binary release. Config-free, like `init`
+and `version` — this never touches remote servers, `jiji-agent`, or
+`jiji-proxy`.
+
+```bash
+jiji update                    # Update to the latest release
+jiji update --check            # Report available versions without installing
+jiji update --release v1.2.3   # Pin or roll back to a specific release
+```
+
+| Option | Description |
+|--------|-------------|
+| `--check` | Report the current and latest version without changing anything |
+| `--release <version>` | Install a specific release instead of latest (also the rollback path) |
+
+Downloads the matching platform artifact and its `.sha256` checksum, rejects
+a mismatch, and installs atomically (temp file on the same filesystem, then
+rename) preserving the existing binary's permissions. After updating, run
+[`jiji server upgrade -e
+<environment>`](/docs/reference/commands#jiji-server-upgrade) for each
+environment configuration to bring `jiji-agent` and `jiji-proxy` up to date
+on your servers.
+
 ## Build
 
 ### `jiji build`
@@ -533,25 +558,27 @@ jiji service remove --volumes   # Also remove named volumes
 
 ### `jiji service scale`
 
-Change the replicated desired count for exactly one service:
+Change the replicated desired instance count, per server, for exactly one
+service:
 
 ```bash
-jiji service scale -S web --replicas 4
-jiji service scale -S web --replicas 0
-jiji service scale -S web --reset
-jiji service scale -S web --replicas 3 --dry-run
+jiji service scale 4 -S web
+jiji service scale 0 -S web
+jiji service scale --reset -S web
+jiji service scale 3 -S web --dry-run
 ```
 
 | Option | Description |
 |---|---|
-| `--replicas N` | Set the runtime desired total |
-| `--reset` | Return to the configured `replicas:` value |
+| `N` (positional) | Set the runtime desired instance count on each of the service's `servers:` |
+| `--reset` | Return to the configured `scale:` value |
 | `--dry-run` | Print placement and mutations without changing state |
 | `-y, --yes` | Skip confirmation |
 
-`-S` must match exactly one service. `-H` is rejected because placement,
-not a host filter, decides replica ownership. Interrupted scale operations
-are resumable by retrying the same command.
+`-S` must match exactly one service. `-H` is rejected: `servers:` is the
+literal deploy target list already, so there's no separate host filter to
+apply. Interrupted scale operations are resumable by retrying the same
+command.
 
 ### `jiji service cron list`
 
@@ -583,11 +610,11 @@ Show output for one job. This command requires one service and one cron
 name.
 
 ```bash
-jiji service cron logs -S worker sync-reports
-jiji service cron logs -S worker sync-reports --run <run-id>
-jiji service cron logs -S worker sync-reports --lines 100
-jiji service cron logs -S worker sync-reports --since 30m
-jiji service cron logs -S worker sync-reports --follow
+jiji service cron logs sync-reports -S worker
+jiji service cron logs sync-reports -S worker --run <run-id>
+jiji service cron logs sync-reports -S worker --lines 100
+jiji service cron logs sync-reports -S worker --since 30m
+jiji service cron logs sync-reports -S worker --follow
 ```
 
 | Option | Description |
@@ -605,8 +632,8 @@ Start one configured job immediately. The manual run does not change the
 next scheduled time.
 
 ```bash
-jiji service cron run -S worker sync-reports
-jiji service cron run -S worker sync-reports --follow
+jiji service cron run sync-reports -S worker
+jiji service cron run sync-reports -S worker --follow
 ```
 
 | Option | Description |
@@ -645,10 +672,12 @@ jiji secrets print --show-values   # Reveal actual values, use with caution
 ```
 
 Shows `[SET]`/`[MISSING]` for every secret-shaped reference in
-configuration. `environment.secrets`, `builder.registry.password`, and
-ALL_CAPS references in SSH `keys` are resolved from `.env`/host-env;
-other fields (SSH key passphrase, proxy SSL certs, build args) are scanned
-and reported for visibility only.
+configuration. `environment.secrets`, `build.secrets`,
+`builder.registry.password`, ALL_CAPS references in SSH `keys`, ALL_CAPS
+build-arg values, and proxy SSL cert references are resolved from
+`.env`/host-env; SSH key passphrases and `${VAR}` command interpolation are
+scanned and reported for visibility only, since Jiji uses those values as
+literal configuration rather than resolving them.
 
 ## Deployment Locks
 
@@ -750,9 +779,16 @@ visible. `--stats` cannot be combined with `--lines` or `--follow`. With
 
 `-S`/`--services` is rejected - the trail is host-scoped, not
 service-scoped. Current writers are `deploy`, `service
-restart/rollback/remove/prune/scale`, `lock acquire/release`, and `server
-setup/teardown`. Some other state-changing commands do not write audit entries
-yet.
+restart/rollback/remove/prune/scale`, `server setup/teardown/upgrade`,
+`network setup/compact/restore`, `registry login/logout`, `proxy restart`,
+`server exec`, `service cron run`, `jiji build` (the `builder.remote` path
+only), and `lock acquire/release`. `proxy restart` and `server exec` do not
+hold a lock today, so their audit entries carry no lock scope.
+
+A local build opens no SSH session, so it has no host to write an entry
+through. `registry teardown`, local (non-`-H`) `registry login`/`logout`,
+and `network recover` are local-only operations with the same no-host
+reasoning, and are unaudited by design, not by gap.
 
 ## Examples
 

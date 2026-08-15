@@ -123,9 +123,13 @@ Timestamps come from Docker/Podman in ISO 8601:
 
 `jiji audit` reads the append-only JSONL trail at
 `.jiji/{project}/audit.log` on each selected server. Current writers are
-`deploy`, `service restart/rollback/remove/prune/scale`, `lock
-acquire/release`, and `server setup/teardown`. Some other state-changing
-commands do not write audit entries yet.
+`deploy`, `service restart/rollback/remove/prune/scale`, `server
+setup/teardown/upgrade`, `network setup/compact/restore`, `registry
+login/logout`, `proxy restart`, `server exec`, `service cron run`, `jiji
+build` (the `builder.remote` path only), and `lock acquire/release`.
+`registry teardown`, local `registry login`/`logout`, and `network recover`
+are local-only operations with no remote host to audit against, and are
+unaudited by design -- the same reason a local `jiji build` writes no entry.
 
 ```bash
 jiji audit
