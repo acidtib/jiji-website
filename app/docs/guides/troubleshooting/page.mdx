@@ -175,6 +175,28 @@ jiji lock release          # if a stale lock is the cause
 jiji --verbose deploy
 ```
 
+### Deploy Was Killed or Lost Its Connection Mid-Deploy
+
+If `jiji deploy` itself dies (network drop, Ctrl-C, CI job killed) after the
+new container starts but before its health check finishes, the container is
+left running with no CLI process left to finish the cutover. `jiji-agent`
+notices this on its own next reconcile tick or restart and replays the same
+health check the deploy would have used, rather than assuming a running
+container is a healthy one:
+
+```bash
+jiji network catalog -H server1       # the leftover deployment shows as candidate
+jiji network diagnostics -H server1   # shows why it hasn't been promoted, if it hasn't
+```
+
+- If the check passes, the agent finishes the cutover itself within a few
+  seconds, no further action needed.
+- If it keeps failing, the container is left alone (not serving traffic, not
+  removed) until it starts passing or you clean it up yourself
+  (`jiji service restart -S <service>` or `jiji service remove -S
+  <service>` followed by a fresh `jiji deploy`). The previous deployment
+  keeps serving the whole time.
+
 ## Container Issues
 
 ### Volume Mount Permission Denied

@@ -155,6 +155,19 @@ agent restart. Liveness is a reversible eligibility overlay: an unreachable
 owner can be suppressed from DNS without deleting its durable records.
 Explicit authenticated tombstones, not timeouts, remove ownership.
 
+If `jiji deploy` itself is killed after the candidate container starts but
+before its health check resolves, the agent doesn't just trust "the
+container is still running" on its own next tick or restart. It replays the
+same health check the deploy would have used before deciding whether to
+promote the candidate: a pass finishes the cutover exactly like a normal
+deploy would; a failure leaves the candidate as-is, out of DNS, with the
+previous deployment still serving, and surfaces in `jiji network
+diagnostics` until it resolves on its own or you intervene. A previous
+deployment that couldn't be removed yet (for example a
+`network_mode: service:<name>` dependent still attached to it) is retried
+automatically on every reconcile tick, not just the next time you happen to
+redeploy the right service.
+
 The CLI enrolls a new server by connecting to it directly over SSH, with no
 dependency on any other host's availability. Ordinary deploy and scale
 commands do not require every mesh member to be reachable.

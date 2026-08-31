@@ -487,6 +487,19 @@ agent restart. Liveness is a reversible eligibility overlay: an unreachable
 owner can be suppressed from DNS without deleting its durable records.
 Explicit authenticated tombstones, not timeouts, remove ownership.
 
+If `jiji deploy` itself is killed after the candidate container starts but
+before its health check resolves, the agent doesn't just trust "the
+container is still running" on its own next tick or restart. It replays the
+same health check the deploy would have used before deciding whether to
+promote the candidate: a pass finishes the cutover exactly like a normal
+deploy would; a failure leaves the candidate as-is, out of DNS, with the
+previous deployment still serving, and surfaces in `jiji network
+diagnostics` until it resolves on its own or you intervene. A previous
+deployment that couldn't be removed yet (for example a
+`network_mode: service:<name>` dependent still attached to it) is retried
+automatically on every reconcile tick, not just the next time you happen to
+redeploy the right service.
+
 The CLI enrolls a new server by connecting to it directly over SSH, with no
 dependency on any other host's availability. Ordinary deploy and scale
 commands do not require every mesh member to be reachable.
@@ -1667,6 +1680,28 @@ jiji lock status
 jiji lock release          # if a stale lock is the cause
 jiji --verbose deploy
 ```
+
+##### Deploy Was Killed or Lost Its Connection Mid-Deploy
+
+If `jiji deploy` itself dies (network drop, Ctrl-C, CI job killed) after the
+new container starts but before its health check finishes, the container is
+left running with no CLI process left to finish the cutover. `jiji-agent`
+notices this on its own next reconcile tick or restart and replays the same
+health check the deploy would have used, rather than assuming a running
+container is a healthy one:
+
+```bash
+jiji network catalog -H server1       # the leftover deployment shows as candidate
+jiji network diagnostics -H server1   # shows why it hasn't been promoted, if it hasn't
+```
+
+- If the check passes, the agent finishes the cutover itself within a few
+  seconds, no further action needed.
+- If it keeps failing, the container is left alone (not serving traffic, not
+  removed) until it starts passing or you clean it up yourself
+  (`jiji service restart -S <service>` or `jiji service remove -S
+  <service>` followed by a fresh `jiji deploy`). The previous deployment
+  keeps serving the whole time.
 
 #### Container Issues
 
