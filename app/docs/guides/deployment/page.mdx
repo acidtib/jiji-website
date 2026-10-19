@@ -37,6 +37,52 @@ flowchart TB
   class rollback failure
 ```
 
+## Image Updates
+
+`jiji deploy` pulls the image of every selected prebuilt `image:` service
+on each selected host before it starts any candidate, the same way Kamal
+does. A moving tag like `:latest` therefore deploys whatever the registry
+serves right now, not the copy the host pulled last time:
+
+```yaml
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    servers: [caja02]
+```
+
+```bash
+jiji deploy -S seerr   # pulls ghcr.io/seerr-team/seerr:latest on caja02, then deploys it
+```
+
+The registry only sends layers when the tag points at a new image, so an
+unchanged tag costs one quick round trip. Deploy output shows the result
+per host: `pulled`, `up to date`, or `updated (<old id> -> <new id>)`.
+
+A failed pull stops the deploy before any container is touched, even when
+the host has an older local copy. Running the stale image silently is the
+surprise this avoids. For offline or air-gapped hosts, opt out per service:
+
+```yaml
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    pull: missing   # only pull when the host has no copy (default: always)
+```
+
+Private images on the registry configured under `builder.registry` are
+pulled after an automatic login on each host. For a private image on
+another registry, log the hosts in yourself first (`docker login`/`podman
+login`, e.g. via `jiji server exec`).
+Build-configured services skip this step; `jiji deploy --build` pulls each
+freshly built tag instead. `jiji service restart`, `rollback`, and `scale`
+never re-pull: they use each host's existing copy, so new replicas match
+the running ones.
+
+When a moving tag is replaced, the previous image is left untagged. Jiji
+removes it after the old container is gone, as long as no other container
+on the host still uses it.
+
 ## Health Checks
 
 ### HTTP health check
@@ -416,7 +462,8 @@ jiji service prune -S api --retain 3
 ```
 
 Only build-configured services (`build:`, not a static `image:`) are ever
-pruned.
+pruned. A static `image:` service's replaced image is removed right after
+its old container, if nothing else uses it (see [Image Updates](#image-updates)).
 
 ## Best Practices
 
