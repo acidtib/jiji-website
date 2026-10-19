@@ -143,6 +143,25 @@ Service deployment does not recompile or reconcile the WireGuard mesh
 unless a targeted host is actually stale. Locks are released after the
 deploy succeeds or fails.
 
+Before starting any new container, `jiji deploy` pulls each selected
+prebuilt `image:` service's image on each of its selected hosts
+(`docker pull`/`podman pull`), so a moving tag like `:latest` picks up
+whatever the registry currently serves. A pull of an unchanged tag
+downloads nothing. The output reports each pull as `pulled`, `up to date`,
+or `updated (<old id> -> <new id>)`. If a pull fails, the deploy stops
+before touching any host, even if the host already has a local copy. Set
+`pull: missing` on a service to skip the pull when the image is already
+present, for example on a host that can't reach the registry but has a
+cached copy, which `pull: always` (the default) would now fail on (see [Image pull policy](/docs/reference/configuration#image-pull-policy-pull)).
+Build-configured services are not re-pulled this way: `--build` pulls its
+freshly pushed tag instead.
+
+If the image is hosted on the registry configured under
+`builder.registry` (with `username` and `password`), each host logs in
+before pulling. Deploy logs in to no other registry, so for a private
+image on any other registry, log the hosts in yourself first (`docker login`/`podman login`, e.g. via
+`jiji server exec`).
+
 ## Server Management
 
 ### `jiji server setup`
@@ -504,7 +523,8 @@ jiji service logs -H web1 -S api
 Restart running services with the same Candidate, health, Active, proxy
 reconciliation, and draining transaction as `jiji deploy`. The logical replica
 ID stays stable, but the replacement gets a fresh deployment ID and address
-lease. Jiji reuses the currently running image.
+lease. Jiji reuses the currently running image and never re-pulls it; use
+`jiji deploy` to pick up a newer image behind the same tag.
 
 ```bash
 jiji service restart
@@ -559,7 +579,9 @@ jiji service remove --volumes   # Also remove named volumes
 ### `jiji service scale`
 
 Change the replicated desired instance count, per server, for exactly one
-service:
+service. New replicas use the image already on each host (pulling it only
+if missing), so they match the replicas already running; run `jiji deploy`
+to move a service to a newer image behind the same tag.
 
 ```bash
 jiji service scale 4 -S web
@@ -647,7 +669,9 @@ full execution model.
 ### `jiji service prune`
 
 Clean up old container images for build-configured services (services with
-only a static `image:` are never pruned).
+only a static `image:` are never pruned; when a deploy replaces a static
+image's container, the replaced image is removed once nothing else on the
+host uses it).
 
 ```bash
 jiji service prune

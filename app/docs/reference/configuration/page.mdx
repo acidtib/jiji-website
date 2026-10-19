@@ -1001,6 +1001,27 @@ services:
 
 Passed straight through to the container engine's `--restart` flag.
 
+### Image pull policy (`pull`)
+
+```yaml
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    servers:
+      - server1
+    pull: missing # always (default), missing
+```
+
+With `always`, every `jiji deploy` pulls the image on each selected host
+before starting the new container, so a moving tag like `:latest` deploys
+the registry's current image. A failed pull fails the deploy, even if the
+host has a local copy. With `missing`, Jiji only pulls when the host has no
+copy, for offline or air-gapped hosts. Ignored for build-configured
+services. Only `jiji deploy` re-pulls; `jiji service restart`, `rollback`,
+and `scale` use each host's existing copy. Deploy logs in automatically
+only to `builder.registry.server`. See
+[Image Updates](/docs/guides/deployment#image-updates).
+
 ### Image retention (`retain`)
 
 ```yaml

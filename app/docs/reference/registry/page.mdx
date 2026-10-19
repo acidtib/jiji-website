@@ -113,6 +113,12 @@ placed in a command string, logged, or printed.
 remote registries locally before pushing, and on every selected deployment
 host before pulling. Local registries need no credentials.
 
+`jiji deploy` also logs in on each selected host before pulling a prebuilt
+`image:` service whose image is hosted on `builder.registry.server`, when
+`username` and `password` are configured. Images on any other private
+registry need the hosts logged in separately (`docker login`/`podman login`,
+e.g. via `jiji server exec`).
+
 To authenticate or clear credentials explicitly:
 
 ```bash
