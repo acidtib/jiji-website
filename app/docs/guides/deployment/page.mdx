@@ -155,6 +155,34 @@ jiji deploy -H "prod*"
 jiji deploy -S api -H "prod*"
 ```
 
+Every deployed service container receives `JIJI_VERSION` automatically. Its
+value is the explicit `--version`, otherwise the current Git short SHA, or a
+timestamp when Git is unavailable. Applications can read it in health endpoints
+and logs:
+
+```bash
+jiji deploy --version example123
+# Inside the application container: JIJI_VERSION=example123
+```
+
+For services using `build:`, Jiji also passes the same value as a build argument.
+Declare `ARG JIJI_VERSION` in the Dockerfile stage that needs it:
+
+```dockerfile
+ARG JIJI_VERSION
+RUN echo "$JIJI_VERSION" > /app/revision
+```
+
+Restart and scaling preserve the active deployment's version. Rollback sets it
+to the requested target version. For containers deployed with an older Jiji that
+did not inject the variable, restart and scaling use the image tag as a fallback
+(`latest` for an untagged image).
+
+`JIJI_VERSION` is reserved. Do not declare it in shared or service
+`environment.clear`, `environment.secrets`, `build.args`, or `build.secrets`.
+Use `--version` to choose its value. It does not need an entry in `.env` and
+`jiji secrets print` does not report it as missing.
+
 **Version pinning:**
 
 ```bash

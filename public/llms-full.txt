@@ -565,6 +565,52 @@ flowchart TB
   class rollback failure
 ```
 
+#### Image Updates
+
+`jiji deploy` pulls the image of every selected prebuilt `image:` service
+on each selected host before it starts any candidate, the same way Kamal
+does. A moving tag like `:latest` therefore deploys whatever the registry
+serves right now, not the copy the host pulled last time:
+
+```yaml
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    servers: [caja02]
+```
+
+```bash
+jiji deploy -S seerr   # pulls ghcr.io/seerr-team/seerr:latest on caja02, then deploys it
+```
+
+The registry only sends layers when the tag points at a new image, so an
+unchanged tag costs one quick round trip. Deploy output shows the result
+per host: `pulled`, `up to date`, or `updated (<old id> -> <new id>)`.
+
+A failed pull stops the deploy before any container is touched, even when
+the host has an older local copy. Running the stale image silently is the
+surprise this avoids. For offline or air-gapped hosts, opt out per service:
+
+```yaml
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    pull: missing   # only pull when the host has no copy (default: always)
+```
+
+Private images on the registry configured under `builder.registry` are
+pulled after an automatic login on each host. For a private image on
+another registry, log the hosts in yourself first (`docker login`/`podman
+login`, e.g. via `jiji server exec`).
+Build-configured services skip this step; `jiji deploy --build` pulls each
+freshly built tag instead. `jiji service restart`, `rollback`, and `scale`
+never re-pull: they use each host's existing copy, so new replicas match
+the running ones.
+
+When a moving tag is replaced, the previous image is left untagged. Jiji
+removes it after the old container is gone, as long as no other container
+on the host still uses it.
+
 #### Health Checks
 
 ##### HTTP health check
@@ -636,6 +682,34 @@ jiji deploy -H web1
 jiji deploy -H "prod*"
 jiji deploy -S api -H "prod*"
 ```
+
+Every deployed service container receives `JIJI_VERSION` automatically. Its
+value is the explicit `--version`, otherwise the current Git short SHA, or a
+timestamp when Git is unavailable. Applications can read it in health endpoints
+and logs:
+
+```bash
+jiji deploy --version example123
+# Inside the application container: JIJI_VERSION=example123
+```
+
+For services using `build:`, Jiji also passes the same value as a build argument.
+Declare `ARG JIJI_VERSION` in the Dockerfile stage that needs it:
+
+```dockerfile
+ARG JIJI_VERSION
+RUN echo "$JIJI_VERSION" > /app/revision
+```
+
+Restart and scaling preserve the active deployment's version. Rollback sets it
+to the requested target version. For containers deployed with an older Jiji that
+did not inject the variable, restart and scaling use the image tag as a fallback
+(`latest` for an untagged image).
+
+`JIJI_VERSION` is reserved. Do not declare it in shared or service
+`environment.clear`, `environment.secrets`, `build.args`, or `build.secrets`.
+Use `--version` to choose its value. It does not need an entry in `.env` and
+`jiji secrets print` does not report it as missing.
 
 **Version pinning:**
 
@@ -944,7 +1018,8 @@ jiji service prune -S api --retain 3
 ```
 
 Only build-configured services (`build:`, not a static `image:`) are ever
-pruned.
+pruned. A static `image:` service's replaced image is removed right after
+its old container, if nothing else uses it (see [Image Updates](#image-updates)).
 
 #### Best Practices
 
@@ -2974,6 +3049,27 @@ services:
 
 Passed straight through to the container engine's `--restart` flag.
 
+##### Image pull policy (`pull`)
+
+```yaml
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    servers:
+      - server1
+    pull: missing # always (default), missing
+```
+
+With `always`, every `jiji deploy` pulls the image on each selected host
+before starting the new container, so a moving tag like `:latest` deploys
+the registry's current image. A failed pull fails the deploy, even if the
+host has a local copy. With `missing`, Jiji only pulls when the host has no
+copy, for offline or air-gapped hosts. Ignored for build-configured
+services. Only `jiji deploy` re-pulls; `jiji service restart`, `rollback`,
+and `scale` use each host's existing copy. Deploy logs in automatically
+only to `builder.registry.server`. See
+[Image Updates](/docs/guides/deployment#image-updates).
+
 ##### Image retention (`retain`)
 
 ```yaml
@@ -3273,6 +3369,25 @@ replica owners plus eligible ingress owners (see
 Service deployment does not recompile or reconcile the WireGuard mesh
 unless a targeted host is actually stale. Locks are released after the
 deploy succeeds or fails.
+
+Before starting any new container, `jiji deploy` pulls each selected
+prebuilt `image:` service's image on each of its selected hosts
+(`docker pull`/`podman pull`), so a moving tag like `:latest` picks up
+whatever the registry currently serves. A pull of an unchanged tag
+downloads nothing. The output reports each pull as `pulled`, `up to date`,
+or `updated (<old id> -> <new id>)`. If a pull fails, the deploy stops
+before touching any host, even if the host already has a local copy. Set
+`pull: missing` on a service to skip the pull when the image is already
+present, for example on a host that can't reach the registry but has a
+cached copy, which `pull: always` (the default) would now fail on (see [Image pull policy](/docs/reference/configuration#image-pull-policy-pull)).
+Build-configured services are not re-pulled this way: `--build` pulls its
+freshly pushed tag instead.
+
+If the image is hosted on the registry configured under
+`builder.registry` (with `username` and `password`), each host logs in
+before pulling. Deploy logs in to no other registry, so for a private
+image on any other registry, log the hosts in yourself first (`docker login`/`podman login`, e.g. via
+`jiji server exec`).
 
 #### Server Management
 
@@ -3635,7 +3750,8 @@ jiji service logs -H web1 -S api
 Restart running services with the same Candidate, health, Active, proxy
 reconciliation, and draining transaction as `jiji deploy`. The logical replica
 ID stays stable, but the replacement gets a fresh deployment ID and address
-lease. Jiji reuses the currently running image.
+lease. Jiji reuses the currently running image and never re-pulls it; use
+`jiji deploy` to pick up a newer image behind the same tag.
 
 ```bash
 jiji service restart
@@ -3690,7 +3806,9 @@ jiji service remove --volumes   # Also remove named volumes
 ##### `jiji service scale`
 
 Change the replicated desired instance count, per server, for exactly one
-service:
+service. New replicas use the image already on each host (pulling it only
+if missing), so they match the replicas already running; run `jiji deploy`
+to move a service to a newer image behind the same tag.
 
 ```bash
 jiji service scale 4 -S web
@@ -3778,7 +3896,9 @@ full execution model.
 ##### `jiji service prune`
 
 Clean up old container images for build-configured services (services with
-only a static `image:` are never pruned).
+only a static `image:` are never pruned; when a deploy replaces a static
+image's container, the replaced image is removed once nothing else on the
+host uses it).
 
 ```bash
 jiji service prune
@@ -5124,6 +5244,12 @@ placed in a command string, logged, or printed.
 `jiji build` and `jiji deploy --build` authenticate automatically:
 remote registries locally before pushing, and on every selected deployment
 host before pulling. Local registries need no credentials.
+
+`jiji deploy` also logs in on each selected host before pulling a prebuilt
+`image:` service whose image is hosted on `builder.registry.server`, when
+`username` and `password` are configured. Images on any other private
+registry need the hosts logged in separately (`docker login`/`podman login`,
+e.g. via `jiji server exec`).
 
 To authenticate or clear credentials explicitly:
 
