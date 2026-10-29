@@ -105,7 +105,8 @@ services:
 | `hosts` | Hostnames accepted by the route |
 | `ssl` | `false` or omitted for HTTP, `true` for TLS, or a custom certificate object |
 | `path_prefix` | Optional path prefix used to select the route |
-| `listen_port` | Public port for raw TCP mode; cannot be combined with `path_prefix` or `ssl` |
+| `forward_headers` | `true` keeps client `X-Forwarded-*` headers and appends the connecting IP; see [Forwarded Headers](#forwarded-headers) |
+| `listen_port` | Public port for raw TCP mode; cannot be combined with `path_prefix`, `ssl`, or `forward_headers` |
 | `healthcheck` | Active health-check settings jiji-proxy runs continuously against this route's backends |
 
 ### Multiple targets
@@ -134,8 +135,8 @@ services:
             path: /health
 ```
 
-Each target supports `port`, `hosts`, `ssl`, `path_prefix`, `listen_port`,
-and `healthcheck`. When `targets` is present, it takes precedence over the
+Each target supports `port`, `hosts`, `ssl`, `path_prefix`,
+`forward_headers`, `listen_port`, and `healthcheck`. When `targets` is present, it takes precedence over the
 flat single-target fields.
 
 ## Raw TCP Proxying
@@ -166,7 +167,8 @@ Open `listen_port` in each server's firewall before connecting clients.
 
 Raw TCP routes have no HTTP Host header, path, or TLS handling:
 
-- `path_prefix` and `ssl` cannot be combined with `listen_port`.
+- `path_prefix`, `ssl`, and `forward_headers` cannot be combined with
+  `listen_port`.
 - `hosts` is optional metadata and does not select a route.
 - Ports `0`, `80`, and `443` cannot be used as `listen_port` values.
 - Every TCP route needs a unique `listen_port` within a project.
@@ -343,6 +345,77 @@ Jiji writes these straight into jiji-proxy's certificate directory before the
 route is applied, so jiji-proxy serves them as-is and never attempts ACME
 issuance for that host. The values can use Jiji's secret resolution. Do not
 place private key material directly in a committed configuration file.
+
+## Forwarded Headers
+
+jiji-proxy sets `X-Forwarded-For`, `X-Forwarded-Proto`, and
+`X-Forwarded-Host` on every HTTP request it sends to a backend. How it treats
+values the client already sent depends on the route's `forward_headers`
+setting.
+
+| Header | Default (replace) | `forward_headers: true` (append) |
+|---|---|---|
+| `X-Forwarded-For` | The connecting IP only | The incoming chain, with the connecting IP appended |
+| `X-Forwarded-Proto` | `https` on the TLS listener, otherwise `http` | The incoming value if present, otherwise `https` or `http` |
+| `X-Forwarded-Host` | The request's `Host` | The incoming value if present, otherwise the request's `Host` |
+
+In both modes the right-most `X-Forwarded-For` entry is always the address
+that actually connected to jiji-proxy. Several incoming `X-Forwarded-For`
+headers are joined into one comma-separated value.
+
+### Default: replace
+
+By default jiji-proxy drops any `X-Forwarded-*` headers the client sent and
+writes its own. A client that connects directly cannot fake its IP address,
+so an app can use `X-Forwarded-For` for rate limits, logs, and allowlists
+without any trusted-proxy configuration.
+
+### Append mode
+
+Set `forward_headers: true` when every request reaches jiji-proxy through a
+trusted proxy such as Cloudflare or another CDN:
+
+```yaml
+services:
+  web:
+    proxy:
+      port: 3000
+      hosts:
+        - example.com
+      ssl: true
+      forward_headers: true
+```
+
+The setting is per route. Set it on `proxy:` or on an individual
+`proxy.targets[]` entry, so one service can have a CDN-fronted target and a
+directly reached target with different settings.
+
+With append mode on, the app sees the chain the CDN built, followed by the
+CDN's own address. The app must be configured to trust and skip those proxy
+hops (for example, a trusted-proxies list covering the CDN's IP ranges) to
+find the real client IP. Only enable append mode when direct connections to
+the server are blocked or the app only trusts the CDN's ranges. Otherwise a
+client that connects directly can put any address it likes in
+`X-Forwarded-For`.
+
+`forward_headers` applies only to HTTP routes. Config validation rejects it
+on a target that also sets `listen_port`, because raw TCP routes carry no
+headers.
+
+After changing `forward_headers`, run `jiji server setup` as well as
+`jiji deploy`. Deploy applies the new value to the running proxy, and setup
+updates the route that `jiji-agent` restores after a proxy restart, so the
+setting survives one.
+
+### Upgrading from earlier versions
+
+Earlier versions of jiji-proxy passed client-supplied `X-Forwarded-*` headers
+to backends unchanged. Because one jiji-proxy serves every project on a host,
+the new default applies to all of them once `jiji server upgrade` recreates
+the proxy. An app behind a CDN that reads `X-Forwarded-For` then sees the
+CDN's IP instead of the visitor's. To fix that, either set
+`forward_headers: true` on the route, or have the app read a header the CDN
+sets itself, such as `CF-Connecting-IP`.
 
 ## Health Checks and Activation
 

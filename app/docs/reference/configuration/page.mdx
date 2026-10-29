@@ -790,6 +790,29 @@ proxy:
   path_prefix: /api
 ```
 
+**Forwarded headers** - by default jiji-proxy replaces any client-supplied
+`X-Forwarded-For`, `X-Forwarded-Proto`, and `X-Forwarded-Host` with what it
+saw itself: the connecting IP, `https` or `http`, and the request's `Host`.
+Set `forward_headers: true` to keep the incoming values and append the
+connecting IP to the `X-Forwarded-For` chain instead:
+
+```yaml
+proxy:
+  port: 3000
+  hosts:
+    - myapp.example.com
+  forward_headers: true    # default: false
+```
+
+Use it only when every request arrives through a trusted proxy such as
+Cloudflare, and the app is configured to skip those proxy hops. Otherwise
+clients can fake their IP address. The setting is per route and can also be
+set on each `targets[]` entry. It cannot be combined with `listen_port`. Run
+`jiji server setup` after changing it so the route `jiji-agent` restores after
+a proxy restart keeps the new value. See
+[Forwarded Headers](/docs/reference/proxy#forwarded-headers) for details and
+the upgrade note.
+
 **Multiple targets** (multiple ports on one service):
 
 ```yaml
@@ -827,7 +850,7 @@ services:
 ```
 
 Setting `listen_port` selects raw TCP mode. It cannot be combined with
-HTTP-only `path_prefix` or `ssl`. Ports `0`, `80`, and `443` are reserved,
+HTTP-only `path_prefix`, `ssl`, or `forward_headers`. Ports `0`, `80`, and `443` are reserved,
 and every TCP route on a shared host needs a unique public port. `hosts` is
 optional metadata for a TCP target, not a routing key. Open the configured
 `listen_port` in the server firewall and point clients at any ingress server
@@ -1066,7 +1089,8 @@ server list must be a subset of the upstream server list. Chained namespace
 sharing is not supported.
 
 Raw TCP proxy ports must be unique within one project. Ports 80 and 443 are
-reserved for HTTP ingress. A raw TCP target cannot set `path_prefix` or `ssl`.
+reserved for HTTP ingress. A raw TCP target cannot set `path_prefix`, `ssl`,
+or `forward_headers`.
 Jiji-proxy also rejects conflicts with routes from other projects on the same
 host when it applies the route.
 
