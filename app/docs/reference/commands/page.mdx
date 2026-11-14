@@ -699,7 +699,8 @@ Shows `[SET]`/`[MISSING]` for every secret-shaped reference in
 configuration. `environment.secrets`, `build.secrets`,
 `builder.registry.password`, ALL_CAPS references in SSH `keys`, ALL_CAPS
 build-arg values, and proxy SSL cert references are resolved from
-`.env`/host-env; SSH key passphrases and `${VAR}` command interpolation are
+`.env` (or the configured secrets adapter, shown as `Secrets adapter:` in
+place of `Secrets file:`)/host-env; SSH key passphrases and `${VAR}` command interpolation are
 scanned and reported for visibility only, since Jiji uses those values as
 literal configuration rather than resolving them.
 

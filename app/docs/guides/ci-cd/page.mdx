@@ -143,6 +143,27 @@ deploy:
 | `SERVER_HOST` | Server hostname (for `ssh-keyscan`) |
 | `GITHUB_TOKEN` | Registry authentication (if using GHCR) |
 
+### Using Doppler
+
+If your config sets `secrets: { adapter: doppler }`, jiji reads secret
+values from Doppler instead of CI environment variables. Install the Doppler
+CLI in the job and pass a service token as `DOPPLER_TOKEN`:
+
+```yaml
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v4
+
+      - name: Deploy
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+        run: jiji deploy --build -e production -y
+```
+
+A service token is scoped to one project and config, so it matches the
+`secrets.project` and `secrets.config` values in your jiji config. Add
+`--host-env` only if some secrets still come from CI variables. See
+[External secrets adapters](/docs/reference/configuration#external-secrets-adapters).
+
 ## SSH Key Setup
 
 ```bash
