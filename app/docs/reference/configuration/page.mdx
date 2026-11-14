@@ -697,7 +697,7 @@ manager instead of a `.env` file. Doppler is the supported adapter.
 secrets:
   adapter: doppler
   project: myapp      # optional
-  config: production  # optional
+  config: prd         # optional
 
 environment:
   secrets:
@@ -719,7 +719,7 @@ With an adapter configured:
 The Doppler adapter runs the local Doppler CLI once per jiji command:
 
 ```sh
-doppler secrets download --no-file --format json --project myapp --config production
+doppler secrets download --no-file --format json --project myapp --config prd
 ```
 
 `--project` and `--config` are passed only when they are set in the config.
