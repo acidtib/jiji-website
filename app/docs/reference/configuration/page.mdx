@@ -176,7 +176,7 @@ builder:
 | Custom | `registry.example.com:5000` | none | `registry.example.com:5000/project-service:version` |
 
 `password` can be a literal value, an ALL_CAPS secret name resolved from
-`.env`/host-env (see Environment Variables below), or `$(a local command)`
+`.env` (or the [secrets adapter](#external-secrets-adapters))/host-env (see Environment Variables below), or `$(a local command)`
 - useful for registries like AWS ECR or GCP Artifact Registry that issue
 short-lived tokens, see [Registry Reference](/docs/reference/registry).
 
@@ -202,8 +202,8 @@ ssh:
 ```
 
 Each `keys` entry accepts a literal path or inline private key, an ALL_CAPS variable
-resolved from `.env` (or the host environment with `--host-env`), or
-`$(a local command)`. Resolved values beginning with a private-key PEM header
+resolved from `.env` or the [secrets adapter](#external-secrets-adapters) (or the
+host environment with `--host-env`), or `$(a local command)`. Resolved values beginning with a private-key PEM header
 are used as inline key material; other values are treated as paths.
 
 ```yaml
@@ -543,8 +543,8 @@ services:
 ```
 
 Each name is resolved the same way `environment.secrets` names are - from
-the selected `.env` file, then the host environment if `--host-env` is
-passed - but **never** from `environment.clear`: a build secret exists
+the selected `.env` file (or the secrets adapter), then the host environment
+if `--host-env` is passed - but **never** from `environment.clear`: a build secret exists
 specifically to bypass the cleartext build-arg path, so mixing in a
 cleartext source would defeat the point. The Dockerfile reads it as a
 mounted file, not an environment variable:
@@ -664,9 +664,10 @@ services:
         - API_KEY
 ```
 
-`secrets` entries are ALL_CAPS names resolved from `.env` files (or host
-environment variables with `--host-env`), never written literally into
-config. Numbers and booleans under `clear` are converted to strings for
+`secrets` entries are ALL_CAPS names resolved from `.env` files, or from
+the [external secrets adapter](#external-secrets-adapters) when one is
+configured (then host environment variables with `--host-env`), never
+written literally into config. Numbers and booleans under `clear` are converted to strings for
 container compatibility (`DEBUG: true` becomes `"true"`).
 
 Resolved secrets are staged on the target server at
@@ -689,22 +690,62 @@ Jiji looks for `{secrets_path}.{environment}` first (e.g.
 
 #### External secrets adapters
 
-The schema also accepts a top-level `secrets:` block describing an external
-adapter:
+Set a top-level `secrets:` block to read secret values from a secrets
+manager instead of a `.env` file. Doppler is the supported adapter.
 
 ```yaml
 secrets:
   adapter: doppler
-  project: myapp
-  config: production
+  project: myapp      # optional
+  config: production  # optional
+
+environment:
+  secrets:
+    - DATABASE_PASSWORD   # value comes from Doppler
 ```
 
-This currently parses but has no effect: no adapter implementation reads
-it yet, so configuring it changes nothing and produces no warning. Use
-`.env`-resolved `secrets:` entries under `environment:` (above), or a
-`$(command)` value for `builder.registry.password` (see
-[Registry Reference](/docs/reference/registry)), for anything that needs a
-secret today.
+With an adapter configured:
+
+- The `.env` file is not read. Every value comes from the adapter, then
+  from the host environment when you pass `--host-env`.
+- Every ALL_CAPS reference resolves through the adapter:
+  `environment.secrets` (shared and per service), `build.secrets` and
+  `build.args`, `builder.registry.password`, `servers.<name>.host`,
+  `ssh.keys` and `servers.<name>.keys`, and `proxy.ssl` `certificate_pem` /
+  `private_key_pem`. Literal and `$(command)` values are unchanged.
+- `secrets_path` is a validation error, since it would have no effect.
+  Remove one of them.
+
+The Doppler adapter runs the local Doppler CLI once per jiji command:
+
+```sh
+doppler secrets download --no-file --format json --project myapp --config production
+```
+
+`--project` and `--config` are passed only when they are set in the config.
+When you omit them, the CLI uses the scope from `doppler setup` in the
+project directory. Every value must be a string.
+
+To set it up, [install the Doppler CLI](https://docs.doppler.com/docs/install-cli)
+and authenticate it:
+
+```sh
+doppler login            # interactive, on your workstation
+doppler setup            # optional: pick a default project and config
+jiji secrets print       # check every reference shows [SET]
+```
+
+In CI, export a Doppler service token as `DOPPLER_TOKEN` instead of running
+`doppler login`. jiji passes its environment through to the CLI and has no
+Doppler credentials of its own.
+
+jiji calls Doppler only when a command resolves a secret. Commands such as
+`jiji service logs` or `jiji lock status` with literal hosts and SSH keys
+run without a Doppler login.
+
+If a name is missing from Doppler, the command fails and lists every missing
+name. Add it to the Doppler config, or pass `--host-env` to fill it from
+the host environment.
 
 ### Proxy
 
