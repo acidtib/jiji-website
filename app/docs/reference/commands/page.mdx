@@ -263,9 +263,19 @@ inside the container), and compares both against the versions the local
 - **Ahead** (a server running something newer than this `jiji` requires) -
   never touched. Jiji does not downgrade a component that's ahead of what
   the local binary asks for.
-- **Unavailable** (unreachable host, or a component that was never
-  installed) - skipped and reported; the command exits non-zero if this
-  happens anywhere.
+- **Not responding** (the host is reachable but its agent does not answer,
+  for example after a crash) - the agent binary is reinstalled, its failed
+  systemd unit is reset and started, and membership is pushed again. A
+  jiji-proxy that does not answer is skipped and reported.
+- **Unavailable** (unreachable host) - skipped and reported; the command
+  exits non-zero if this happens anywhere.
+
+Before a new agent binary replaces the installed one, jiji runs it once on
+the host against a throwaway state directory. If that self-test fails (for
+example, the build needs a CPU feature the host lacks), the installed binary
+stays in place and the host is reported as failed. If the new agent passes
+the self-test but does not start, jiji restores the previous binary, restarts
+it, and reports the failure.
 
 Component versions are read and compared per host, so one host's outdated
 proxy never blocks another host's already-current agent from having its

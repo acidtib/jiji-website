@@ -78,7 +78,10 @@ each environment configuration to bring your servers up to date.
 Target Servers need:
 
 - Linux (developed and tested on Ubuntu 24.04; other distributions may
-  work)
+  work) with glibc 2.36 or newer, for example Debian 12 or Ubuntu 24.04
+- An x86_64 or arm64 CPU. On x86_64, any 64-bit CPU works: the release
+  binaries target the baseline `x86-64` level and need no SSE4.2, AVX, or
+  BMI support
 - An SSH server
 - Docker or Podman (with root access, jiji installs a missing engine and
   upgrades Podman when the installed version is older than 5.8.4)
