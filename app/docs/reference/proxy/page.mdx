@@ -74,6 +74,39 @@ host. It also removes other projects' network attachments. Each affected
 project restores its attachment the next time it runs `jiji deploy`,
 `jiji server setup`, or `jiji proxy restart`.
 
+### Proxy versions on a shared host
+
+Each project's jiji-agent keeps jiji-proxy at the version its own `jiji`
+release requires. From jiji-agent v0.7.4, an agent never replaces a newer
+jiji-proxy, so on a host where every project runs v0.7.4 or later, the newest
+proxy wins and stays.
+
+Agents older than v0.7.4 replace any jiji-proxy that differs from their own.
+Next to a newer project, the two agents swap the container back and forth, and
+every swap drops every route on the host. To avoid it, upgrade the older
+project first:
+
+```sh
+cd path/to/older-project
+jiji server upgrade
+```
+
+`jiji server upgrade` lists every other project's agent on each host and warns
+about agents older than v0.7.4, agents that are not running (often left behind
+by a project that no longer uses the host), and agents older than your `jiji`.
+When an older agent shares a host you are about to upgrade, it asks for
+confirmation and defaults to no. `jiji network diagnostics` shows the same
+warnings and how many times jiji-proxy was created in the last 10 minutes.
+
+If a swap loop starts anyway, the newer agent stops after it has replaced a
+running jiji-proxy 3 times within 10 minutes. It leaves the running proxy
+alone and reports the conflict in `jiji network diagnostics` until the agent
+restarts; `jiji server upgrade` restarts it.
+
+After jiji-proxy is recreated for any reason, each project's agent puts back
+its own routes within a few seconds, using the route list saved by the last
+`jiji server setup` or `jiji deploy`.
+
 ## Service Configuration
 
 Configure one proxy target directly under a service:
